@@ -1,0 +1,28 @@
+# Secrets
+.env
+
+# Runtime data
+config.json
+*.db
+*.log
+seen_listings.json
+
+# Debug / scratch HTML
+jkk_debug_*.html
+
+# Old scraper versions
+scraper.py
+scraper2.py
+scraper3.py
+scrapper2.py
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# macOS
+.DS_Store

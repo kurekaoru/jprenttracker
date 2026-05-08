@@ -1,0 +1,7 @@
+playwright>=1.44
+requests>=2.31
+beautifulsoup4>=4.12
+flask>=3.0
+flask-cors>=4.0
+lxml>=5.0
+python-dotenv>=1.0
