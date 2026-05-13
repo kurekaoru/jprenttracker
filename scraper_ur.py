@@ -1,7 +1,5 @@
 """
-UR都市機構 (Urban Renaissance Agency) Tokyo Housing Monitor.
-
-Talks to the UR JSON API directly — no headless browser needed.
+UR都市機構 (Urban Renaissance Agency) Housing Monitor — Tokyo + Kanagawa.
 
 API flow per ward:
   1. POST .../bukken/result/bukken_result/ with mode=area + skcs=<ward_code>
@@ -12,7 +10,7 @@ API flow per ward:
      → list of currently-vacant rooms in that complex.
 
 Each room becomes one listing dict, shaped like JKK listings so that
-scraper3.run() can process JKK and UR results uniformly.
+scraper4.run() can process JKK and UR results uniformly.
 """
 
 import re
@@ -22,32 +20,47 @@ import requests
 
 log = logging.getLogger(__name__)
 
-UR_API_BASE       = "https://chintai.r6.ur-net.go.jp/chintai/api/"
-UR_BUKKEN_RESULT  = UR_API_BASE + "bukken/result/bukken_result/"
-UR_BUKKEN_ROOM    = UR_API_BASE + "bukken/result/bukken_result_room/"
-UR_WEB_BASE       = "https://www.ur-net.go.jp"
+UR_API_BASE      = "https://chintai.r6.ur-net.go.jp/chintai/api/"
+UR_BUKKEN_RESULT = UR_API_BASE + "bukken/result/bukken_result/"
+UR_BUKKEN_ROOM   = UR_API_BASE + "bukken/result/bukken_result_room/"
+UR_WEB_BASE      = "https://www.ur-net.go.jp"
 
-UR_TOKYO_TDFK  = "13"
-UR_TOKYO_BLOCK = "kanto"
-
-# Tokyo ward / city → UR area code (skcs). Extracted from
-# https://www.ur-net.go.jp/chintai/kanto/tokyo/
-UR_WARD_CODE = {
-    # 23 special wards
-    "千代田区": "101", "中央区": "102", "港区":   "103", "新宿区": "104",
-    "文京区":   "105", "台東区": "106", "墨田区": "107", "江東区": "108",
-    "品川区":   "109", "目黒区": "110", "大田区": "111", "世田谷区":"112",
-    "渋谷区":   "113", "中野区": "114", "杉並区": "115", "豊島区": "116",
-    "北区":     "117", "荒川区": "118", "板橋区": "119", "練馬区": "120",
-    "足立区":   "121", "葛飾区": "122", "江戸川区":"123",
-    # Tama-area cities
-    "八王子市": "201", "立川市":   "202", "武蔵野市": "203", "三鷹市":   "204",
-    "府中市":   "206", "昭島市":   "207", "調布市":   "208", "町田市":   "209",
-    "小金井市": "210", "小平市":   "211", "日野市":   "212", "東村山市": "213",
-    "国分寺市": "214", "国立市":   "215", "福生市":   "218", "狛江市":   "219",
-    "清瀬市":   "221", "東久留米市":"222", "武蔵村山市":"223", "多摩市":   "224",
-    "稲城市":   "225", "羽村市":   "227", "西東京市": "229",
-}
+# Each region is (tdfk, block, {ward_name: skcs})
+UR_REGIONS = [
+    # ── Tokyo (tdfk=13) ───────────────────────────────────────────────────────
+    ("13", "kanto", {
+        # 23 special wards
+        "千代田区": "101", "中央区": "102", "港区":   "103", "新宿区": "104",
+        "文京区":   "105", "台東区": "106", "墨田区": "107", "江東区": "108",
+        "品川区":   "109", "目黒区": "110", "大田区": "111", "世田谷区":"112",
+        "渋谷区":   "113", "中野区": "114", "杉並区": "115", "豊島区": "116",
+        "北区":     "117", "荒川区": "118", "板橋区": "119", "練馬区": "120",
+        "足立区":   "121", "葛飾区": "122", "江戸川区":"123",
+        # Tama-area cities
+        "八王子市": "201", "立川市":   "202", "武蔵野市": "203", "三鷹市":   "204",
+        "府中市":   "206", "昭島市":   "207", "調布市":   "208", "町田市":   "209",
+        "小金井市": "210", "小平市":   "211", "日野市":   "212", "東村山市": "213",
+        "国分寺市": "214", "国立市":   "215", "福生市":   "218", "狛江市":   "219",
+        "清瀬市":   "221", "東久留米市":"222", "武蔵村山市":"223", "多摩市":   "224",
+        "稲城市":   "225", "羽村市":   "227", "西東京市": "229",
+    }),
+    # ── Kanagawa (tdfk=14) ───────────────────────────────────────────────────
+    ("14", "kanto", {
+        # Yokohama wards
+        "横浜市鶴見区":    "101", "横浜市神奈川区": "102", "横浜市西区":   "103",
+        "横浜市中区":      "104", "横浜市南区":     "105", "横浜市保土ケ谷区":"106",
+        "横浜市磯子区":    "107", "横浜市金沢区":   "108", "横浜市港北区": "109",
+        "横浜市戸塚区":    "110", "横浜市港南区":   "111", "横浜市旭区":   "112",
+        "横浜市緑区":      "113", "横浜市瀬谷区":   "114", "横浜市栄区":   "115",
+        "横浜市青葉区":    "117", "横浜市都筑区":   "118",
+        # Kawasaki wards
+        "川崎市川崎区":    "131", "川崎市幸区":     "132", "川崎市中原区": "133",
+        "川崎市高津区":    "134", "川崎市麻生区":   "135", "川崎市多摩区": "136",
+        "川崎市宮前区":    "137",
+        # Sagamihara
+        "相模原市緑区":    "151", "相模原市中央区": "152", "相模原市南区": "153",
+    }),
+]
 
 _HEADERS = {
     "Origin": "https://www.ur-net.go.jp",
@@ -63,10 +76,7 @@ _HEADERS = {
 }
 
 
-def _base_body(skcs, page_index=0, shisya="", danchi="", shikibetu=""):
-    # Mirrors what frmMain serializes in the browser. Empty strings for
-    # filters mean "no filter" — we let the harness apply rent/layout
-    # filters in matches_criteria(), the same way JKK does.
+def _base_body(skcs, tdfk, block, page_index=0, shisya="", danchi="", shikibetu=""):
     return {
         "rent_low": "", "rent_high": "",
         "walk": "",
@@ -74,9 +84,9 @@ def _base_body(skcs, page_index=0, shisya="", danchi="", shikibetu=""):
         "years": "",
         "mode": "area",
         "skcs": skcs,
-        "block": UR_TOKYO_BLOCK,
-        "tdfk": UR_TOKYO_TDFK,
-        "rireki_tdfk": UR_TOKYO_TDFK,
+        "block": block,
+        "tdfk": tdfk,
+        "rireki_tdfk": tdfk,
         "orderByField": "1",
         "pageSize": "10",
         "pageIndex": str(page_index),
@@ -101,12 +111,11 @@ def _post(url, body, timeout=30, retries=2):
     raise last_err
 
 
-def _fetch_danchi_for_ward(skcs):
-    """Return all danchi (housing complexes) with vacancies in a ward."""
+def _fetch_danchi_for_ward(skcs, tdfk, block):
     out = []
     page = 0
     while page < 50:
-        data = _post(UR_BUKKEN_RESULT, _base_body(skcs, page_index=page))
+        data = _post(UR_BUKKEN_RESULT, _base_body(skcs, tdfk, block, page_index=page))
         if not data:
             break
         out.extend(data)
@@ -120,9 +129,9 @@ def _fetch_danchi_for_ward(skcs):
     return out
 
 
-def _fetch_rooms_for_danchi(skcs, danchi_obj):
+def _fetch_rooms_for_danchi(skcs, tdfk, block, danchi_obj):
     body = _base_body(
-        skcs,
+        skcs, tdfk, block,
         shisya=danchi_obj.get("shisya", ""),
         danchi=danchi_obj.get("danchi", ""),
         shikibetu=danchi_obj.get("shikibetu", ""),
@@ -166,50 +175,48 @@ def _parse_room(room, danchi, ward_name):
 
 def fetch_ur_listings(config):
     """
-    Pull all current Tokyo UR vacancies, optionally restricted to wards
-    listed in config["wards"]. Returns a list of listing dicts shaped
-    like JKK listings so scraper3.run() can consume them uniformly.
+    Pull all current UR vacancies across Tokyo and Kanagawa.
+    Returns a list of listing dicts shaped like JKK listings.
     """
-    wards = list(UR_WARD_CODE.items())
-
-    log.info(f"UR: fetching {len(wards)} ward(s)...")
     listings = []
-    for ward_name, skcs in wards:
-        try:
-            danchi_list = _fetch_danchi_for_ward(skcs)
-        except Exception as e:
-            log.error(f"UR: ward {ward_name} ({skcs}) danchi fetch failed: {e}")
-            continue
-        if not danchi_list:
-            continue
-
-        # bukken_result returns every danchi in the ward, vacancies or not.
-        # roomCount > 0 means there's at least one currently-vacant room in
-        # that complex — skip the rest to avoid useless room-detail calls.
-        active = [d for d in danchi_list if str(d.get("roomCount", "0")) not in ("0", "")]
-        ward_count = 0
-        for d in active:
+    for tdfk, block, area_codes in UR_REGIONS:
+        region_label = "東京" if tdfk == "13" else "神奈川"
+        log.info(f"UR: fetching {region_label} ({len(area_codes)} area(s))...")
+        for ward_name, skcs in area_codes.items():
             try:
-                rooms = _fetch_rooms_for_danchi(skcs, d)
+                danchi_list = _fetch_danchi_for_ward(skcs, tdfk, block)
             except Exception as e:
-                log.error(f"UR: rooms fetch failed for {d.get('danchiNm','?')}: {e}")
+                log.error(f"UR: {ward_name} ({skcs}) danchi fetch failed: {e}")
                 continue
-            for r in rooms:
-                parsed = _parse_room(r, d, ward_name)
-                if parsed:
-                    listings.append(parsed)
-                    ward_count += 1
-        log.info(f"UR: {ward_name} ({skcs}) → {ward_count} room(s) across "
-                 f"{len(active)}/{len(danchi_list)} complex(es) with vacancies")
+            if not danchi_list:
+                continue
+
+            active = [d for d in danchi_list if str(d.get("roomCount", "0")) not in ("0", "")]
+            ward_count = 0
+            for d in active:
+                try:
+                    rooms = _fetch_rooms_for_danchi(skcs, tdfk, block, d)
+                except Exception as e:
+                    log.error(f"UR: rooms fetch failed for {d.get('danchiNm','?')}: {e}")
+                    continue
+                for r in rooms:
+                    parsed = _parse_room(r, d, ward_name)
+                    if parsed:
+                        listings.append(parsed)
+                        ward_count += 1
+            if ward_count:
+                log.info(f"UR: {ward_name} ({skcs}) → {ward_count} room(s) across "
+                         f"{len(active)}/{len(danchi_list)} complex(es) with vacancies")
 
     log.info(f"UR: total {len(listings)} listing(s) fetched.")
     return listings
 
 
 if __name__ == "__main__":
-    # Smoke test: list current UR vacancies for a single ward.
     import json, sys
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-    cfg = {"wards": ["江東区"]} if len(sys.argv) < 2 else {"wards": [sys.argv[1]]}
-    rows = fetch_ur_listings(cfg)
-    print(json.dumps(rows, ensure_ascii=False, indent=2))
+    ward = sys.argv[1] if len(sys.argv) > 1 else "横浜市港北区"
+    rows = fetch_ur_listings({})
+    filtered = [r for r in rows if r["ward"] == ward]
+    print(json.dumps(filtered, ensure_ascii=False, indent=2))
+    print(f"\n{len(filtered)} listings in {ward} (total: {len(rows)})")

@@ -47,6 +47,24 @@ WARD_CENTROID = {
     "狛江市":(35.6346,139.5786),"清瀬市":(35.7858,139.5263),"東久留米市":(35.7585,139.5290),
     "武蔵村山市":(35.7549,139.3878),"多摩市":(35.6363,139.4463),"稲城市":(35.6379,139.5040),
     "羽村市":(35.7669,139.3115),"西東京市":(35.7257,139.5384),
+    # Kanagawa — Yokohama wards
+    "横浜市鶴見区":   (35.5084,139.6761),"横浜市神奈川区":(35.4890,139.6339),
+    "横浜市西区":     (35.4666,139.6218),"横浜市中区":    (35.4437,139.6427),
+    "横浜市南区":     (35.4255,139.6145),"横浜市保土ケ谷区":(35.4607,139.5952),
+    "横浜市磯子区":   (35.3990,139.6327),"横浜市金沢区":  (35.3534,139.6284),
+    "横浜市港北区":   (35.5300,139.6305),"横浜市戸塚区":  (35.3975,139.5332),
+    "横浜市港南区":   (35.3953,139.5965),"横浜市旭区":    (35.4621,139.5592),
+    "横浜市緑区":     (35.5100,139.5872),"横浜市瀬谷区":  (35.4630,139.5089),
+    "横浜市栄区":     (35.3679,139.5737),"横浜市青葉区":  (35.5560,139.5479),
+    "横浜市都筑区":   (35.5399,139.5763),
+    # Kanagawa — Kawasaki wards
+    "川崎市川崎区":   (35.5308,139.6974),"川崎市幸区":    (35.5389,139.6726),
+    "川崎市中原区":   (35.5731,139.6615),"川崎市高津区":  (35.6020,139.6430),
+    "川崎市麻生区":   (35.6451,139.4998),"川崎市多摩区":  (35.6118,139.5505),
+    "川崎市宮前区":   (35.5885,139.5742),
+    # Kanagawa — Sagamihara
+    "相模原市緑区":   (35.5968,139.3906),"相模原市中央区":(35.5716,139.3720),
+    "相模原市南区":   (35.5298,139.3888),
 }
 
 # Geocoding runs in a background daemon thread so the listings endpoint
@@ -157,19 +175,26 @@ def _nearest_station(lat, lng):
         return None
 
 
+_KANAGAWA_PREFIXES = ("横浜市", "川崎市", "相模原市")
+
+def _prefecture(ward):
+    """Return the prefecture string to prepend to geocode queries."""
+    if any(ward.startswith(p) for p in _KANAGAWA_PREFIXES):
+        return "神奈川県"
+    return "東京都"
+
 def _build_geocode_query(row):
     name = (row["name"] or "").strip()
     address = (row["address"] or "").strip()
     ward = (row["ward"] or "").strip()
+    pref = _prefecture(ward)
     # UR listings carry a real street address in `address`. JKK only has
-    # the ward, so we lean on the building name plus 東京都 for those.
+    # the ward, so we lean on the building name plus prefecture for those.
     if address and address != ward:
-        # Strip room-number suffix from name (e.g. "シティコート大島 2号棟108号室")
-        # so GSI matches the building, not a free-text room label.
-        return f"東京都{address}"
+        return f"{pref}{address}"
     if name:
-        return f"東京都{ward} {name}"
-    return f"東京都{ward}"
+        return f"{pref}{ward} {name}"
+    return f"{pref}{ward}"
 
 
 def _geocode_worker():

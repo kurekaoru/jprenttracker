@@ -20,6 +20,9 @@ from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 import logging
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from scraper_ur import fetch_ur_listings
 
@@ -119,17 +122,18 @@ def init_db():
     con.commit()
     return con
 
-def is_seen(con, lid):
-    return con.execute("SELECT 1 FROM listings WHERE id=?", (lid,)).fetchone() is not None
+def get_listing_row(con, lid):
+    return con.execute("SELECT notified FROM listings WHERE id=?", (lid,)).fetchone()
 
 def upsert_listing(con, lid, listing, notified=False):
     now = datetime.now().isoformat()
     source = listing.get("source", "jkk")
     address = listing.get("address") or listing.get("ward", "")
-    if is_seen(con, lid):
+    if get_listing_row(con, lid):
         con.execute(
-            "UPDATE listings SET last_seen=?, rent=?, source=?, address=?, disappeared_at=NULL WHERE id=?",
-            (now, listing["rent"], source, address, lid),
+            "UPDATE listings SET last_seen=?, rent=?, source=?, address=?, disappeared_at=NULL,"
+            " notified=MAX(notified,?) WHERE id=?",
+            (now, listing["rent"], source, address, int(notified), lid),
         )
     else:
         con.execute(
@@ -170,6 +174,7 @@ CODE_WARD = {v: k for k, v in WARD_CODE.items()}
 
 def fetch_listings():
     all_listings = []
+    ok = False
 
     try:
         with sync_playwright() as p:
@@ -301,6 +306,7 @@ def fetch_listings():
                 wait_stable(popup)
 
             browser.close()
+        ok = True
 
     except PWTimeout as e:
         log.error(f"Playwright timeout: {e}")
@@ -313,7 +319,7 @@ def fetch_listings():
             f"  [{i+1:03}] {l['name']!r:40} | {l['ward']:5} | "
             f"¥{l['rent']:>7,} | {l['layout']:6} | {l['size_m2']}m²"
         )
-    return all_listings
+    return all_listings, ok
 
 
 def parse_results(html, current_url):
@@ -420,10 +426,11 @@ SOURCE_META = {
 
 
 def send_slack(listing):
+    """Send a Slack notification. Returns True if sent, False otherwise."""
     webhook = SLACK_WEBHOOK_URL or load_json(CONFIG_FILE, {}).get("slack_webhook", "")
     if not webhook:
         log.warning("SLACK_WEBHOOK_URL not set — skipping")
-        return
+        return False
 
     meta = SOURCE_META.get(listing.get("source", "jkk"), SOURCE_META["jkk"])
     emoji, label, footer = meta["emoji"], meta["label"], meta["footer"]
@@ -467,8 +474,10 @@ def send_slack(listing):
         r = requests.post(webhook, json=payload, timeout=10)
         r.raise_for_status()
         log.info(f"Slack sent ✓  [{label}] {listing['name']}")
+        return True
     except Exception as e:
         log.error(f"Slack send failed: {e}")
+        return False
 
 
 def run():
@@ -479,41 +488,52 @@ def run():
     while True:
         config = load_json(CONFIG_FILE, {})
 
-        listings = []
+        jkk_listings, jkk_ok = [], False
+        ur_listings,  ur_ok  = [], False
         try:
-            listings.extend(fetch_listings())
+            jkk_listings, jkk_ok = fetch_listings()
         except Exception as e:
             log.error(f"JKK fetch failed: {e}")
         try:
-            listings.extend(fetch_ur_listings(config))
+            ur_listings = fetch_ur_listings(config)
+            ur_ok = True
         except Exception as e:
             log.error(f"UR fetch failed: {e}")
+
+        listings = jkk_listings + ur_listings
+        if not jkk_ok:
+            log.warning("JKK fetch did not complete — skipping JKK disappearance detection this cycle.")
+        if not ur_ok:
+            log.warning("UR fetch did not complete — skipping UR disappearance detection this cycle.")
 
         new_count = {"jkk": 0, "ur": 0}
         for listing in listings:
             lid = listing_id(listing)
-            already_seen = is_seen(con, lid)
+            row = get_listing_row(con, lid)
+            already_notified = bool(row[0]) if row else False
             notified = False
 
-            if not already_seen and matches_criteria(listing, config):
+            if not already_notified and matches_criteria(listing, config):
                 rent_display = f"¥{listing['rent']:,}" if listing["rent"] else "不明"
                 src = listing.get("source", "jkk").upper()
                 log.info(f"NEW match [{src}] → {listing['name']} | {listing['ward']} | {rent_display}")
-                send_slack(listing)
-                notified = True
+                notified = send_slack(listing)
                 new_count[listing.get("source", "jkk")] = new_count.get(listing.get("source", "jkk"), 0) + 1
 
             upsert_listing(con, lid, listing, notified=notified)
 
-        # Mark listings that weren't seen this cycle as disappeared.
-        # Guard: only run if we actually got data (avoids wiping on fetch failure).
-        if listings:
+        # Mark disappeared only for sources whose fetch completed successfully.
+        # If JKK timed out but UR succeeded (or vice versa), we must not wipe
+        # the failed source's listings — that would be a false disappearance.
+        sources_ok = (["jkk"] if jkk_ok else []) + (["ur"] if ur_ok else [])
+        if sources_ok:
             now_iso = datetime.now().isoformat()
             cutoff = (datetime.now() - timedelta(seconds=int(POLL_INTERVAL * 1.5))).isoformat()
+            placeholders = ",".join("?" * len(sources_ok))
             cur = con.execute(
-                "UPDATE listings SET disappeared_at=? "
-                "WHERE disappeared_at IS NULL AND last_seen < ?",
-                (now_iso, cutoff),
+                f"UPDATE listings SET disappeared_at=? "
+                f"WHERE disappeared_at IS NULL AND last_seen < ? AND source IN ({placeholders})",
+                [now_iso, cutoff] + sources_ok,
             )
             con.commit()
             if cur.rowcount:

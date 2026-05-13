@@ -349,9 +349,17 @@
     width: 14px; height: 14px; border-radius: 50%;
     border: 2px solid #fff;
     box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    transition: transform 0.15s;
   }
   .map-marker.jkk { background: var(--accent); }
   .map-marker.ur  { background: #3a86ff; }
+  .map-marker.selected {
+    width: 20px; height: 20px;
+    border: 3px solid #f59e0b;
+    box-shadow: 0 0 0 3px rgba(245,158,11,0.35), 0 2px 6px rgba(0,0,0,0.5);
+    margin: -3px;
+  }
+  .sort-table tbody tr.row-selected td { background: var(--accent-light); }
 
   /* Sortable table */
   .sort-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -423,6 +431,13 @@
       <div class="card-title">専有面積</div>
       <label>最低面積 (m²)</label>
       <input type="number" id="min-size" placeholder="0" step="1" oninput="applyMapFilters()" />
+    </div>
+
+    <!-- Walk time -->
+    <div class="card">
+      <div class="card-title">駅徒歩</div>
+      <label>最大徒歩分数 (分)</label>
+      <input type="number" id="max-walk" placeholder="例: 10 (0=上限なし)" step="1" min="0" oninput="applyMapFilters()" />
     </div>
 
     <!-- Source filter -->
@@ -536,6 +551,17 @@ const SI = [
   '福生市','狛江市','東大和市','清瀬市','東久留米市','武蔵村山市','多摩市',
   '稲城市','羽村市','あきる野市','日の出町','檜原村','奥多摩町','瑞穂町'
 ];
+const YOKOHAMA = [
+  '横浜市鶴見区','横浜市神奈川区','横浜市西区','横浜市中区','横浜市南区',
+  '横浜市保土ケ谷区','横浜市磯子区','横浜市金沢区','横浜市港北区','横浜市戸塚区',
+  '横浜市港南区','横浜市旭区','横浜市緑区','横浜市瀬谷区','横浜市栄区',
+  '横浜市青葉区','横浜市都筑区'
+];
+const KAWASAKI = [
+  '川崎市川崎区','川崎市幸区','川崎市中原区','川崎市高津区',
+  '川崎市麻生区','川崎市多摩区','川崎市宮前区'
+];
+const SAGAMIHARA = ['相模原市緑区','相模原市中央区','相模原市南区'];
 const LAYOUTS = ['1R','1K','1DK','1LDK','2K','2DK','2LDK','3K','3DK','3LDK','4LDK以上'];
 
 let selectedWards = new Set();
@@ -564,9 +590,27 @@ function buildChips() {
 
   const label_si = document.createElement('div');
   label_si.style.cssText = 'font-size:10px;color:var(--muted);margin-bottom:4px;margin-top:8px;font-weight:600;letter-spacing:.05em';
-  label_si.textContent = '市部';
+  label_si.textContent = '市部（東京）';
   wc.appendChild(label_si);
   SI.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
+
+  const label_yoko = document.createElement('div');
+  label_yoko.style.cssText = 'font-size:10px;color:var(--muted);margin-bottom:4px;margin-top:8px;font-weight:600;letter-spacing:.05em';
+  label_yoko.textContent = '横浜市';
+  wc.appendChild(label_yoko);
+  YOKOHAMA.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
+
+  const label_kawa = document.createElement('div');
+  label_kawa.style.cssText = 'font-size:10px;color:var(--muted);margin-bottom:4px;margin-top:8px;font-weight:600;letter-spacing:.05em';
+  label_kawa.textContent = '川崎市';
+  wc.appendChild(label_kawa);
+  KAWASAKI.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
+
+  const label_saga = document.createElement('div');
+  label_saga.style.cssText = 'font-size:10px;color:var(--muted);margin-bottom:4px;margin-top:8px;font-weight:600;letter-spacing:.05em';
+  label_saga.textContent = '相模原市';
+  wc.appendChild(label_saga);
+  SAGAMIHARA.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
 
   const lc = document.getElementById('layout-chips');
   LAYOUTS.forEach(l => makeChip(l, selectedLayouts, lc, applyMapFilters));
@@ -593,6 +637,7 @@ async function loadConfig() {
     document.getElementById('min-rent').value     = d.min_rent || '';
     document.getElementById('max-rent').value     = d.max_rent || '';
     document.getElementById('min-size').value     = d.min_size_m2 || '';
+    document.getElementById('max-walk').value     = d.max_walk_min || '';
     selectedWards   = new Set(d.wards   || []);
     selectedLayouts = new Set(d.layouts || []);
     // refresh chips
@@ -616,6 +661,7 @@ async function saveConfig() {
     layouts:       [...selectedLayouts],
     wards:         [...selectedWards],
     min_size_m2:   parseFloat(document.getElementById('min-size').value) || 0,
+    max_walk_min:  parseInt(document.getElementById('max-walk').value) || 0,
   };
 
   // also write to config.json locally via clipboard hint when server down
@@ -682,24 +728,56 @@ function fmtDate(iso) {
   return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
 }
 
-function marketDays(firstSeen, endIso) {
+function marketDuration(firstSeen, endIso) {
   if (!firstSeen) return null;
-  const ms = (endIso ? new Date(endIso) : new Date()) - new Date(firstSeen);
-  return Math.max(0, Math.round(ms / 86400000));
+  const ms = Math.max(0, (endIso ? new Date(endIso) : new Date()) - new Date(firstSeen));
+  const days  = Math.floor(ms / 86400000);
+  const hours = Math.floor((ms % 86400000) / 3600000);
+  return { days, hours, ms };
+}
+
+function fmtDuration(firstSeen, endIso) {
+  const d = marketDuration(firstSeen, endIso);
+  if (!d) return '—';
+  if (d.days === 0) return `${d.hours}時間`;
+  return `${d.days}日 ${d.hours}時間`;
 }
 
 // ── Map ─────────────────────────────────────────────────────────
 let map, markerLayer;
 let _allListings = [];
 let _pendingCount = 0;
+let _mapUserMoved = false;
+let _markerMap = {};
+let _selectedId = null;
 
 function initMap() {
   map = L.map('map', { scrollWheelZoom: false }).setView([35.6762, 139.6503], 11);
+  map.on('movestart zoomstart', () => { _mapUserMoved = true; });
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap',
   }).addTo(map);
   markerLayer = L.layerGroup().addTo(map);
+  loadTokyoBoundary();
+}
+
+async function loadTokyoBoundary() {
+  try {
+    const r = await fetch('https://raw.githubusercontent.com/dataofjapan/land/master/tokyo.geojson');
+    if (!r.ok) return;
+    const gj = await r.json();
+    L.geoJSON(gj, {
+      style: {
+        color: '#1D9E75',
+        weight: 1.5,
+        opacity: 0.45,
+        fillOpacity: 0.04,
+        fillColor: '#1D9E75',
+      },
+      interactive: false,
+    }).addTo(map);
+  } catch (_) { /* decorative — fail silently */ }
 }
 
 function pinIcon(source) {
@@ -721,8 +799,8 @@ function popupHtml(l) {
   const rent = l.rent ? `¥${l.rent.toLocaleString()}` : '—';
   const size = l.size_m2 ? `${l.size_m2} m²` : '—';
   const tag  = l.source === 'ur' ? 'UR' : 'JKK';
-  const days    = marketDays(l.first_seen, l.disappeared_at);
-  const daysStr = days !== null ? `${days}日間掲載中` : '';
+  const dur     = marketDuration(l.first_seen, l.disappeared_at);
+  const daysStr = dur ? fmtDuration(l.first_seen, l.disappeared_at) + '掲載中' : '';
   const station = stationStr(l.nearest_station, l.walk_min);
   return `
     <div class="pin-popup">
@@ -735,6 +813,42 @@ function popupHtml(l) {
     </div>`;
 }
 
+function selectListing(id, url) {
+  // Deselect previous
+  if (_selectedId && _markerMap[_selectedId]) {
+    const prev = _markerMap[_selectedId];
+    prev.marker.setIcon(pinIcon(prev.source));
+  }
+  document.querySelectorAll('.sort-table tbody tr.row-selected')
+    .forEach(r => r.classList.remove('row-selected'));
+
+  if (_selectedId === id) { _selectedId = null; return; } // toggle off
+
+  _selectedId = id;
+  const entry = _markerMap[id];
+  if (entry) {
+    entry.marker.setIcon(pinIconSelected(entry.source));
+    map.setView(entry.marker.getLatLng(), Math.max(map.getZoom(), 14), { animate: true });
+    entry.marker.openPopup();
+    _mapUserMoved = true;
+  }
+  const row = document.querySelector(`.sort-table tbody tr[data-id="${CSS.escape(id)}"]`);
+  if (row) {
+    row.classList.add('row-selected');
+    row.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+function pinIconSelected(source) {
+  return L.divIcon({
+    className: '',
+    html: `<div class="map-marker ${source === 'ur' ? 'ur' : 'jkk'} selected"></div>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+    popupAnchor: [0, -10],
+  });
+}
+
 let _listingsPollTimer = null;
 
 function applyMapFilters() {
@@ -742,8 +856,10 @@ function applyMapFilters() {
   const minRent = parseInt(document.getElementById('min-rent').value) || 0;
   const maxRent = parseInt(document.getElementById('max-rent').value) || 0;
   const minSize = parseFloat(document.getElementById('min-size').value) || 0;
+  const maxWalk = parseInt(document.getElementById('max-walk').value) || 0;
 
   markerLayer.clearLayers();
+  _markerMap = {};
   _filteredListings = [];
   const bounds = [];
 
@@ -754,16 +870,19 @@ function applyMapFilters() {
     if (minRent > 0 && l.rent < minRent) return;
     if (maxRent > 0 && l.rent > maxRent) return;
     if (minSize > 0 && l.size_m2 < minSize) return;
+    if (maxWalk > 0 && (l.walk_min == null || l.walk_min > maxWalk)) return;
 
     _filteredListings.push(l);
     const m = L.marker([l.lat, l.lng], { icon: pinIcon(l.source) })
       .bindPopup(popupHtml(l));
     m.addTo(markerLayer);
+    _markerMap[l.id] = { marker: m, source: l.source };
     bounds.push([l.lat, l.lng]);
   });
   const shown = _filteredListings.length;
 
-  if (bounds.length) {
+  // Only auto-fit on the very first load (when map has no user-set view yet)
+  if (bounds.length && !_mapUserMoved) {
     map.fitBounds(bounds, { padding: [30, 30], maxZoom: 13 });
   }
 
@@ -817,8 +936,8 @@ function renderAvailableTable() {
       return _sortAsc ? va.localeCompare(vb, 'ja') : vb.localeCompare(va, 'ja');
     }
     if (_sortCol === 'days') {
-      va = marketDays(a.first_seen) ?? -1;
-      vb = marketDays(b.first_seen) ?? -1;
+      va = marketDuration(a.first_seen)?.ms ?? -1;
+      vb = marketDuration(b.first_seen)?.ms ?? -1;
     } else if (_sortCol === 'walk_min') {
       va = a.walk_min ?? 9999; vb = b.walk_min ?? 9999;
     } else {
@@ -838,9 +957,9 @@ function renderAvailableTable() {
   const tbody = sorted.map(l => {
     const tag     = l.source === 'ur' ? '🏢' : '🏠';
     const station = stationStr(l.nearest_station, l.walk_min);
-    const days    = marketDays(l.first_seen);
     const href    = l.url ? escHtml(l.url) : '#';
-    return `<tr onclick="if(event.target.tagName!='A'&&'${l.url}')window.open('${l.url}','_blank')">
+    const sel     = l.id === _selectedId ? ' row-selected' : '';
+    return `<tr class="${sel}" data-id="${escHtml(l.id)}" onclick="if(event.target.tagName!='A')selectListing('${l.id}','${l.url||''}')">
       <td>${tag} <a href="${href}" target="_blank" rel="noopener">${escHtml(l.name)}</a></td>
       <td>${escHtml(l.ward)}</td>
       <td style="font-family:var(--mono);">¥${(l.rent||0).toLocaleString()}</td>
@@ -849,7 +968,7 @@ function renderAvailableTable() {
       <td>${l.nearest_station ? escHtml(l.nearest_station) : '—'}</td>
       <td style="font-family:var(--mono);">${l.walk_min > 0 ? l.walk_min+'分' : '—'}</td>
       <td style="font-family:var(--mono);">${fmtDate(l.first_seen)}</td>
-      <td style="font-family:var(--mono);color:var(--accent);">${days !== null ? days+'日' : '—'}</td>
+      <td style="font-family:var(--mono);color:var(--accent);">${fmtDuration(l.first_seen)}</td>
     </tr>`;
   }).join('');
 
@@ -924,8 +1043,8 @@ function renderDisappearedTable() {
       return _dSortAsc ? va.localeCompare(vb, 'ja') : vb.localeCompare(va, 'ja');
     }
     if (_dSortCol === 'duration') {
-      va = marketDays(a.first_seen, a.disappeared_at) ?? -1;
-      vb = marketDays(b.first_seen, b.disappeared_at) ?? -1;
+      va = marketDuration(a.first_seen, a.disappeared_at)?.ms ?? -1;
+      vb = marketDuration(b.first_seen, b.disappeared_at)?.ms ?? -1;
     } else if (_dSortCol === 'walk_min') {
       va = a.walk_min ?? 9999; vb = b.walk_min ?? 9999;
     } else {
@@ -944,7 +1063,6 @@ function renderDisappearedTable() {
 
   const tbody = sorted.map(l => {
     const tag      = l.source === 'ur' ? '🏢' : '🏠';
-    const days     = marketDays(l.first_seen, l.disappeared_at);
     const href     = l.url ? escHtml(l.url) : '#';
     return `<tr onclick="if(event.target.tagName!='A'&&'${l.url}')window.open('${l.url}','_blank')">
       <td>${tag} <a href="${href}" target="_blank" rel="noopener">${escHtml(l.name)}</a></td>
@@ -956,7 +1074,7 @@ function renderDisappearedTable() {
       <td style="font-family:var(--mono);">${l.walk_min > 0 ? l.walk_min+'分' : '—'}</td>
       <td style="font-family:var(--mono);">${fmtDate(l.first_seen)}</td>
       <td style="font-family:var(--mono);">${fmtDate(l.disappeared_at)}</td>
-      <td style="font-family:var(--mono);color:var(--accent);">${days !== null ? days+'日' : '—'}</td>
+      <td style="font-family:var(--mono);color:var(--accent);">${fmtDuration(l.first_seen, l.disappeared_at)}</td>
     </tr>`;
   }).join('');
 
