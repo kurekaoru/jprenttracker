@@ -2,7 +2,7 @@
 Config + read API for the dashboard. Run alongside scraper4.py.
 """
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, redirect
 from flask_cors import CORS
 from flask_jwt_extended import (
     JWTManager, create_access_token, jwt_required, get_jwt_identity
@@ -10,6 +10,7 @@ from flask_jwt_extended import (
 from werkzeug.security import generate_password_hash, check_password_hash
 import json, math, os, secrets, sqlite3, time, threading, requests
 from datetime import datetime, timedelta
+from urllib.parse import urlencode
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -19,10 +20,20 @@ LOG_FILE    = "jkk_monitor.log"
 DB_FILE     = "jkk_monitor.db"
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=30)
 jwt = JWTManager(app)
+
+LINE_CLIENT_ID     = os.environ.get("LINE_NOTIFY_CLIENT_ID", "")
+LINE_CLIENT_SECRET = os.environ.get("LINE_NOTIFY_CLIENT_SECRET", "")
+LINE_REDIRECT_URI  = os.environ.get("LINE_NOTIFY_REDIRECT_URI", "")
+
+SLACK_CLIENT_ID     = os.environ.get("SLACK_CLIENT_ID", "")
+SLACK_CLIENT_SECRET = os.environ.get("SLACK_CLIENT_SECRET", "")
+SLACK_REDIRECT_URI  = os.environ.get("SLACK_REDIRECT_URI", "")
+
+DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "http://34.72.39.84:5050")
 
 TOKYO_WARDS = [
     "千代田区","中央区","港区","新宿区","文京区","台東区","墨田区","江東区",
@@ -481,6 +492,145 @@ def toggle_user_notification(notif_id):
     con.commit()
     con.close()
     return jsonify({"status": "ok"})
+
+
+# ── OAuth connect helpers ─────────────────────────────────────────────────────
+
+def _store_oauth_state(con, key, user_id):
+    con.execute("INSERT OR REPLACE INTO app_config (key, value) VALUES (?, ?)",
+                (key, str(user_id)))
+    con.commit()
+
+def _pop_oauth_state(con, key):
+    row = con.execute("SELECT value FROM app_config WHERE key=?", (key,)).fetchone()
+    if row:
+        con.execute("DELETE FROM app_config WHERE key=?", (key,))
+        con.commit()
+        return int(row["value"])
+    return None
+
+def _connected_page(type_name):
+    return f"""<!DOCTYPE html><html><head>
+<meta charset="UTF-8">
+<style>body{{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f6f5f0}}.box{{background:#fff;border-radius:14px;padding:2rem 2.5rem;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.1)}}.ok{{font-size:48px}}.msg{{font-size:18px;font-weight:600;margin:.5rem 0}}.sub{{font-size:13px;color:#888}}</style>
+</head><body><div class="box">
+<div class="ok">✅</div>
+<div class="msg">{type_name} を連携しました</div>
+<div class="sub">このタブを閉じてください</div>
+</div></body></html>"""
+
+def _error_page(msg):
+    return f"<p style='font-family:system-ui;padding:2rem;color:red'>エラー: {msg}</p>", 400
+
+
+@app.route("/api/auth/line/start")
+@jwt_required()
+def line_oauth_start():
+    if not LINE_CLIENT_ID:
+        return jsonify({"error": "LINE_NOTIFY_CLIENT_ID が設定されていません"}), 503
+    user_id = int(get_jwt_identity())
+    state   = secrets.token_hex(16)
+    con     = db()
+    _store_oauth_state(con, f"line_state_{state}", user_id)
+    con.close()
+    url = "https://notify-bot.line.me/oauth/authorize?" + urlencode({
+        "response_type": "code",
+        "client_id":     LINE_CLIENT_ID,
+        "redirect_uri":  LINE_REDIRECT_URI,
+        "scope":         "notify",
+        "state":         state,
+    })
+    return jsonify({"url": url})
+
+
+@app.route("/api/auth/line/callback")
+def line_oauth_callback():
+    code  = request.args.get("code")
+    state = request.args.get("state")
+    if not code or not state:
+        return _error_page("code または state がありません")
+    con     = db()
+    user_id = _pop_oauth_state(con, f"line_state_{state}")
+    if not user_id:
+        con.close()
+        return _error_page("無効な state です（期限切れの可能性があります）")
+    try:
+        r = requests.post("https://notify-api.line.me/oauth/token", data={
+            "grant_type":    "authorization_code",
+            "code":          code,
+            "redirect_uri":  LINE_REDIRECT_URI,
+            "client_id":     LINE_CLIENT_ID,
+            "client_secret": LINE_CLIENT_SECRET,
+        }, timeout=10)
+        token = r.json().get("access_token")
+        if not token:
+            con.close()
+            return _error_page("トークン取得失敗")
+        con.execute(
+            "INSERT INTO user_notifications (user_id, type, target, label) VALUES (?,?,?,?)",
+            (user_id, "line", token, "LINE Notify")
+        )
+        con.commit()
+    except Exception as e:
+        con.close()
+        return _error_page(str(e))
+    con.close()
+    return _connected_page("LINE Notify")
+
+
+@app.route("/api/auth/slack/start")
+@jwt_required()
+def slack_oauth_start():
+    if not SLACK_CLIENT_ID:
+        return jsonify({"error": "SLACK_CLIENT_ID が設定されていません"}), 503
+    user_id = int(get_jwt_identity())
+    state   = secrets.token_hex(16)
+    con     = db()
+    _store_oauth_state(con, f"slack_state_{state}", user_id)
+    con.close()
+    url = "https://slack.com/oauth/v2/authorize?" + urlencode({
+        "client_id":   SLACK_CLIENT_ID,
+        "scope":       "incoming-webhook",
+        "redirect_uri": SLACK_REDIRECT_URI,
+        "state":       state,
+    })
+    return jsonify({"url": url})
+
+
+@app.route("/api/auth/slack/callback")
+def slack_oauth_callback():
+    code  = request.args.get("code")
+    state = request.args.get("state")
+    if not code or not state:
+        return _error_page("code または state がありません")
+    con     = db()
+    user_id = _pop_oauth_state(con, f"slack_state_{state}")
+    if not user_id:
+        con.close()
+        return _error_page("無効な state です")
+    try:
+        r = requests.post("https://slack.com/api/oauth.v2.access", data={
+            "client_id":     SLACK_CLIENT_ID,
+            "client_secret": SLACK_CLIENT_SECRET,
+            "code":          code,
+            "redirect_uri":  SLACK_REDIRECT_URI,
+        }, timeout=10)
+        d           = r.json()
+        webhook_url = d.get("incoming_webhook", {}).get("url")
+        channel     = d.get("incoming_webhook", {}).get("channel", "")
+        if not webhook_url:
+            con.close()
+            return _error_page("Webhook URL 取得失敗: " + str(d.get("error", "")))
+        con.execute(
+            "INSERT INTO user_notifications (user_id, type, target, label) VALUES (?,?,?,?)",
+            (user_id, "slack", webhook_url, f"Slack {channel}")
+        )
+        con.commit()
+    except Exception as e:
+        con.close()
+        return _error_page(str(e))
+    con.close()
+    return _connected_page("Slack")
 
 
 # ── Legacy config (scraper still reads this for its own filter) ───────────────

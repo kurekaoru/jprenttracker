@@ -713,7 +713,7 @@
 <!-- Add notification modal -->
 <div class="modal-overlay" id="add-notif-modal">
   <div class="modal-box">
-    <button class="modal-close" onclick="document.getElementById('add-notif-modal').classList.remove('open')">×</button>
+    <button class="modal-close" onclick="clearInterval(_oauthPollTimer);document.getElementById('add-notif-modal').classList.remove('open')">×</button>
     <div style="font-size:16px;font-weight:600;margin-bottom:1.1rem;">通知先を追加</div>
     <div class="modal-err" id="notif-err"></div>
 
@@ -743,21 +743,37 @@
       </button>
     </div>
 
-    <!-- Dynamic input area -->
-    <div class="notif-input-area" id="notif-input-area">
-      <label id="notif-target-label">Webhook URL</label>
+    <!-- OAuth area (LINE / Slack) -->
+    <div id="notif-oauth-area" style="display:none;" class="notif-input-area">
+      <div style="display:flex;gap:12px;align-items:flex-start;">
+        <div>
+          <img id="notif-oauth-qr" width="130" height="130"
+               style="border-radius:8px;border:4px solid var(--surface2);display:block;" alt="QR">
+          <div style="font-size:10px;color:var(--muted);text-align:center;margin-top:4px;">スマホでスキャン</div>
+        </div>
+        <div style="flex:1;">
+          <div id="notif-oauth-desc" style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5;"></div>
+          <a id="notif-oauth-link" href="#" target="_blank" rel="noopener"
+             style="display:inline-block;padding:9px 14px;border-radius:8px;font-size:13px;font-weight:600;color:#fff;text-decoration:none;margin-bottom:10px;"></a>
+          <div id="notif-oauth-status" style="font-size:12px;color:var(--muted);margin-top:6px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manual input area (email only, or fallback) -->
+    <div id="notif-manual-area" class="notif-input-area">
+      <label id="notif-target-label">メールアドレス</label>
       <input type="text" id="notif-target" class="notif-target-input"
-             placeholder="https://hooks.slack.com/services/..."
+             placeholder="you@example.com"
              onkeydown="if(event.key==='Enter')submitAddNotif()">
       <label>ラベル（任意）</label>
       <input type="text" id="notif-label"
-             style="width:100%;padding:8px 10px;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:13px;font-family:var(--font);"
-             placeholder="例: 自分のSlack"
+             style="width:100%;padding:8px 10px;margin-bottom:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:13px;font-family:var(--font);"
+             placeholder="例: 自分のメール"
              onkeydown="if(event.key==='Enter')submitAddNotif()">
       <div id="notif-hint" style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5;"></div>
+      <button class="modal-submit" onclick="submitAddNotif()">追加する</button>
     </div>
-
-    <button class="modal-submit" onclick="submitAddNotif()">追加する</button>
   </div>
 </div>
 
@@ -1501,36 +1517,92 @@ function renderNotifications(list) {
 }
 
 let _notifType = 'slack';
+let _oauthPollTimer = null;
 
 function selectNotifType(type) {
   _notifType = type;
-  ['slack','line','email'].forEach(t => {
-    document.getElementById(`nt-${t}`)?.classList.toggle('active', t === type);
-  });
-  const input = document.getElementById('notif-target');
-  const label = document.getElementById('notif-target-label');
-  const hint  = document.getElementById('notif-hint');
-  if (type === 'slack') {
-    label.textContent = 'Webhook URL';
-    input.placeholder = 'https://hooks.slack.com/services/...';
-    hint.textContent  = 'Slack の「Incoming Webhooks」アプリから取得できます。';
-  } else if (type === 'line') {
-    label.textContent = 'LINE Notify アクセストークン';
-    input.placeholder = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
-    hint.innerHTML    = '<a href="https://notify-bot.line.me/my/" target="_blank" style="color:var(--accent)">notify-bot.line.me/my/</a> でトークンを発行してください。';
+  ['slack','line','email'].forEach(t =>
+    document.getElementById(`nt-${t}`)?.classList.toggle('active', t === type)
+  );
+  const oauthArea  = document.getElementById('notif-oauth-area');
+  const manualArea = document.getElementById('notif-manual-area');
+
+  if (type === 'email') {
+    oauthArea.style.display  = 'none';
+    manualArea.style.display = 'block';
+    document.getElementById('notif-target-label').textContent = 'メールアドレス';
+    document.getElementById('notif-target').placeholder = 'you@example.com';
+    document.getElementById('notif-hint').textContent = 'サーバーの .env に SMTP 設定が必要です。';
+    document.getElementById('notif-target').value = '';
   } else {
-    label.textContent = 'メールアドレス';
-    input.placeholder = 'you@example.com';
-    hint.textContent  = 'サーバーの .env に SMTP 設定が必要です。';
+    oauthArea.style.display  = 'block';
+    manualArea.style.display = 'none';
+    startOAuthConnect(type);
   }
-  input.value = '';
-  input.focus();
+}
+
+async function startOAuthConnect(type) {
+  clearInterval(_oauthPollTimer);
+  const qrEl     = document.getElementById('notif-oauth-qr');
+  const linkEl   = document.getElementById('notif-oauth-link');
+  const descEl   = document.getElementById('notif-oauth-desc');
+  const statusEl = document.getElementById('notif-oauth-status');
+
+  qrEl.src      = '';
+  statusEl.textContent = '接続URLを生成中…';
+
+  try {
+    const r = await fetch(`${API}/auth/${type}/start`, { headers: authHeaders() });
+    const d = await r.json();
+    if (!r.ok) { statusEl.textContent = d.error || '設定が必要です'; return; }
+
+    const url = d.url;
+    qrEl.src  = `https://api.qrserver.com/v1/create-qr-code/?size=130x130&margin=6&data=${encodeURIComponent(url)}`;
+
+    if (type === 'line') {
+      descEl.textContent = 'QRコードをスキャンするか、ボタンを押してLINEで認証してください。';
+      linkEl.textContent = 'LINE で連携する →';
+      linkEl.style.background = '#06c755';
+    } else {
+      descEl.textContent = 'QRコードをスキャンするか、ボタンを押してSlackチャンネルを選択してください。';
+      linkEl.textContent = 'Slack に追加する →';
+      linkEl.style.background = '#4a154b';
+    }
+    linkEl.href = url;
+    statusEl.textContent = '認証完了を待っています…';
+
+    const before = Date.now();
+    _oauthPollTimer = setInterval(async () => {
+      if (Date.now() - before > 120_000) {
+        clearInterval(_oauthPollTimer);
+        statusEl.textContent = 'タイムアウトしました。もう一度お試しください。';
+        return;
+      }
+      try {
+        const pr = await fetch(`${API}/user/notifications`, { headers: authHeaders() });
+        const pd = await pr.json();
+        const found = pd.notifications?.some(
+          n => n.type === type && new Date(n.created_at).getTime() > before - 5000
+        );
+        if (found) {
+          clearInterval(_oauthPollTimer);
+          statusEl.innerHTML = '✅ 連携完了！';
+          setTimeout(() => {
+            document.getElementById('add-notif-modal').classList.remove('open');
+            loadNotifications();
+          }, 1200);
+        }
+      } catch {}
+    }, 2000);
+  } catch { statusEl.textContent = 'サーバーエラー'; }
 }
 
 function openAddNotif() {
-  document.getElementById('notif-err').textContent = '';
-  document.getElementById('notif-target').value    = '';
-  document.getElementById('notif-label').value     = '';
+  clearInterval(_oauthPollTimer);
+  document.getElementById('notif-err').textContent    = '';
+  document.getElementById('notif-target').value       = '';
+  document.getElementById('notif-label').value        = '';
+  document.getElementById('notif-oauth-status').textContent = '';
   selectNotifType('slack');
   document.getElementById('add-notif-modal').classList.add('open');
 }
