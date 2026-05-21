@@ -633,6 +633,39 @@ def slack_oauth_callback():
     return _connected_page("Slack")
 
 
+@app.route("/api/auth/telegram/connect", methods=["POST"])
+@jwt_required()
+def telegram_connect():
+    user_id = int(get_jwt_identity())
+    token   = (request.json or {}).get("token", "").strip()
+    if not token:
+        return jsonify({"error": "token が必要です"}), 400
+    try:
+        r = requests.get(
+            f"https://api.telegram.org/bot{token}/getUpdates",
+            timeout=10
+        )
+        d = r.json()
+        if not d.get("ok"):
+            return jsonify({"error": "トークンが無効です: " + d.get("description", "")}), 400
+        updates = d.get("result", [])
+        if not updates:
+            return jsonify({"error": "Botにメッセージを1件送ってから再試行してください"}), 400
+        chat_id = str(updates[-1]["message"]["chat"]["id"])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    target = f"{token}|{chat_id}"
+    label  = f"Telegram ({chat_id})"
+    con    = db()
+    con.execute(
+        "INSERT INTO user_notifications (user_id, type, target, label) VALUES (?,?,?,?)",
+        (user_id, "telegram", target, label)
+    )
+    con.commit()
+    con.close()
+    return jsonify({"ok": True, "chat_id": int(chat_id)})
+
+
 # ── Legacy config (scraper still reads this for its own filter) ───────────────
 
 def load_config():

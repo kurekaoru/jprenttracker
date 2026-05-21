@@ -560,6 +560,44 @@ def send_email(listing, to_email):
         return False
 
 
+def send_telegram(listing, target):
+    """target = 'bot_token|chat_id'"""
+    parts = target.split("|", 1)
+    if len(parts) != 2:
+        log.error(f"Telegram target malformed: {target}")
+        return False
+    token, chat_id = parts
+    meta = SOURCE_META.get(listing.get("source", "jkk"), SOURCE_META["jkk"])
+    emoji, label = meta["emoji"], meta["label"]
+    rent_str = f"¥{listing['rent']:,}" if listing["rent"] else "要確認"
+    text = (f"{emoji} *新着{label}物件*\n"
+            f"物件名: {listing['name'] or '—'}\n"
+            f"所在地: {listing['ward']}\n"
+            f"家賃: {rent_str}\n"
+            f"間取り: {listing['layout'] or '—'}\n"
+            f"面積: {listing.get('size_m2') or '—'} m²")
+    if listing.get("url"):
+        text += f"\n[物件ページ]({listing['url']})"
+    for attempt in range(3):
+        try:
+            r = requests.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"},
+                timeout=10,
+            )
+            if r.status_code == 429:
+                time.sleep(int(r.headers.get("Retry-After", 1)))
+                continue
+            r.raise_for_status()
+            log.info(f"Telegram sent ✓  [{label}] {listing['name']}")
+            return True
+        except Exception as e:
+            log.error(f"Telegram send failed: {e}")
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+    return False
+
+
 def get_user_targets(con):
     """Return all enabled notification targets with their per-user filter settings."""
     rows = con.execute("""
@@ -614,6 +652,8 @@ def send_notifications(con, listing, lid, global_config):
                 sent = send_slack(listing, t["target"])
             elif t["type"] == "line":
                 sent = send_line(listing, t["target"])
+            elif t["type"] == "telegram":
+                sent = send_telegram(listing, t["target"])
             elif t["type"] == "email":
                 sent = send_email(listing, t["target"])
             if sent:
