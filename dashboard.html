@@ -382,6 +382,119 @@
     .sidebar { border-right: none; border-bottom: 1px solid var(--border); }
     .stat-row { grid-template-columns: 1fr 1fr; }
   }
+
+  /* ── Auth modal ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5); z-index: 1000;
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--surface); border-radius: 14px;
+    padding: 1.5rem; width: 340px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3); position: relative;
+  }
+  .modal-close {
+    position: absolute; top: 12px; right: 14px;
+    background: none; border: none; font-size: 20px;
+    cursor: pointer; color: var(--muted); line-height: 1;
+  }
+  .modal-close:hover { color: var(--text); }
+  .modal-tabs {
+    display: flex; margin-bottom: 1.1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-tab {
+    flex: 1; padding: 6px 0; font-size: 13px; font-weight: 500;
+    background: none; border: none; border-bottom: 2px solid transparent;
+    cursor: pointer; color: var(--muted); font-family: var(--font);
+    transition: all 0.15s; margin-bottom: -1px;
+  }
+  .modal-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .modal-form { display: flex; flex-direction: column; }
+  .modal-form input {
+    padding: 9px 11px; margin-bottom: 9px;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface2); color: var(--text);
+    font-size: 13px; font-family: var(--font); width: 100%;
+  }
+  .modal-form input:focus { outline: none; border-color: var(--accent); }
+  .modal-err { font-size: 12px; color: var(--danger); min-height: 18px; margin-bottom: 6px; }
+  .modal-submit {
+    padding: 10px; background: var(--accent); color: #fff;
+    border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
+    cursor: pointer; font-family: var(--font); width: 100%;
+  }
+  .modal-submit:hover { background: var(--accent-dark); }
+
+  /* ── User chip ── */
+  .user-chip { display: flex; align-items: center; gap: 8px; position: relative; }
+  .user-avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; cursor: pointer; user-select: none;
+  }
+  .user-name { font-size: 12px; font-weight: 500; color: var(--text); }
+  .user-menu {
+    display: none; position: absolute; top: 38px; right: 0;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; min-width: 180px; z-index: 200;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15); overflow: hidden;
+  }
+  .user-menu.open { display: block; }
+  .user-menu-email {
+    padding: 10px 14px 6px; font-size: 11px; color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .user-menu-item {
+    display: block; width: 100%; text-align: left; padding: 9px 14px;
+    font-size: 13px; background: none; border: none; cursor: pointer;
+    color: var(--text); font-family: var(--font); transition: background 0.1s;
+  }
+  .user-menu-item:hover { background: var(--surface2); }
+  .user-menu-item.danger { color: var(--danger); }
+  .login-btn {
+    font-size: 12px; padding: 5px 12px; border-radius: 20px;
+    border: 1px solid var(--accent); background: none; color: var(--accent);
+    cursor: pointer; font-family: var(--font); font-weight: 500;
+  }
+  .login-btn:hover { background: var(--accent); color: #fff; }
+
+  /* ── Notification list ── */
+  .notif-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12px;
+  }
+  .notif-item:last-child { border-bottom: none; }
+  .notif-badge {
+    font-size: 10px; padding: 2px 6px; border-radius: 10px;
+    background: var(--accent-light); color: var(--accent-dark);
+    font-weight: 600; white-space: nowrap; flex-shrink: 0;
+  }
+  .notif-badge.line  { background: #dcfce7; color: #166534; }
+  .notif-badge.email { background: #fef3c7; color: #92400e; }
+  .notif-label { flex: 1; font-size: 11px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .notif-del {
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; font-size: 15px; padding: 0 2px; line-height: 1; flex-shrink: 0;
+  }
+  .notif-del:hover { color: var(--danger); }
+  .notif-disabled { opacity: 0.45; }
+  .add-notif-btn {
+    width: 100%; margin-top: 7px; padding: 6px;
+    border: 1px dashed var(--border); border-radius: 8px;
+    background: none; color: var(--muted); font-size: 12px;
+    cursor: pointer; font-family: var(--font); transition: all 0.15s;
+  }
+  .add-notif-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .notif-target-input {
+    width: 100%; padding: 8px 10px; margin-bottom: 9px;
+    border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface2); color: var(--text);
+    font-size: 12px; font-family: var(--mono);
+  }
 </style>
 </head>
 <body>
@@ -391,9 +504,11 @@
     <div class="dot">J</div>
     JKK Monitor
   </div>
-  <div class="status-pill">
-    <div class="pulse"></div>
-    監視中
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div class="status-pill"><div class="pulse"></div>監視中</div>
+    <div id="user-area">
+      <button class="login-btn" onclick="openAuthModal()">ログイン</button>
+    </div>
   </div>
 </div>
 
@@ -449,6 +564,25 @@
 
     <button class="save-btn" id="save-btn" onclick="saveConfig()">設定を保存</button>
     <div class="saved-msg" id="saved-msg"></div>
+
+    <!-- Notifications + account (shown when logged in) -->
+    <div id="notif-section" style="display:none;">
+      <p class="section-label" style="margin-top:1.2rem;">通知設定</p>
+      <div class="card">
+        <div class="card-title">通知チャンネル</div>
+        <div id="notif-list"><p style="font-size:11px;color:var(--muted);">登録なし</p></div>
+        <button class="add-notif-btn" onclick="openAddNotif()">＋ 通知先を追加</button>
+      </div>
+
+      <p class="section-label" style="margin-top:1rem;">アカウント</p>
+      <div class="card">
+        <div class="card-title">パスワード変更</div>
+        <input type="password" id="pw-current" placeholder="現在のパスワード" style="margin-bottom:6px;">
+        <input type="password" id="pw-new" placeholder="新しいパスワード（8文字以上）" style="margin-bottom:6px;">
+        <button class="save-btn" onclick="doChangePassword()">変更する</button>
+        <div class="saved-msg" id="pw-msg"></div>
+      </div>
+    </div>
   </aside>
 
   <!-- ── Main ── -->
@@ -535,6 +669,55 @@
       <div class="log-lines" id="log-lines">サーバー (server.py) が起動するとここにログが表示されます。</div>
     </div>
   </main>
+</div>
+
+<!-- Auth modal -->
+<div class="modal-overlay" id="auth-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeAuthModal()">×</button>
+    <div class="modal-tabs">
+      <button class="modal-tab active" id="tab-login-btn" onclick="switchAuthTab('login')">ログイン</button>
+      <button class="modal-tab" id="tab-reg-btn" onclick="switchAuthTab('register')">新規登録</button>
+    </div>
+    <div id="tab-login" class="modal-form">
+      <div class="modal-err" id="login-err"></div>
+      <input type="email" id="login-email" placeholder="メールアドレス" autocomplete="email">
+      <input type="password" id="login-password" placeholder="パスワード" autocomplete="current-password"
+             onkeydown="if(event.key==='Enter')doLogin()">
+      <button class="modal-submit" onclick="doLogin()">ログイン</button>
+    </div>
+    <div id="tab-register" class="modal-form" style="display:none;">
+      <div class="modal-err" id="reg-err"></div>
+      <input type="text" id="reg-name" placeholder="表示名（任意）">
+      <input type="email" id="reg-email" placeholder="メールアドレス" autocomplete="email">
+      <input type="password" id="reg-password" placeholder="パスワード（8文字以上）" autocomplete="new-password"
+             onkeydown="if(event.key==='Enter')doRegister()">
+      <button class="modal-submit" onclick="doRegister()">登録</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add notification modal -->
+<div class="modal-overlay" id="add-notif-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="document.getElementById('add-notif-modal').classList.remove('open')">×</button>
+    <div style="font-size:16px;font-weight:600;margin-bottom:1.1rem;">通知先を追加</div>
+    <div class="modal-err" id="notif-err"></div>
+    <label>種類</label>
+    <select id="notif-type" onchange="updateNotifPlaceholder()" style="margin-bottom:9px;">
+      <option value="slack">Slack Webhook</option>
+      <option value="line">LINE Notify トークン</option>
+      <option value="email">メールアドレス</option>
+    </select>
+    <label id="notif-target-label">Webhook URL</label>
+    <input type="text" id="notif-target" class="notif-target-input"
+           placeholder="https://hooks.slack.com/services/...">
+    <label>ラベル（任意）</label>
+    <input type="text" id="notif-label" placeholder="例: 自分のSlack"
+           style="width:100%;padding:8px 10px;margin-bottom:9px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:13px;font-family:var(--font);"
+           onkeydown="if(event.key==='Enter')submitAddNotif()">
+    <button class="modal-submit" onclick="submitAddNotif()">追加</button>
+  </div>
 </div>
 
 <script>
@@ -640,9 +823,10 @@ function loadConfig() {
   document.getElementById('ward-chips').innerHTML = '';
   document.getElementById('layout-chips').innerHTML = '';
   buildChips();
+  // If logged in, server settings will override this via loadUserSettings()
 }
 
-function saveConfig() {
+async function saveConfig() {
   const btn = document.getElementById('save-btn');
   const msg = document.getElementById('saved-msg');
   btn.classList.add('saving');
@@ -657,8 +841,20 @@ function saveConfig() {
     max_walk_min: parseInt(document.getElementById('max-walk').value) || 0,
   };
 
-  localStorage.setItem('jkktrackr_config', JSON.stringify(payload));
-  msg.textContent = '✓ 保存しました';
+  if (AUTH.token) {
+    try {
+      const r = await fetch(`${API}/user/settings`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', ...authHeaders()},
+        body: JSON.stringify(payload)
+      });
+      msg.textContent = r.ok ? '✓ 保存しました' : '保存失敗';
+    } catch { msg.textContent = 'サーバーエラー'; }
+  } else {
+    localStorage.setItem('jkktrackr_config', JSON.stringify(payload));
+    msg.textContent = '✓ 保存しました（ローカル）';
+  }
+
   btn.classList.remove('saving');
   btn.textContent = '設定を保存';
   setTimeout(() => msg.textContent = '', 3500);
@@ -1071,6 +1267,237 @@ async function loadDisappeared() {
   }
 }
 
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+const AUTH = { token: null, user: null };
+
+function authHeaders() {
+  return AUTH.token ? { 'Authorization': `Bearer ${AUTH.token}` } : {};
+}
+
+function openAuthModal()  { document.getElementById('auth-modal').classList.add('open'); }
+function closeAuthModal() { document.getElementById('auth-modal').classList.remove('open'); }
+
+function switchAuthTab(tab) {
+  document.getElementById('tab-login').style.display    = tab === 'login'    ? 'flex' : 'none';
+  document.getElementById('tab-register').style.display = tab === 'register' ? 'flex' : 'none';
+  document.getElementById('tab-login-btn').classList.toggle('active', tab === 'login');
+  document.getElementById('tab-reg-btn').classList.toggle('active',   tab === 'register');
+}
+
+function onAuthSuccess(data) {
+  AUTH.token = data.token;
+  AUTH.user  = data;
+  localStorage.setItem('jkktrackr_token', data.token);
+  closeAuthModal();
+  renderUserChip();
+  document.getElementById('notif-section').style.display = 'block';
+  loadUserSettings();
+  loadNotifications();
+}
+
+function renderUserChip() {
+  const area = document.getElementById('user-area');
+  if (!AUTH.user) {
+    area.innerHTML = `<button class="login-btn" onclick="openAuthModal()">ログイン</button>`;
+    return;
+  }
+  const initial = (AUTH.user.display_name || AUTH.user.email || '?')[0].toUpperCase();
+  area.innerHTML = `
+    <div class="user-chip">
+      <div class="user-avatar" onclick="toggleUserMenu()">${initial}</div>
+      <span class="user-name">${escHtml(AUTH.user.display_name || AUTH.user.email)}</span>
+      <div class="user-menu" id="user-menu">
+        <div class="user-menu-email">${escHtml(AUTH.user.email)}</div>
+        <button class="user-menu-item danger" onclick="doLogout()">ログアウト</button>
+      </div>
+    </div>`;
+}
+
+function toggleUserMenu() {
+  document.getElementById('user-menu')?.classList.toggle('open');
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.user-chip')) {
+    document.getElementById('user-menu')?.classList.remove('open');
+  }
+});
+
+async function doLogin() {
+  const email    = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl    = document.getElementById('login-err');
+  errEl.textContent = '';
+  try {
+    const r = await fetch(`${API}/auth/login`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email, password})
+    });
+    const d = await r.json();
+    if (!r.ok) { errEl.textContent = d.error || 'ログイン失敗'; return; }
+    onAuthSuccess(d);
+  } catch { errEl.textContent = 'サーバーに接続できません'; }
+}
+
+async function doRegister() {
+  const display_name = document.getElementById('reg-name').value.trim();
+  const email        = document.getElementById('reg-email').value.trim();
+  const password     = document.getElementById('reg-password').value;
+  const errEl        = document.getElementById('reg-err');
+  errEl.textContent  = '';
+  try {
+    const r = await fetch(`${API}/auth/register`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email, password, display_name})
+    });
+    const d = await r.json();
+    if (!r.ok) { errEl.textContent = d.error || '登録失敗'; return; }
+    onAuthSuccess(d);
+  } catch { errEl.textContent = 'サーバーに接続できません'; }
+}
+
+function doLogout() {
+  AUTH.token = null;
+  AUTH.user  = null;
+  localStorage.removeItem('jkktrackr_token');
+  renderUserChip();
+  document.getElementById('notif-section').style.display = 'none';
+}
+
+async function initAuth() {
+  const token = localStorage.getItem('jkktrackr_token');
+  if (!token) return;
+  try {
+    const r = await fetch(`${API}/auth/me`, { headers: {'Authorization': `Bearer ${token}`} });
+    if (!r.ok) { localStorage.removeItem('jkktrackr_token'); return; }
+    const user = await r.json();
+    AUTH.token = token;
+    AUTH.user  = { ...user, token };
+    renderUserChip();
+    document.getElementById('notif-section').style.display = 'block';
+    loadUserSettings();
+    loadNotifications();
+  } catch {}
+}
+
+async function doChangePassword() {
+  const current  = document.getElementById('pw-current').value;
+  const new_pw   = document.getElementById('pw-new').value;
+  const msgEl    = document.getElementById('pw-msg');
+  msgEl.textContent = '';
+  try {
+    const r = await fetch(`${API}/auth/change-password`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', ...authHeaders()},
+      body: JSON.stringify({current_password: current, new_password: new_pw})
+    });
+    const d = await r.json();
+    msgEl.textContent = r.ok ? '✓ 変更しました' : (d.error || '失敗');
+    if (r.ok) { document.getElementById('pw-current').value = ''; document.getElementById('pw-new').value = ''; }
+  } catch { msgEl.textContent = 'サーバーエラー'; }
+  setTimeout(() => msgEl.textContent = '', 3500);
+}
+
+// ── User settings (server-side when logged in) ────────────────────────────────
+
+async function loadUserSettings() {
+  if (!AUTH.token) return;
+  try {
+    const r = await fetch(`${API}/user/settings`, { headers: authHeaders() });
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!Object.keys(d).length) return;
+    document.getElementById('min-rent').value = d.min_rent || '';
+    document.getElementById('max-rent').value = d.max_rent || '';
+    document.getElementById('min-size').value = d.min_size_m2 || '';
+    document.getElementById('max-walk').value = d.max_walk_min || '';
+    selectedWards   = new Set(d.wards   || []);
+    selectedLayouts = new Set(d.layouts || []);
+    document.getElementById('ward-chips').innerHTML   = '';
+    document.getElementById('layout-chips').innerHTML = '';
+    buildChips();
+  } catch {}
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+async function loadNotifications() {
+  if (!AUTH.token) return;
+  try {
+    const r = await fetch(`${API}/user/notifications`, { headers: authHeaders() });
+    if (!r.ok) return;
+    const d = await r.json();
+    renderNotifications(d.notifications || []);
+  } catch {}
+}
+
+function renderNotifications(list) {
+  const el = document.getElementById('notif-list');
+  if (!list.length) {
+    el.innerHTML = '<p style="font-size:11px;color:var(--muted);">登録なし</p>';
+    return;
+  }
+  el.innerHTML = list.map(n => `
+    <div class="notif-item ${n.enabled ? '' : 'notif-disabled'}">
+      <span class="notif-badge ${n.type}">${n.type.toUpperCase()}</span>
+      <span class="notif-label">${escHtml(n.label || n.target)}</span>
+      <button class="notif-del" title="削除" onclick="deleteNotif(${n.id})">×</button>
+    </div>`).join('');
+}
+
+function openAddNotif() {
+  document.getElementById('notif-err').textContent = '';
+  document.getElementById('notif-target').value = '';
+  document.getElementById('notif-label').value  = '';
+  document.getElementById('notif-type').value   = 'slack';
+  updateNotifPlaceholder();
+  document.getElementById('add-notif-modal').classList.add('open');
+}
+
+function updateNotifPlaceholder() {
+  const type = document.getElementById('notif-type').value;
+  const input = document.getElementById('notif-target');
+  const label = document.getElementById('notif-target-label');
+  if (type === 'slack') {
+    label.textContent = 'Webhook URL';
+    input.placeholder = 'https://hooks.slack.com/services/...';
+  } else if (type === 'line') {
+    label.textContent = 'LINE Notify アクセストークン';
+    input.placeholder = 'xxxxxxxxxxxxxxxxxxxx';
+  } else {
+    label.textContent = 'メールアドレス';
+    input.placeholder = 'you@example.com';
+  }
+}
+
+async function submitAddNotif() {
+  const type   = document.getElementById('notif-type').value;
+  const target = document.getElementById('notif-target').value.trim();
+  const label  = document.getElementById('notif-label').value.trim();
+  const errEl  = document.getElementById('notif-err');
+  errEl.textContent = '';
+  if (!target) { errEl.textContent = '送信先を入力してください'; return; }
+  try {
+    const r = await fetch(`${API}/user/notifications`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', ...authHeaders()},
+      body: JSON.stringify({type, target, label})
+    });
+    const d = await r.json();
+    if (!r.ok) { errEl.textContent = d.error || '追加失敗'; return; }
+    document.getElementById('add-notif-modal').classList.remove('open');
+    loadNotifications();
+  } catch { errEl.textContent = 'サーバーエラー'; }
+}
+
+async function deleteNotif(id) {
+  if (!confirm('この通知設定を削除しますか？')) return;
+  await fetch(`${API}/user/notifications/${id}`, { method: 'DELETE', headers: authHeaders() });
+  loadNotifications();
+}
+
+// ── Countdown timer ───────────────────────────────────────────────────────────
+
 // Countdown timer
 let secs = 300;
 setInterval(() => {
@@ -1084,6 +1511,7 @@ setInterval(() => {
 // Init
 buildChips();
 loadConfig();
+initAuth();
 loadLog();
 loadDisappeared();
 initMap();

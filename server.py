@@ -1,13 +1,14 @@
 """
-Config + read API for the dashboard. Run alongside scraper3.py.
-
-  pip install flask flask-cors requests
-  python server.py
+Config + read API for the dashboard. Run alongside scraper4.py.
 """
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import json, math, os, sqlite3, time, threading, requests
+from flask_jwt_extended import (
+    JWTManager, create_access_token, jwt_required, get_jwt_identity
+)
+from werkzeug.security import generate_password_hash, check_password_hash
+import json, math, os, secrets, sqlite3, time, threading, requests
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
@@ -18,7 +19,10 @@ LOG_FILE    = "jkk_monitor.log"
 DB_FILE     = "jkk_monitor.db"
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=30)
+jwt = JWTManager(app)
 
 TOKYO_WARDS = [
     "千代田区","中央区","港区","新宿区","文京区","台東区","墨田区","江東区",
@@ -28,8 +32,6 @@ TOKYO_WARDS = [
 
 LAYOUTS = ["1R","1K","1DK","1LDK","2K","2DK","2LDK","3K","3DK","3LDK","4LDK以上"]
 
-# Approximate ward/city centroids — used as a fallback when GSI can't
-# resolve a building-level address.
 WARD_CENTROID = {
     "千代田区":(35.6940,139.7536),"中央区":(35.6701,139.7724),"港区":(35.6580,139.7515),
     "新宿区":(35.6938,139.7035),"文京区":(35.7081,139.7522),"台東区":(35.7128,139.7800),
@@ -47,7 +49,6 @@ WARD_CENTROID = {
     "狛江市":(35.6346,139.5786),"清瀬市":(35.7858,139.5263),"東久留米市":(35.7585,139.5290),
     "武蔵村山市":(35.7549,139.3878),"多摩市":(35.6363,139.4463),"稲城市":(35.6379,139.5040),
     "羽村市":(35.7669,139.3115),"西東京市":(35.7257,139.5384),
-    # Kanagawa — Yokohama wards
     "横浜市鶴見区":   (35.5084,139.6761),"横浜市神奈川区":(35.4890,139.6339),
     "横浜市西区":     (35.4666,139.6218),"横浜市中区":    (35.4437,139.6427),
     "横浜市南区":     (35.4255,139.6145),"横浜市保土ケ谷区":(35.4607,139.5952),
@@ -57,77 +58,107 @@ WARD_CENTROID = {
     "横浜市緑区":     (35.5100,139.5872),"横浜市瀬谷区":  (35.4630,139.5089),
     "横浜市栄区":     (35.3679,139.5737),"横浜市青葉区":  (35.5560,139.5479),
     "横浜市都筑区":   (35.5399,139.5763),
-    # Kanagawa — Kawasaki wards
     "川崎市川崎区":   (35.5308,139.6974),"川崎市幸区":    (35.5389,139.6726),
     "川崎市中原区":   (35.5731,139.6615),"川崎市高津区":  (35.6020,139.6430),
     "川崎市麻生区":   (35.6451,139.4998),"川崎市多摩区":  (35.6118,139.5505),
     "川崎市宮前区":   (35.5885,139.5742),
-    # Kanagawa — Sagamihara
     "相模原市緑区":   (35.5968,139.3906),"相模原市中央区":(35.5716,139.3720),
     "相模原市南区":   (35.5298,139.3888),
 }
 
-# Geocoding runs in a background daemon thread so the listings endpoint
-# never blocks waiting for GSI. The dashboard polls until pending == 0.
-GEOCODE_TIMEOUT_S    = 5
-GEOCODE_DELAY_S      = 0.3
+GEOCODE_TIMEOUT_S      = 5
+GEOCODE_DELAY_S        = 0.3
 GEOCODE_LOOKBACK_HOURS = 6
 GSI_URL        = "https://msearch.gsi.go.jp/address-search/AddressSearch"
 HEARTRAILS_URL = "https://express.heartrails.com/api/json"
 HEARTRAILS_TIMEOUT_S = 5
 
-_geo_lock = threading.Lock()
+_geo_lock    = threading.Lock()
 _geo_running = False
 
 
-def load_config():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE) as f:
-            return json.load(f)
-    return {}
-
-
-def save_config(data):
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
+# ── DB ────────────────────────────────────────────────────────────────────────
 
 def db():
     con = sqlite3.connect(DB_FILE)
     con.row_factory = sqlite3.Row
-    # Idempotent migration so the dashboard works even if the scraper
-    # hasn't been started since these columns were added.
+
+    # Listings table migrations (idempotent)
     cols = {row[1] for row in con.execute("PRAGMA table_info(listings)")}
-    if "source" not in cols:
-        con.execute("ALTER TABLE listings ADD COLUMN source TEXT DEFAULT 'jkk'")
-    if "address" not in cols:
-        con.execute("ALTER TABLE listings ADD COLUMN address TEXT")
-    if "lat" not in cols:
-        con.execute("ALTER TABLE listings ADD COLUMN lat REAL")
-    if "lng" not in cols:
-        con.execute("ALTER TABLE listings ADD COLUMN lng REAL")
-    if "geocoded_at" not in cols:
-        con.execute("ALTER TABLE listings ADD COLUMN geocoded_at TEXT")
-    if "disappeared_at" not in cols:
-        con.execute("ALTER TABLE listings ADD COLUMN disappeared_at TEXT")
-    if "walk_min" not in cols:
-        con.execute("ALTER TABLE listings ADD COLUMN walk_min INTEGER")
-    if "walk_m" not in cols:
-        con.execute("ALTER TABLE listings ADD COLUMN walk_m INTEGER")
-    if "nearest_station" not in cols:
-        con.execute("ALTER TABLE listings ADD COLUMN nearest_station TEXT")
+    for col, defn in [
+        ("source",          "TEXT DEFAULT 'jkk'"),
+        ("address",         "TEXT"),
+        ("lat",             "REAL"),
+        ("lng",             "REAL"),
+        ("geocoded_at",     "TEXT"),
+        ("disappeared_at",  "TEXT"),
+        ("walk_min",        "INTEGER"),
+        ("walk_m",          "INTEGER"),
+        ("nearest_station", "TEXT"),
+    ]:
+        if col not in cols:
+            con.execute(f"ALTER TABLE listings ADD COLUMN {col} {defn}")
+
+    # User / auth tables
+    con.executescript("""
+        CREATE TABLE IF NOT EXISTS app_config (
+            key   TEXT PRIMARY KEY,
+            value TEXT
+        );
+        CREATE TABLE IF NOT EXISTS users (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            email         TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            display_name  TEXT,
+            created_at    TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS user_settings (
+            user_id      INTEGER PRIMARY KEY REFERENCES users(id),
+            min_rent     INTEGER DEFAULT 0,
+            max_rent     INTEGER DEFAULT 0,
+            min_size_m2  REAL    DEFAULT 0,
+            max_walk_min INTEGER DEFAULT 0,
+            layouts      TEXT    DEFAULT '[]',
+            wards        TEXT    DEFAULT '[]',
+            updated_at   TEXT    DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS user_notifications (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER REFERENCES users(id),
+            type       TEXT NOT NULL,
+            target     TEXT NOT NULL,
+            label      TEXT,
+            enabled    INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS listing_notifications (
+            listing_id TEXT NOT NULL,
+            user_id    INTEGER NOT NULL,
+            sent_at    TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (listing_id, user_id)
+        );
+    """)
     con.commit()
+
+    # JWT secret — stored in DB so it survives server restarts
+    row = con.execute("SELECT value FROM app_config WHERE key='jwt_secret'").fetchone()
+    if row:
+        app.config["JWT_SECRET_KEY"] = row["value"]
+    else:
+        secret = secrets.token_hex(32)
+        con.execute("INSERT INTO app_config (key, value) VALUES ('jwt_secret', ?)", (secret,))
+        con.commit()
+        app.config["JWT_SECRET_KEY"] = secret
+
     return con
 
 
+# ── Geocoding helpers ─────────────────────────────────────────────────────────
+
 def _gsi_geocode(query):
     try:
-        r = requests.get(
-            GSI_URL,
-            params={"q": query},
-            timeout=GEOCODE_TIMEOUT_S,
-            headers={"User-Agent": "jkktrackr/1.0 (dashboard)"},
-        )
+        r = requests.get(GSI_URL, params={"q": query}, timeout=GEOCODE_TIMEOUT_S,
+                         headers={"User-Agent": "jkktrackr/1.0 (dashboard)"})
         r.raise_for_status()
         data = r.json()
     except Exception:
@@ -138,27 +169,17 @@ def _gsi_geocode(query):
         lng, lat = data[0]["geometry"]["coordinates"]
     except (KeyError, IndexError, TypeError):
         return None
-    # GSI sometimes returns clearly bogus coordinates outside Japan;
-    # constrain to a generous Kanto bounding box.
     if not (35.0 <= lat <= 36.5 and 138.5 <= lng <= 140.5):
         return None
     return (float(lat), float(lng))
 
 
 def _nearest_station(lat, lng):
-    """Return (label, walk_min, dist_m) for the closest train station via HeartRails.
-
-    label is e.g. "渋谷（東急東横線）".
-    walk_min uses the standard Japanese 1 min / 80 m rule (ceil, min 1).
-    Returns None on API failure.
-    """
     try:
-        r = requests.get(
-            HEARTRAILS_URL,
-            params={"method": "getStations", "x": str(lng), "y": str(lat)},
-            timeout=HEARTRAILS_TIMEOUT_S,
-            headers={"User-Agent": "jkktrackr/1.0 (dashboard)"},
-        )
+        r = requests.get(HEARTRAILS_URL,
+                         params={"method": "getStations", "x": str(lng), "y": str(lat)},
+                         timeout=HEARTRAILS_TIMEOUT_S,
+                         headers={"User-Agent": "jkktrackr/1.0 (dashboard)"})
         r.raise_for_status()
         stations = r.json().get("response", {}).get("station") or []
         if not stations:
@@ -178,18 +199,15 @@ def _nearest_station(lat, lng):
 _KANAGAWA_PREFIXES = ("横浜市", "川崎市", "相模原市")
 
 def _prefecture(ward):
-    """Return the prefecture string to prepend to geocode queries."""
     if any(ward.startswith(p) for p in _KANAGAWA_PREFIXES):
         return "神奈川県"
     return "東京都"
 
 def _build_geocode_query(row):
-    name = (row["name"] or "").strip()
+    name    = (row["name"]    or "").strip()
     address = (row["address"] or "").strip()
-    ward = (row["ward"] or "").strip()
-    pref = _prefecture(ward)
-    # UR listings carry a real street address in `address`. JKK only has
-    # the ward, so we lean on the building name plus prefecture for those.
+    ward    = (row["ward"]    or "").strip()
+    pref    = _prefecture(ward)
     if address and address != ward:
         return f"{pref}{address}"
     if name:
@@ -198,7 +216,6 @@ def _build_geocode_query(row):
 
 
 def _geocode_worker():
-    """Drain geocode-pending rows, then station-lookup-pending rows."""
     global _geo_running
     try:
         while True:
@@ -206,7 +223,6 @@ def _geocode_worker():
             con.row_factory = sqlite3.Row
             cutoff = (datetime.now() - timedelta(hours=GEOCODE_LOOKBACK_HOURS)).isoformat()
 
-            # ── Pass 1: geocode a row that has no coordinates yet ──────────
             row = con.execute(
                 "SELECT id, name, ward, COALESCE(address, ward) AS address "
                 "  FROM listings "
@@ -214,34 +230,28 @@ def _geocode_worker():
                 " LIMIT 1",
                 (cutoff,),
             ).fetchone()
-
             if row:
                 coords = _gsi_geocode(_build_geocode_query(row))
                 if coords is None:
                     coords = WARD_CENTROID.get(row["ward"])
                 now = datetime.now().isoformat()
                 if coords is not None:
-                    station = _nearest_station(coords[0], coords[1])
-                    label    = station[0] if station else None
-                    walk_min = station[1] if station else None
-                    walk_m   = station[2] if station else None
+                    station  = _nearest_station(coords[0], coords[1])
                     con.execute(
-                        "UPDATE listings "
-                        "   SET lat=?,lng=?,geocoded_at=?,nearest_station=?,walk_min=?,walk_m=?"
-                        " WHERE id=?",
-                        (coords[0], coords[1], now, label, walk_min, walk_m, row["id"]),
+                        "UPDATE listings SET lat=?,lng=?,geocoded_at=?,nearest_station=?,walk_min=?,walk_m=? WHERE id=?",
+                        (coords[0], coords[1], now,
+                         station[0] if station else None,
+                         station[1] if station else None,
+                         station[2] if station else None,
+                         row["id"]),
                     )
                 else:
-                    con.execute(
-                        "UPDATE listings SET geocoded_at=? WHERE id=?",
-                        (now, row["id"]),
-                    )
+                    con.execute("UPDATE listings SET geocoded_at=? WHERE id=?", (now, row["id"]))
                 con.commit()
                 con.close()
                 time.sleep(GEOCODE_DELAY_S)
                 continue
 
-            # ── Pass 2: nearest-station lookup for already-geocoded rows ───
             row = con.execute(
                 "SELECT id, lat, lng FROM listings "
                 " WHERE last_seen >= ? AND lat IS NOT NULL AND (nearest_station IS NULL OR nearest_station = '') "
@@ -251,15 +261,10 @@ def _geocode_worker():
             if row:
                 station = _nearest_station(row["lat"], row["lng"])
                 if station:
-                    con.execute(
-                        "UPDATE listings SET nearest_station=?, walk_min=?, walk_m=? WHERE id=?",
-                        (station[0], station[1], station[2], row["id"]),
-                    )
+                    con.execute("UPDATE listings SET nearest_station=?, walk_min=?, walk_m=? WHERE id=?",
+                                (station[0], station[1], station[2], row["id"]))
                 else:
-                    # Mark attempted so we don't retry endlessly
-                    con.execute(
-                        "UPDATE listings SET nearest_station='' WHERE id=?", (row["id"],)
-                    )
+                    con.execute("UPDATE listings SET nearest_station='' WHERE id=?", (row["id"],))
                 con.commit()
                 con.close()
                 time.sleep(GEOCODE_DELAY_S)
@@ -268,8 +273,6 @@ def _geocode_worker():
             con.close()
             return
     except Exception:
-        # Daemon thread — swallow errors so a single bad row doesn't
-        # poison the worker; next /api/listings call will restart it.
         pass
     finally:
         with _geo_lock:
@@ -285,19 +288,208 @@ def _ensure_geocoding():
     threading.Thread(target=_geocode_worker, daemon=True).start()
 
 
-@app.route("/api/config", methods=["GET"])
-def get_config():
-    cfg = load_config()
-    cfg.pop("slack_webhook", None)  # never expose secret over API
-    return jsonify(cfg)
+# ── Auth endpoints ────────────────────────────────────────────────────────────
+
+@app.route("/api/auth/register", methods=["POST"])
+def register():
+    data         = request.get_json() or {}
+    email        = data.get("email", "").strip().lower()
+    password     = data.get("password", "")
+    display_name = data.get("display_name", "").strip()
+
+    if not email or not password:
+        return jsonify({"error": "メールアドレスとパスワードを入力してください"}), 400
+    if len(password) < 8:
+        return jsonify({"error": "パスワードは8文字以上にしてください"}), 400
+
+    con = db()
+    try:
+        con.execute(
+            "INSERT INTO users (email, password_hash, display_name) VALUES (?,?,?)",
+            (email, generate_password_hash(password), display_name or email.split("@")[0])
+        )
+        con.commit()
+        user = con.execute("SELECT id, email, display_name FROM users WHERE email=?", (email,)).fetchone()
+        token = create_access_token(identity=str(user["id"]))
+        return jsonify({"token": token, "email": user["email"], "display_name": user["display_name"]})
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "このメールアドレスはすでに登録されています"}), 409
+    finally:
+        con.close()
 
 
-@app.route("/api/config", methods=["POST"])
-def set_config():
-    data = request.get_json()
-    data.pop("slack_webhook", None)  # ignore any webhook sent from browser
-    save_config(data)
+@app.route("/api/auth/login", methods=["POST"])
+def login():
+    data     = request.get_json() or {}
+    email    = data.get("email", "").strip().lower()
+    password = data.get("password", "")
+
+    con  = db()
+    user = con.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+    con.close()
+
+    if not user or not check_password_hash(user["password_hash"], password):
+        return jsonify({"error": "メールアドレスまたはパスワードが間違っています"}), 401
+
+    token = create_access_token(identity=str(user["id"]))
+    return jsonify({"token": token, "email": user["email"], "display_name": user["display_name"]})
+
+
+@app.route("/api/auth/me")
+@jwt_required()
+def me():
+    user_id = int(get_jwt_identity())
+    con     = db()
+    user    = con.execute(
+        "SELECT id, email, display_name, created_at FROM users WHERE id=?", (user_id,)
+    ).fetchone()
+    con.close()
+    if not user:
+        return jsonify({"error": "ユーザーが見つかりません"}), 404
+    return jsonify(dict(user))
+
+
+@app.route("/api/auth/change-password", methods=["POST"])
+@jwt_required()
+def change_password():
+    user_id  = int(get_jwt_identity())
+    data     = request.get_json() or {}
+    current  = data.get("current_password", "")
+    new_pw   = data.get("new_password", "")
+
+    if len(new_pw) < 8:
+        return jsonify({"error": "新しいパスワードは8文字以上にしてください"}), 400
+
+    con  = db()
+    user = con.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+    if not user or not check_password_hash(user["password_hash"], current):
+        con.close()
+        return jsonify({"error": "現在のパスワードが間違っています"}), 401
+
+    con.execute("UPDATE users SET password_hash=? WHERE id=?", (generate_password_hash(new_pw), user_id))
+    con.commit()
+    con.close()
     return jsonify({"status": "ok"})
+
+
+# ── User settings ─────────────────────────────────────────────────────────────
+
+@app.route("/api/user/settings", methods=["GET"])
+@jwt_required()
+def get_user_settings():
+    user_id = int(get_jwt_identity())
+    con     = db()
+    row     = con.execute("SELECT * FROM user_settings WHERE user_id=?", (user_id,)).fetchone()
+    con.close()
+    if not row:
+        return jsonify({})
+    d = dict(row)
+    d["layouts"] = json.loads(d.get("layouts") or "[]")
+    d["wards"]   = json.loads(d.get("wards")   or "[]")
+    return jsonify(d)
+
+
+@app.route("/api/user/settings", methods=["POST"])
+@jwt_required()
+def set_user_settings():
+    user_id = int(get_jwt_identity())
+    data    = request.get_json() or {}
+    con     = db()
+    con.execute("""
+        INSERT INTO user_settings (user_id, min_rent, max_rent, min_size_m2, max_walk_min, layouts, wards)
+        VALUES (:uid, :min_rent, :max_rent, :min_size, :max_walk, :layouts, :wards)
+        ON CONFLICT(user_id) DO UPDATE SET
+            min_rent=excluded.min_rent, max_rent=excluded.max_rent,
+            min_size_m2=excluded.min_size_m2, max_walk_min=excluded.max_walk_min,
+            layouts=excluded.layouts, wards=excluded.wards,
+            updated_at=datetime('now')
+    """, {
+        "uid":      user_id,
+        "min_rent": int(data.get("min_rent") or 0),
+        "max_rent": int(data.get("max_rent") or 0),
+        "min_size": float(data.get("min_size_m2") or 0),
+        "max_walk": int(data.get("max_walk_min") or 0),
+        "layouts":  json.dumps(data.get("layouts") or []),
+        "wards":    json.dumps(data.get("wards")   or []),
+    })
+    con.commit()
+    con.close()
+    return jsonify({"status": "ok"})
+
+
+# ── User notifications ────────────────────────────────────────────────────────
+
+@app.route("/api/user/notifications", methods=["GET"])
+@jwt_required()
+def get_user_notifications():
+    user_id = int(get_jwt_identity())
+    con     = db()
+    rows    = con.execute(
+        "SELECT * FROM user_notifications WHERE user_id=? ORDER BY id", (user_id,)
+    ).fetchall()
+    con.close()
+    return jsonify({"notifications": [dict(r) for r in rows]})
+
+
+@app.route("/api/user/notifications", methods=["POST"])
+@jwt_required()
+def add_user_notification():
+    user_id = int(get_jwt_identity())
+    data    = request.get_json() or {}
+    ntype   = data.get("type", "").lower()
+    target  = data.get("target", "").strip()
+    label   = data.get("label", "").strip()
+
+    if ntype not in ("slack", "line", "email"):
+        return jsonify({"error": "type は slack / line / email のいずれかです"}), 400
+    if not target:
+        return jsonify({"error": "送信先を入力してください"}), 400
+
+    con = db()
+    con.execute(
+        "INSERT INTO user_notifications (user_id, type, target, label) VALUES (?,?,?,?)",
+        (user_id, ntype, target, label or ntype)
+    )
+    con.commit()
+    row = con.execute(
+        "SELECT * FROM user_notifications WHERE user_id=? ORDER BY id DESC LIMIT 1", (user_id,)
+    ).fetchone()
+    con.close()
+    return jsonify(dict(row)), 201
+
+
+@app.route("/api/user/notifications/<int:notif_id>", methods=["DELETE"])
+@jwt_required()
+def delete_user_notification(notif_id):
+    user_id = int(get_jwt_identity())
+    con     = db()
+    con.execute("DELETE FROM user_notifications WHERE id=? AND user_id=?", (notif_id, user_id))
+    con.commit()
+    con.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/user/notifications/<int:notif_id>/toggle", methods=["POST"])
+@jwt_required()
+def toggle_user_notification(notif_id):
+    user_id = int(get_jwt_identity())
+    con     = db()
+    con.execute(
+        "UPDATE user_notifications SET enabled=1-enabled WHERE id=? AND user_id=?",
+        (notif_id, user_id)
+    )
+    con.commit()
+    con.close()
+    return jsonify({"status": "ok"})
+
+
+# ── Legacy config (scraper still reads this for its own filter) ───────────────
+
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE) as f:
+            return json.load(f)
+    return {}
 
 
 @app.route("/api/meta")
@@ -314,19 +506,15 @@ def get_log():
     return jsonify({"lines": [l.rstrip() for l in lines]})
 
 
+# ── Listings ──────────────────────────────────────────────────────────────────
+
 @app.route("/api/listings")
 def get_listings():
-    """Return listings still considered available.
-
-    Query params:
-      max_age_min — listings whose last_seen is within this many minutes
-                    of now are returned (default 90).
-    """
     if not os.path.exists(DB_FILE):
         return jsonify({"listings": [], "geocoded_now": 0})
 
     max_age_min = request.args.get("max_age_min", default=90, type=int)
-    cutoff = (datetime.now() - timedelta(minutes=max_age_min)).isoformat()
+    cutoff      = (datetime.now() - timedelta(minutes=max_age_min)).isoformat()
 
     con = db()
     cur = con.execute(
@@ -363,12 +551,11 @@ def get_listings():
 
 @app.route("/api/disappeared")
 def get_disappeared():
-    """Return recently disappeared listings with their market duration."""
     if not os.path.exists(DB_FILE):
         return jsonify({"listings": []})
     limit = request.args.get("limit", default=30, type=int)
-    con = db()
-    cur = con.execute(
+    con   = db()
+    cur   = con.execute(
         "SELECT id,name,ward,layout,rent,size_m2,url,first_seen,last_seen,"
         "       disappeared_at, walk_min, walk_m, nearest_station, COALESCE(source,'jkk') AS source,"
         "       COALESCE(address, ward) AS address "
@@ -384,4 +571,5 @@ def get_disappeared():
 
 
 if __name__ == "__main__":
+    db()  # init tables + JWT secret on startup
     app.run(host="0.0.0.0", port=5050, debug=False)

@@ -98,27 +98,27 @@ def init_db():
         "  seen_at TEXT,"
         "  FOREIGN KEY(listing_id) REFERENCES listings(id)"
         ");"
+        "CREATE TABLE IF NOT EXISTS listing_notifications ("
+        "  listing_id TEXT NOT NULL,"
+        "  user_id    INTEGER NOT NULL,"
+        "  sent_at    TEXT DEFAULT (datetime('now')),"
+        "  PRIMARY KEY (listing_id, user_id)"
+        ");"
     )
-    # Idempotent migrations for columns added after the initial schema.
     cols = {row[1] for row in con.execute("PRAGMA table_info(listings)")}
-    if "source" not in cols:
-        con.execute("ALTER TABLE listings ADD COLUMN source TEXT DEFAULT 'jkk'")
-    if "address" not in cols:
-        con.execute("ALTER TABLE listings ADD COLUMN address TEXT")
-    if "lat" not in cols:
-        con.execute("ALTER TABLE listings ADD COLUMN lat REAL")
-    if "lng" not in cols:
-        con.execute("ALTER TABLE listings ADD COLUMN lng REAL")
-    if "geocoded_at" not in cols:
-        con.execute("ALTER TABLE listings ADD COLUMN geocoded_at TEXT")
-    if "disappeared_at" not in cols:
-        con.execute("ALTER TABLE listings ADD COLUMN disappeared_at TEXT")
-    if "walk_min" not in cols:
-        con.execute("ALTER TABLE listings ADD COLUMN walk_min INTEGER")
-    if "walk_m" not in cols:
-        con.execute("ALTER TABLE listings ADD COLUMN walk_m INTEGER")
-    if "nearest_station" not in cols:
-        con.execute("ALTER TABLE listings ADD COLUMN nearest_station TEXT")
+    for col, defn in [
+        ("source",          "TEXT DEFAULT 'jkk'"),
+        ("address",         "TEXT"),
+        ("lat",             "REAL"),
+        ("lng",             "REAL"),
+        ("geocoded_at",     "TEXT"),
+        ("disappeared_at",  "TEXT"),
+        ("walk_min",        "INTEGER"),
+        ("walk_m",          "INTEGER"),
+        ("nearest_station", "TEXT"),
+    ]:
+        if col not in cols:
+            con.execute(f"ALTER TABLE listings ADD COLUMN {col} {defn}")
     con.commit()
     return con
 
@@ -431,51 +431,41 @@ SOURCE_META = {
 }
 
 
-def send_slack(listing):
-    """Send a Slack notification. Returns True if sent, False otherwise."""
-    webhook = SLACK_WEBHOOK_URL or load_json(CONFIG_FILE, {}).get("slack_webhook", "")
-    if not webhook:
-        log.warning("SLACK_WEBHOOK_URL not set — skipping")
-        return False
-
-    meta = SOURCE_META.get(listing.get("source", "jkk"), SOURCE_META["jkk"])
+def _slack_payload(listing):
+    meta       = SOURCE_META.get(listing.get("source", "jkk"), SOURCE_META["jkk"])
     emoji, label, footer = meta["emoji"], meta["label"], meta["footer"]
-
-    rent_str = f"¥{listing['rent']:,}" if listing["rent"] else "要確認"
-    size_str = f"{listing['size_m2']} m²" if listing["size_m2"] else "—"
-
-    maps_url = get_maps_url(listing["name"], listing["ward"])
+    rent_str   = f"¥{listing['rent']:,}" if listing["rent"] else "要確認"
+    size_str   = f"{listing['size_m2']} m²" if listing["size_m2"] else "—"
+    maps_url   = get_maps_url(listing["name"], listing["ward"])
     detail_url = listing.get("url") or maps_url
-    actions = [
-        {"type": "button",
-         "text": {"type": "plain_text", "text": "🔗 物件ページ", "emoji": True},
-         "url": detail_url,
-         "style": "primary"},
-        {"type": "button",
-         "text": {"type": "plain_text", "text": "📍 Google Maps", "emoji": True},
-         "url": maps_url},
-    ]
-    payload = {
+    return {
         "text": f"{emoji} 新着{label}物件: {listing['name']} ({listing['ward']}) {rent_str}",
         "blocks": [
             {"type": "header", "text": {"type": "plain_text",
-                                         "text": f"{emoji} 新着{label}物件が見つかりました！",
-                                         "emoji": True}},
+             "text": f"{emoji} 新着{label}物件が見つかりました！", "emoji": True}},
             {"type": "section", "fields": [
                 {"type": "mrkdwn", "text": f"*物件名* : {listing['name'] or '—'}"},
-                {"type": "mrkdwn", "text": f"*所在地* :{listing['address'] or '—'}"},
-                {"type": "mrkdwn", "text": f"*家賃* :{rent_str}"},
-                {"type": "mrkdwn", "text": f"*間取り* :{listing['layout'] or '—'}"},
-                {"type": "mrkdwn", "text": f"*専有面積* :{size_str}"},
+                {"type": "mrkdwn", "text": f"*所在地* : {listing['address'] or '—'}"},
+                {"type": "mrkdwn", "text": f"*家賃* : {rent_str}"},
+                {"type": "mrkdwn", "text": f"*間取り* : {listing['layout'] or '—'}"},
+                {"type": "mrkdwn", "text": f"*専有面積* : {size_str}"},
             ]},
-            {"type": "actions", "elements": actions},
+            {"type": "actions", "elements": [
+                {"type": "button", "text": {"type": "plain_text", "text": "🔗 物件ページ", "emoji": True},
+                 "url": detail_url, "style": "primary"},
+                {"type": "button", "text": {"type": "plain_text", "text": "📍 Google Maps", "emoji": True},
+                 "url": maps_url},
+            ]},
             {"type": "context", "elements": [
                 {"type": "mrkdwn",
                  "text": f"Detected: {datetime.now().strftime('%Y-%m-%d %H:%M')} | {footer}"}
             ]}
         ]
-    }
+    }, label
 
+
+def send_slack(listing, webhook):
+    payload, label = _slack_payload(listing)
     for attempt in range(3):
         try:
             r = requests.post(webhook, json=payload, timeout=10)
@@ -486,13 +476,155 @@ def send_slack(listing):
                 continue
             r.raise_for_status()
             log.info(f"Slack sent ✓  [{label}] {listing['name']}")
-            time.sleep(1)  # stay within ~1 msg/sec rate limit
+            time.sleep(1)
             return True
         except Exception as e:
             log.error(f"Slack send failed: {e}")
             if attempt < 2:
                 time.sleep(2 ** attempt)
     return False
+
+
+def send_line(listing, token):
+    meta     = SOURCE_META.get(listing.get("source", "jkk"), SOURCE_META["jkk"])
+    emoji, label = meta["emoji"], meta["label"]
+    rent_str = f"¥{listing['rent']:,}" if listing["rent"] else "要確認"
+    msg = (f"\n{emoji} 新着{label}物件\n"
+           f"物件名: {listing['name'] or '—'}\n"
+           f"所在地: {listing['ward']}\n"
+           f"家賃: {rent_str}\n"
+           f"間取り: {listing['layout'] or '—'}\n"
+           f"面積: {listing.get('size_m2') or '—'} m²")
+    if listing.get("url"):
+        msg += f"\n{listing['url']}"
+    for attempt in range(3):
+        try:
+            r = requests.post(
+                "https://notify-api.line.me/api/notify",
+                headers={"Authorization": f"Bearer {token}"},
+                data={"message": msg},
+                timeout=10,
+            )
+            if r.status_code == 429:
+                time.sleep(int(r.headers.get("Retry-After", 1)))
+                continue
+            r.raise_for_status()
+            log.info(f"LINE sent ✓  [{label}] {listing['name']}")
+            time.sleep(1)
+            return True
+        except Exception as e:
+            log.error(f"LINE send failed: {e}")
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+    return False
+
+
+def send_email(listing, to_email):
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    smtp_host = os.environ.get("SMTP_HOST", "")
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_user = os.environ.get("SMTP_USER", "")
+    smtp_pass = os.environ.get("SMTP_PASS", "")
+    if not smtp_host or not smtp_user:
+        log.warning("SMTP not configured — skipping email")
+        return False
+    meta     = SOURCE_META.get(listing.get("source", "jkk"), SOURCE_META["jkk"])
+    emoji, label = meta["emoji"], meta["label"]
+    rent_str = f"¥{listing['rent']:,}" if listing["rent"] else "要確認"
+    subject  = f"{emoji} 新着{label}物件: {listing['name']} ({listing['ward']}) {rent_str}"
+    body     = (f"新着{label}物件が見つかりました！\n\n"
+                f"物件名: {listing['name'] or '—'}\n"
+                f"所在地: {listing['ward']}\n"
+                f"家賃: {rent_str}\n"
+                f"間取り: {listing['layout'] or '—'}\n"
+                f"面積: {listing.get('size_m2') or '—'} m²\n")
+    if listing.get("url"):
+        body += f"\n物件ページ: {listing['url']}"
+    body += f"\n\n検出日時: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    msg = MIMEMultipart()
+    msg["From"]    = smtp_user
+    msg["To"]      = to_email
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain", "utf-8"))
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+        log.info(f"Email sent ✓  [{label}] {listing['name']} → {to_email}")
+        return True
+    except Exception as e:
+        log.error(f"Email send failed to {to_email}: {e}")
+        return False
+
+
+def get_user_targets(con):
+    """Return all enabled notification targets with their per-user filter settings."""
+    rows = con.execute("""
+        SELECT un.id AS notif_id, un.user_id, un.type, un.target,
+               COALESCE(us.min_rent,     0)    AS min_rent,
+               COALESCE(us.max_rent,     0)    AS max_rent,
+               COALESCE(us.min_size_m2,  0)    AS min_size_m2,
+               COALESCE(us.max_walk_min, 0)    AS max_walk_min,
+               COALESCE(us.layouts, '[]')       AS layouts,
+               COALESCE(us.wards,   '[]')       AS wards
+          FROM user_notifications un
+          LEFT JOIN user_settings us ON us.user_id = un.user_id
+         WHERE un.enabled = 1
+    """).fetchall()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["layouts"] = json.loads(d.get("layouts") or "[]")
+        d["wards"]   = json.loads(d.get("wards")   or "[]")
+        result.append(d)
+    return result
+
+
+def already_notified_user(con, listing_id, user_id):
+    return con.execute(
+        "SELECT 1 FROM listing_notifications WHERE listing_id=? AND user_id=?",
+        (listing_id, user_id)
+    ).fetchone() is not None
+
+
+def mark_notified_user(con, listing_id, user_id):
+    con.execute(
+        "INSERT OR IGNORE INTO listing_notifications (listing_id, user_id) VALUES (?,?)",
+        (listing_id, user_id)
+    )
+    con.commit()
+
+
+def send_notifications(con, listing, lid, global_config):
+    """Send to all matching users. Falls back to global Slack if no users registered."""
+    targets = get_user_targets(con)
+    notified = False
+
+    if targets:
+        for t in targets:
+            if already_notified_user(con, lid, t["user_id"]):
+                continue
+            if not matches_criteria(listing, t):
+                continue
+            sent = False
+            if t["type"] == "slack":
+                sent = send_slack(listing, t["target"])
+            elif t["type"] == "line":
+                sent = send_line(listing, t["target"])
+            elif t["type"] == "email":
+                sent = send_email(listing, t["target"])
+            if sent:
+                mark_notified_user(con, lid, t["user_id"])
+                notified = True
+    else:
+        webhook = SLACK_WEBHOOK_URL or global_config.get("slack_webhook", "")
+        if webhook:
+            notified = send_slack(listing, webhook)
+
+    return notified
 
 
 def run():
@@ -532,7 +664,7 @@ def run():
                 rent_display = f"¥{listing['rent']:,}" if listing["rent"] else "不明"
                 src = listing.get("source", "jkk").upper()
                 log.info(f"NEW match [{src}] → {listing['name']} | {listing['ward']} | {rent_display}")
-                notified = send_slack(listing)
+                notified = send_notifications(con, listing, lid, config)
                 new_count[listing.get("source", "jkk")] = new_count.get(listing.get("source", "jkk"), 0) + 1
 
             upsert_listing(con, lid, listing, notified=notified)
