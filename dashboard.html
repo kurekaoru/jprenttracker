@@ -402,6 +402,25 @@
   .pin-popup .pin-meta { color: #6b6b66; }
   .route-btn { background: #f0ede6; color: #1a1a18; }
   .sort-table tbody tr.row-selected td { background: var(--accent-light); }
+  .layer-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .layer-row:last-child { border-bottom: none; }
+  .layer-label { font-size: 12px; display: flex; align-items: center; gap: 7px; }
+  .layer-label svg { opacity: 0.6; }
+  .tog { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
+  .tog input { opacity: 0; width: 0; height: 0; }
+  .tog-slider {
+    position: absolute; inset: 0; border-radius: 20px;
+    background: var(--border); cursor: pointer; transition: background 0.2s;
+  }
+  .tog-slider::before {
+    content: ''; position: absolute; width: 14px; height: 14px; border-radius: 50%;
+    left: 3px; top: 3px; background: #fff; transition: transform 0.2s;
+  }
+  .tog input:checked + .tog-slider { background: var(--accent); }
+  .tog input:checked + .tog-slider::before { transform: translateX(16px); }
 
   /* Sortable table */
   .sort-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -590,7 +609,11 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       <span class="rail-tip">アカウント</span>
     </button>
-    <button class="rail-btn" id="rail-about" onclick="openPanel('about')" style="margin-top:auto;">
+    <button class="rail-btn" id="rail-layers" onclick="openPanel('layers')" style="margin-top:auto;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+      <span class="rail-tip">地図レイヤー</span>
+    </button>
+    <button class="rail-btn" id="rail-about" onclick="openPanel('about')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
       <span class="rail-tip">セットアップ</span>
     </button>
@@ -678,6 +701,41 @@
         </div>
         <div style="overflow-x:auto;">
           <div id="disappeared-table" style="color:var(--muted);font-size:11px;">読み込み中…</div>
+        </div>
+      </div>
+
+      <!-- Layers page -->
+      <div class="panel-page" id="panel-layers">
+        <p class="section-label">地図レイヤー</p>
+        <div style="margin-top:8px;">
+          <div class="layer-row">
+            <span class="layer-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+              駅・路線
+            </span>
+            <label class="tog"><input type="checkbox" id="layer-transit" onchange="toggleLayer('transit',this.checked)"><span class="tog-slider"></span></label>
+          </div>
+          <div class="layer-row">
+            <span class="layer-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+              道路名
+            </span>
+            <label class="tog"><input type="checkbox" id="layer-roadLabels" onchange="toggleLayer('roadLabels',this.checked)"><span class="tog-slider"></span></label>
+          </div>
+          <div class="layer-row">
+            <span class="layer-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              丁目・町名
+            </span>
+            <label class="tog"><input type="checkbox" id="layer-neighborhoods" onchange="toggleLayer('neighborhoods',this.checked)"><span class="tog-slider"></span></label>
+          </div>
+          <div class="layer-row">
+            <span class="layer-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              公園
+            </span>
+            <label class="tog"><input type="checkbox" id="layer-parks" onchange="toggleLayer('parks',this.checked)" checked><span class="tog-slider"></span></label>
+          </div>
         </div>
       </div>
 
@@ -1015,25 +1073,53 @@ let _pendingCount = 0;
 let _markers = {};
 let _selectedId = null;
 
-const DARK_MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#ebebeb' }] },
-  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#777777' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#f5f5f5' }] },
-  { featureType: 'administrative', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
-  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#444444' }] },
-  { featureType: 'administrative.neighborhood', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#d8e8d8' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
-  { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#e0e0e0' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#cccccc' }] },
-  { featureType: 'road.highway', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#b0c4d8' }] },
-  { featureType: 'water', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-];
+const _mapLayers = { transit: false, roadLabels: false, neighborhoods: false, parks: true };
+
+function buildMapStyle() {
+  const s = [
+    { elementType: 'geometry', stylers: [{ color: '#ebebeb' }] },
+    { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#777777' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#f5f5f5' }] },
+    { featureType: 'administrative', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
+    { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#444444' }] },
+    { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+    { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#e0e0e0' }] },
+    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#cccccc' }] },
+    { featureType: 'road.highway', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#b0c4d8' }] },
+    { featureType: 'water', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+  ];
+  if (_mapLayers.transit) {
+    s.push({ featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#d4d4d4' }] });
+    s.push({ featureType: 'transit.station', elementType: 'labels.text.fill', stylers: [{ color: '#555555' }] });
+    s.push({ featureType: 'transit.station', elementType: 'labels.text.stroke', stylers: [{ color: '#f5f5f5' }] });
+  } else {
+    s.push({ featureType: 'transit', stylers: [{ visibility: 'off' }] });
+  }
+  if (_mapLayers.roadLabels) {
+    s.push({ featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#888888' }] });
+    s.push({ featureType: 'road.arterial', elementType: 'labels.text.stroke', stylers: [{ color: '#f5f5f5' }] });
+  } else {
+    s.push({ featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] });
+  }
+  if (_mapLayers.neighborhoods) {
+    s.push({ featureType: 'administrative.neighborhood', elementType: 'labels.text.fill', stylers: [{ color: '#888888' }] });
+    s.push({ featureType: 'administrative.neighborhood', elementType: 'labels.text.stroke', stylers: [{ color: '#f5f5f5' }] });
+  } else {
+    s.push({ featureType: 'administrative.neighborhood', stylers: [{ visibility: 'off' }] });
+  }
+  if (_mapLayers.parks) {
+    s.push({ featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#d8e8d8' }, { visibility: 'on' }] });
+  }
+  return s;
+}
+
+function toggleLayer(layer, on) {
+  _mapLayers[layer] = on;
+  if (map) map.setOptions({ styles: buildMapStyle() });
+}
 
 function markerIcon(source, selected) {
   const fill   = selected ? '#b91c1c' : '#dc2626';
@@ -1059,7 +1145,7 @@ function initMap() {
     zoom: 11,
     scrollwheel: true,
     gestureHandling: 'greedy',
-    styles: DARK_MAP_STYLE,
+    styles: buildMapStyle(),
     mapTypeControl: false,
     streetViewControl: false,
     fullscreenControl: false,
@@ -1433,10 +1519,10 @@ function closeAuthModal() { document.getElementById('auth-modal').classList.remo
 
 // ── Icon-rail panel ───────────────────────────────────────────────────────────
 let _activePanel = null;
-const _allPanels  = ['filter','listings','notif','account','about'];
+const _allPanels  = ['filter','listings','notif','account','layers','about'];
 const _panelTitles = {
   filter: 'フィルター', listings: '空室一覧',
-  notif: '通知設定', account: 'アカウント', about: 'セットアップ'
+  notif: '通知設定', account: 'アカウント', layers: '地図レイヤー', about: 'セットアップ'
 };
 
 function openPanel(name) {
