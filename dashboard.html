@@ -800,6 +800,7 @@ const KAWASAKI = [
   '川崎市麻生区','川崎市多摩区','川崎市宮前区'
 ];
 const SAGAMIHARA = ['相模原市緑区','相模原市中央区','相模原市南区'];
+const KANAGAWA_WARDS = new Set([...YOKOHAMA, ...KAWASAKI, ...SAGAMIHARA]);
 const LAYOUTS = ['1R','1K','1DK','1LDK','2K','2DK','2LDK','3K','3DK','3LDK','4LDK以上'];
 
 let selectedWards = new Set();
@@ -1089,6 +1090,7 @@ function applyMapFilters() {
   _allListings.forEach(l => {
     if (filterSources.size > 0 && !filterSources.has(l.source)) return;
     if (selectedWards.size > 0 && !selectedWards.has(l.ward)) return;
+    if (selectedWards.size === 0 && KANAGAWA_WARDS.has(l.ward)) return;
     if (selectedLayouts.size > 0 && !selectedLayouts.has(l.layout)) return;
     if (minRent > 0 && l.rent < minRent) return;
     if (maxRent > 0 && l.rent > maxRent) return;
