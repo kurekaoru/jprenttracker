@@ -4,12 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>JKK Monitor Dashboard</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      crossorigin=""/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-        crossorigin=""></script>
+<script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBHw3d6FU73jXiJxUJoZ4MlDGu2CmhC4i8&libraries=places&language=ja&callback=initMap"></script>
 <style>
   :root {
     --bg: #f6f5f0;
@@ -386,20 +381,23 @@
   }
   .pin-popup .src-tag.jkk { background: var(--accent); }
   .pin-popup .src-tag.ur  { background: #3a86ff; }
-  .map-marker {
-    width: 14px; height: 14px; border-radius: 50%;
-    border: 2px solid #fff;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
-    transition: transform 0.15s;
+  .route-btn {
+    font-size: 11px; padding: 3px 8px; border-radius: 6px; border: none; cursor: pointer;
+    background: #383840; color: rgba(255,255,255,0.8); transition: background 0.1s;
   }
-  .map-marker.jkk { background: var(--accent); }
-  .map-marker.ur  { background: #3a86ff; }
-  .map-marker.selected {
-    width: 20px; height: 20px;
-    border: 3px solid #f59e0b;
-    box-shadow: 0 0 0 3px rgba(245,158,11,0.35), 0 2px 6px rgba(0,0,0,0.5);
-    margin: -3px;
+  .route-btn:hover { background: var(--accent); color: #fff; }
+  .gm-style .gm-style-iw-c {
+    background: #2d2d30 !important;
+    color: rgba(255,255,255,0.87) !important;
+    border-radius: 10px !important;
+    padding: 0 !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.6) !important;
   }
+  .gm-style .gm-style-iw-d { overflow: hidden !important; }
+  .gm-style .gm-style-iw-d > div { padding: 12px 14px; }
+  .gm-style .gm-style-iw-t::after { background: #2d2d30 !important; }
+  .gm-style .gm-style-iw-ch, .gm-style .gm-style-iw-chr { display: none !important; }
+  .gm-style-iw button.gm-ui-hover-effect { display: none !important; }
   .sort-table tbody tr.row-selected td { background: var(--accent-light); }
 
   /* Sortable table */
@@ -620,6 +618,10 @@
         <p class="section-label" style="margin-top:10px;">駅徒歩</p>
         <label>最大徒歩分数 (分)</label>
         <input type="number" id="max-walk" placeholder="例: 10 (0=上限なし)" step="1" min="0" oninput="applyMapFilters()" />
+        <p class="section-label" style="margin-top:10px;">通勤先（経路検索）</p>
+        <label>目的地（駅名・住所）</label>
+        <input type="text" id="commute-dest" placeholder="例: 新宿駅, 渋谷" />
+        <button class="save-btn" style="margin-top:6px;background:#383840;font-size:12px;" onclick="clearDirections()">経路をクリア</button>
         <p class="section-label" style="margin-top:10px;">データソース</p>
         <div class="chips" id="source-chips"></div>
         <button class="save-btn" id="save-btn" onclick="saveConfig()" style="margin-top:14px;">設定を保存</button>
@@ -1004,20 +1006,67 @@ function fmtDuration(firstSeen, endIso) {
 }
 
 // ── Map ─────────────────────────────────────────────────────────
-let map, markerLayer;
+let map, infoWindow, directionsService, directionsRenderer;
 let _allListings = [];
 let _pendingCount = 0;
-let _markerMap = {};
+let _markers = {};
 let _selectedId = null;
 
+const DARK_MAP_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#242f3e' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
+  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#263c3f' }] },
+  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#6b9a76' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#38414e' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#212a37' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#9ca5b3' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#746855' }] },
+  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#1f2835' }] },
+  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#f3d19c' }] },
+  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#2f3948' }] },
+  { featureType: 'transit.station', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#17263c' }] },
+  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#515c6d' }] },
+  { featureType: 'water', elementType: 'labels.text.stroke', stylers: [{ color: '#17263c' }] },
+];
+
+function markerIcon(source, selected) {
+  const color = source === 'ur' ? '#3a86ff' : '#1D9E75';
+  return {
+    path: google.maps.SymbolPath.CIRCLE,
+    fillColor: color,
+    fillOpacity: selected ? 1 : 0.85,
+    strokeColor: selected ? '#f59e0b' : '#ffffff',
+    strokeWeight: selected ? 2.5 : 1.5,
+    scale: selected ? 10 : 7,
+  };
+}
+
 function initMap() {
-  map = L.map('map', { scrollWheelZoom: false }).setView([35.6762, 139.6503], 11);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap',
-  }).addTo(map);
-  markerLayer = L.layerGroup().addTo(map);
+  map = new google.maps.Map(document.getElementById('map'), {
+    center: { lat: 35.6762, lng: 139.6503 },
+    zoom: 11,
+    scrollwheel: false,
+    gestureHandling: 'greedy',
+    styles: DARK_MAP_STYLE,
+    mapTypeControl: false,
+    streetViewControl: false,
+    fullscreenControl: false,
+  });
+
+  infoWindow = new google.maps.InfoWindow({ maxWidth: 280 });
+  directionsService = new google.maps.DirectionsService();
+  directionsRenderer = new google.maps.DirectionsRenderer({
+    suppressMarkers: true,
+    polylineOptions: { strokeColor: '#34d399', strokeWeight: 5, strokeOpacity: 0.85 },
+  });
+  directionsRenderer.setMap(map);
+
   loadTokyoBoundary();
+  loadListings();
 }
 
 async function loadTokyoBoundary() {
@@ -1025,27 +1074,12 @@ async function loadTokyoBoundary() {
     const r = await fetch('https://raw.githubusercontent.com/dataofjapan/land/master/tokyo.geojson');
     if (!r.ok) return;
     const gj = await r.json();
-    L.geoJSON(gj, {
-      style: {
-        color: '#1D9E75',
-        weight: 1.5,
-        opacity: 0.45,
-        fillOpacity: 0.04,
-        fillColor: '#1D9E75',
-      },
-      interactive: false,
-    }).addTo(map);
-  } catch (_) { /* decorative — fail silently */ }
-}
-
-function pinIcon(source) {
-  return L.divIcon({
-    className: '',
-    html: `<div class="map-marker ${source === 'ur' ? 'ur' : 'jkk'}"></div>`,
-    iconSize: [14, 14],
-    iconAnchor: [7, 7],
-    popupAnchor: [0, -8],
-  });
+    map.data.addGeoJson(gj);
+    map.data.setStyle({
+      strokeColor: '#1D9E75', strokeWeight: 1.5, strokeOpacity: 0.45,
+      fillColor: '#1D9E75', fillOpacity: 0.04, clickable: false,
+    });
+  } catch (_) {}
 }
 
 function stationStr(nearest_station, walk_min) {
@@ -1054,12 +1088,13 @@ function stationStr(nearest_station, walk_min) {
 }
 
 function popupHtml(l) {
-  const rent = l.rent ? `¥${l.rent.toLocaleString()}` : '—';
-  const size = l.size_m2 ? `${l.size_m2} m²` : '—';
-  const tag  = l.source === 'ur' ? 'UR' : 'JKK';
+  const rent    = l.rent ? `¥${l.rent.toLocaleString()}` : '—';
+  const size    = l.size_m2 ? `${l.size_m2} m²` : '—';
+  const tag     = l.source === 'ur' ? 'UR' : 'JKK';
   const dur     = marketDuration(l.first_seen, l.disappeared_at);
   const daysStr = dur ? fmtDuration(l.first_seen, l.disappeared_at) + '掲載中' : '';
   const station = stationStr(l.nearest_station, l.walk_min);
+  const eid     = escHtml(l.id);
   return `
     <div class="pin-popup">
       <div class="pin-name">${escHtml(l.name)}<span class="src-tag ${l.source}">${tag}</span></div>
@@ -1067,58 +1102,78 @@ function popupHtml(l) {
       <div><span class="pin-rent">${rent}</span> · ${escHtml(l.layout || '—')} · ${size}</div>
       ${station ? `<div style="margin-top:3px;">${escHtml(station)}</div>` : ''}
       <div class="pin-meta" style="margin-top:3px;">初回発見: ${fmtDate(l.first_seen)}${daysStr ? ` · ${daysStr}` : ''}</div>
-      ${l.url ? `<div style="margin-top:4px;"><a href="${l.url}" target="_blank" rel="noopener">物件ページを開く →</a></div>` : ''}
+      ${l.url ? `<div style="margin-top:4px;"><a href="${escHtml(l.url)}" target="_blank" rel="noopener">物件ページを開く →</a></div>` : ''}
+      <div style="margin-top:8px;display:flex;gap:5px;">
+        <button onclick="showRoute('${eid}','TRANSIT')" class="route-btn">🚃 電車</button>
+        <button onclick="showRoute('${eid}','DRIVING')" class="route-btn">🚗 車</button>
+        <button onclick="showRoute('${eid}','WALKING')" class="route-btn">🚶 徒歩</button>
+      </div>
     </div>`;
 }
 
-function selectListing(id, url) {
-  // Deselect previous
-  if (_selectedId && _markerMap[_selectedId]) {
-    const prev = _markerMap[_selectedId];
-    prev.marker.setIcon(pinIcon(prev.source));
+function showRoute(listingId, travelMode) {
+  const destInput = document.getElementById('commute-dest');
+  const dest = destInput ? destInput.value.trim() : '';
+  if (!dest) {
+    openPanel('filter');
+    destInput?.focus();
+    return;
+  }
+  const entry = _markers[listingId];
+  if (!entry) return;
+  directionsService.route({
+    origin: entry.marker.getPosition(),
+    destination: dest,
+    travelMode: google.maps.TravelMode[travelMode],
+  }, (result, status) => {
+    if (status === 'OK') {
+      directionsRenderer.setDirections(result);
+    } else {
+      alert('経路を取得できませんでした: ' + status);
+    }
+  });
+}
+
+function clearDirections() {
+  directionsRenderer.setDirections({ routes: [] });
+}
+
+function selectListing(id) {
+  if (_selectedId && _markers[_selectedId]) {
+    _markers[_selectedId].marker.setIcon(markerIcon(_markers[_selectedId].source, false));
   }
   document.querySelectorAll('.sort-table tbody tr.row-selected')
     .forEach(r => r.classList.remove('row-selected'));
 
-  if (_selectedId === id) { _selectedId = null; return; } // toggle off
+  if (_selectedId === id) { _selectedId = null; infoWindow.close(); return; }
 
   _selectedId = id;
-  const entry = _markerMap[id];
+  const entry = _markers[id];
   if (entry) {
-    entry.marker.setIcon(pinIconSelected(entry.source));
-    map.setView(entry.marker.getLatLng(), Math.max(map.getZoom(), 14), { animate: true });
-    entry.marker.openPopup();
+    entry.marker.setIcon(markerIcon(entry.source, true));
+    map.panTo(entry.marker.getPosition());
+    if (map.getZoom() < 14) map.setZoom(14);
+    infoWindow.setContent(popupHtml(entry.listing));
+    infoWindow.open(map, entry.marker);
   }
   const row = document.querySelector(`.sort-table tbody tr[data-id="${CSS.escape(id)}"]`);
-  if (row) {
-    row.classList.add('row-selected');
-    row.scrollIntoView({ block: 'nearest' });
-  }
-}
-
-function pinIconSelected(source) {
-  return L.divIcon({
-    className: '',
-    html: `<div class="map-marker ${source === 'ur' ? 'ur' : 'jkk'} selected"></div>`,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-    popupAnchor: [0, -10],
-  });
+  if (row) { row.classList.add('row-selected'); row.scrollIntoView({ block: 'nearest' }); }
 }
 
 let _listingsPollTimer = null;
 
 function applyMapFilters() {
-  if (!markerLayer) return;
+  if (!map) return;
   const minRent = parseInt(document.getElementById('min-rent').value) || 0;
   const maxRent = parseInt(document.getElementById('max-rent').value) || 0;
   const minSize = parseFloat(document.getElementById('min-size').value) || 0;
   const maxWalk = parseInt(document.getElementById('max-walk').value) || 0;
 
-  markerLayer.clearLayers();
-  _markerMap = {};
+  Object.values(_markers).forEach(e => e.marker.setMap(null));
+  _markers = {};
   _filteredListings = [];
-  const bounds = [];
+  infoWindow.close();
+  _selectedId = null;
 
   _allListings.forEach(l => {
     if (!filterSources.has(l.source)) return;
@@ -1130,11 +1185,14 @@ function applyMapFilters() {
     if (maxWalk > 0 && (l.walk_min == null || l.walk_min > maxWalk)) return;
 
     _filteredListings.push(l);
-    const m = L.marker([l.lat, l.lng], { icon: pinIcon(l.source) })
-      .bindPopup(popupHtml(l));
-    m.addTo(markerLayer);
-    _markerMap[l.id] = { marker: m, source: l.source };
-    bounds.push([l.lat, l.lng]);
+    const marker = new google.maps.Marker({
+      position: { lat: l.lat, lng: l.lng },
+      map,
+      icon: markerIcon(l.source, false),
+      title: l.name,
+    });
+    marker.addListener('click', () => selectListing(l.id));
+    _markers[l.id] = { marker, source: l.source, listing: l };
   });
   const shown = _filteredListings.length;
 
@@ -1383,7 +1441,7 @@ function openPanel(name) {
   document.getElementById('panel-title').textContent = _panelTitles[name] || '';
   panel.classList.add('open');
   backdrop.classList.add('open');
-  setTimeout(() => map?.invalidateSize(), 230);
+  setTimeout(() => { if (map) google.maps.event.trigger(map, 'resize'); }, 230);
 }
 
 function closePanel() {
@@ -1391,7 +1449,7 @@ function closePanel() {
   document.getElementById('side-panel').classList.remove('open');
   document.getElementById('panel-backdrop').classList.remove('open');
   _allPanels.forEach(n => document.getElementById(`rail-${n}`)?.classList.remove('active'));
-  setTimeout(() => map?.invalidateSize(), 230);
+  setTimeout(() => { if (map) google.maps.event.trigger(map, 'resize'); }, 230);
 }
 
 function updateAuthPanels() {
@@ -1731,8 +1789,7 @@ loadConfig();
 initAuth();
 loadLog();
 loadDisappeared();
-initMap();
-loadListings();
+// initMap() is called by Google Maps API callback; it calls loadListings() internally
 setInterval(loadLog, 30000);
 setInterval(loadDisappeared, 60000);
 </script>
