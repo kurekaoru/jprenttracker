@@ -1093,6 +1093,8 @@ function buildMapStyle() {
   ];
   if (_mapLayers.transit) {
     s.push({ featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#d4d4d4' }] });
+    s.push({ featureType: 'transit.station', elementType: 'labels', stylers: [{ visibility: 'on' }] });
+    s.push({ featureType: 'transit.station', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] });
     s.push({ featureType: 'transit.station', elementType: 'labels.text.fill', stylers: [{ color: '#555555' }] });
     s.push({ featureType: 'transit.station', elementType: 'labels.text.stroke', stylers: [{ color: '#f5f5f5' }] });
   } else {
@@ -1215,13 +1217,23 @@ function showRoute(listingId, travelMode) {
   }
   const entry = _markers[listingId];
   if (!entry) return;
+
+  // For transit, snap origin to nearest station name rather than raw lat/lng
+  // — the Directions API often returns ZERO_RESULTS when given a residential lat/lng for transit
+  const l = entry.listing;
+  const transitOrigin = (travelMode === 'TRANSIT' && l.nearest_station)
+    ? l.nearest_station + '駅'
+    : entry.marker.getPosition();
+
   const req = {
-    origin: entry.marker.getPosition(),
+    origin: transitOrigin,
     destination: dest,
     travelMode: google.maps.TravelMode[travelMode],
     region: 'JP',
   };
-  if (travelMode === 'TRANSIT') req.transitOptions = { departureTime: new Date() };
+  if (travelMode === 'TRANSIT') {
+    req.transitOptions = { departureTime: new Date() };
+  }
   directionsService.route(req, (result, status) => {
     if (status === 'OK') {
       directionsRenderer.setDirections(result);
