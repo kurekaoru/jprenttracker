@@ -572,7 +572,6 @@
     <!-- Source filter -->
     <div class="card">
       <div class="card-title">ソース</div>
-      <p style="font-size:11px; color:var(--muted); margin-bottom:8px;">空白 = JKK・UR 両方</p>
       <div class="chips" id="source-chips"></div>
     </div>
 
@@ -800,12 +799,15 @@ const KAWASAKI = [
   '川崎市麻生区','川崎市多摩区','川崎市宮前区'
 ];
 const SAGAMIHARA = ['相模原市緑区','相模原市中央区','相模原市南区'];
-const KANAGAWA_WARDS = new Set([...YOKOHAMA, ...KAWASAKI, ...SAGAMIHARA]);
 const LAYOUTS = ['1R','1K','1DK','1LDK','2K','2DK','2LDK','3K','3DK','3LDK','4LDK以上'];
 
-let selectedWards = new Set();
-let selectedLayouts = new Set();
-let filterSources = new Set();   // empty = all sources shown
+const DEFAULT_WARDS   = new Set([...KU, ...SI]);   // Kanagawa is opt-in
+const DEFAULT_LAYOUTS = new Set(LAYOUTS);
+const DEFAULT_SOURCES = new Set(['jkk', 'ur']);
+
+let selectedWards   = new Set(DEFAULT_WARDS);
+let selectedLayouts = new Set(DEFAULT_LAYOUTS);
+let filterSources   = new Set(DEFAULT_SOURCES);
 
 function makeChip(label, set, container, onChange) {
   const c = document.createElement('div');
@@ -819,46 +821,42 @@ function makeChip(label, set, container, onChange) {
   container.appendChild(c);
 }
 
+function addSectionLabel(container, text, marginTop = 8) {
+  const el = document.createElement('div');
+  el.style.cssText = `font-size:10px;color:var(--muted);margin-bottom:4px;margin-top:${marginTop}px;font-weight:600;letter-spacing:.05em`;
+  el.textContent = text;
+  container.appendChild(el);
+}
+
 function buildChips() {
   const wc = document.getElementById('ward-chips');
-  const label_ku = document.createElement('div');
-  label_ku.style.cssText = 'font-size:10px;color:var(--muted);margin-bottom:4px;margin-top:2px;font-weight:600;letter-spacing:.05em';
-  label_ku.textContent = '区部';
-  wc.appendChild(label_ku);
+  const lc = document.getElementById('layout-chips');
+  const sc = document.getElementById('source-chips');
+  wc.innerHTML = '';
+  lc.innerHTML = '';
+  sc.innerHTML = '';
+
+  addSectionLabel(wc, '区部', 2);
   KU.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
 
-  const label_si = document.createElement('div');
-  label_si.style.cssText = 'font-size:10px;color:var(--muted);margin-bottom:4px;margin-top:8px;font-weight:600;letter-spacing:.05em';
-  label_si.textContent = '市部（東京）';
-  wc.appendChild(label_si);
+  addSectionLabel(wc, '市部（東京）');
   SI.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
 
-  const label_yoko = document.createElement('div');
-  label_yoko.style.cssText = 'font-size:10px;color:var(--muted);margin-bottom:4px;margin-top:8px;font-weight:600;letter-spacing:.05em';
-  label_yoko.textContent = '横浜市';
-  wc.appendChild(label_yoko);
+  addSectionLabel(wc, '横浜市');
   YOKOHAMA.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
 
-  const label_kawa = document.createElement('div');
-  label_kawa.style.cssText = 'font-size:10px;color:var(--muted);margin-bottom:4px;margin-top:8px;font-weight:600;letter-spacing:.05em';
-  label_kawa.textContent = '川崎市';
-  wc.appendChild(label_kawa);
+  addSectionLabel(wc, '川崎市');
   KAWASAKI.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
 
-  const label_saga = document.createElement('div');
-  label_saga.style.cssText = 'font-size:10px;color:var(--muted);margin-bottom:4px;margin-top:8px;font-weight:600;letter-spacing:.05em';
-  label_saga.textContent = '相模原市';
-  wc.appendChild(label_saga);
+  addSectionLabel(wc, '相模原市');
   SAGAMIHARA.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
 
-  const lc = document.getElementById('layout-chips');
   LAYOUTS.forEach(l => makeChip(l, selectedLayouts, lc, applyMapFilters));
 
-  const sc = document.getElementById('source-chips');
-  [['jkk', '🏠 JKK'], ['ur', '🏢 UR']].forEach(([val, label]) => {
+  [['jkk', '🏠 JKK'], ['ur', '🏢 UR']].forEach(([val, lbl]) => {
     const c = document.createElement('div');
     c.className = 'chip' + (filterSources.has(val) ? ' active' : '');
-    c.textContent = label;
+    c.textContent = lbl;
     c.onclick = () => {
       filterSources.has(val) ? filterSources.delete(val) : filterSources.add(val);
       c.classList.toggle('active');
@@ -874,10 +872,9 @@ function loadConfig() {
   document.getElementById('max-rent').value = d.max_rent || '';
   document.getElementById('min-size').value = d.min_size_m2 || '';
   document.getElementById('max-walk').value = d.max_walk_min || '';
-  selectedWards   = new Set(d.wards   || []);
-  selectedLayouts = new Set(d.layouts || []);
-  document.getElementById('ward-chips').innerHTML = '';
-  document.getElementById('layout-chips').innerHTML = '';
+  selectedWards   = d.wards?.length   ? new Set(d.wards)   : new Set(DEFAULT_WARDS);
+  selectedLayouts = d.layouts?.length ? new Set(d.layouts) : new Set(DEFAULT_LAYOUTS);
+  filterSources   = new Set(DEFAULT_SOURCES);
   buildChips();
   // If logged in, server settings will override this via loadUserSettings()
 }
@@ -1088,10 +1085,9 @@ function applyMapFilters() {
   const bounds = [];
 
   _allListings.forEach(l => {
-    if (filterSources.size > 0 && !filterSources.has(l.source)) return;
-    if (selectedWards.size > 0 && !selectedWards.has(l.ward)) return;
-    if (selectedWards.size === 0 && KANAGAWA_WARDS.has(l.ward)) return;
-    if (selectedLayouts.size > 0 && !selectedLayouts.has(l.layout)) return;
+    if (!filterSources.has(l.source)) return;
+    if (!selectedWards.has(l.ward)) return;
+    if (!selectedLayouts.has(l.layout)) return;
     if (minRent > 0 && l.rent < minRent) return;
     if (maxRent > 0 && l.rent > maxRent) return;
     if (minSize > 0 && l.size_m2 < minSize) return;
@@ -1469,10 +1465,9 @@ async function loadUserSettings() {
     document.getElementById('max-rent').value = d.max_rent || '';
     document.getElementById('min-size').value = d.min_size_m2 || '';
     document.getElementById('max-walk').value = d.max_walk_min || '';
-    selectedWards   = new Set(d.wards   || []);
-    selectedLayouts = new Set(d.layouts || []);
-    document.getElementById('ward-chips').innerHTML   = '';
-    document.getElementById('layout-chips').innerHTML = '';
+    selectedWards   = d.wards?.length   ? new Set(d.wards)   : new Set(DEFAULT_WARDS);
+    selectedLayouts = d.layouts?.length ? new Set(d.layouts) : new Set(DEFAULT_LAYOUTS);
+    filterSources   = new Set(DEFAULT_SOURCES);
     buildChips();
   } catch {}
 }
