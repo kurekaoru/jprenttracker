@@ -1252,6 +1252,7 @@ function showRoute(listingId, travelMode) {
       if (status === 'OK') {
         directionsRenderer.setDirections(result);
       } else {
+        console.warn('[transit]', status, result?.geocoded_waypoints);
         // Fall back to Google Maps web — opens with full transit UI, real-time data, fares
         const gmOrigin = encodeURIComponent(l.nearest_station ? l.nearest_station + '駅' : l.address || l.ward);
         const gmDest   = encodeURIComponent(dest);
@@ -1927,8 +1928,8 @@ setInterval(() => {
   secs--;
   if (secs <= 0) { secs = 300; loadLog(); loadListings(); }
   const m = Math.floor(secs/60), s = secs%60;
-  document.getElementById('countdown').textContent =
-    `次回確認まで ${m}:${String(s).padStart(2,'0')}`;
+  const cd = document.getElementById('countdown');
+  if (cd) cd.textContent = `次回確認まで ${m}:${String(s).padStart(2,'0')}`;
 }, 1000);
 
 // Init
