@@ -1072,6 +1072,26 @@ let _allListings = [];
 let _pendingCount = 0;
 let _markers = {};
 let _selectedId = null;
+let _transitPolylines = [];
+
+function decodePolyline(encoded) {
+  const pts = []; let i = 0, lat = 0, lng = 0;
+  while (i < encoded.length) {
+    let b, shift = 0, result = 0;
+    do { b = encoded.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lat += (result & 1) ? ~(result >> 1) : result >> 1;
+    shift = result = 0;
+    do { b = encoded.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lng += (result & 1) ? ~(result >> 1) : result >> 1;
+    pts.push({ lat: lat / 1e5, lng: lng / 1e5 });
+  }
+  return pts;
+}
+
+function clearTransitPolylines() {
+  _transitPolylines.forEach(p => p.setMap(null));
+  _transitPolylines = [];
+}
 
 const _mapLayers = { transit: false, roadLabels: false, neighborhoods: false, parks: true };
 
@@ -1229,7 +1249,10 @@ function showRoute(listingId, travelMode) {
   const l = entry.listing;
 
   if (travelMode === 'TRANSIT') {
-    // Walking leg: property → nearest station (dashed grey)
+    clearTransitPolylines();
+    directionsRenderer.setDirections({ routes: [] });
+
+    // Walking leg: property → nearest station (dashed grey, JS API works fine for walking)
     if (l.nearest_station) {
       directionsService.route({
         origin: entry.marker.getPosition(),
@@ -1239,29 +1262,41 @@ function showRoute(listingId, travelMode) {
       }, (r, s) => { if (s === 'OK') walkRenderer.setDirections(r); });
     }
 
-    // Transit leg: try on-map first, fall back to Google Maps web
-    const origin = l.nearest_station ? l.nearest_station + '駅' : entry.marker.getPosition();
-    const dep = new Date(Date.now() + 5 * 60000); // 5 min from now
-    directionsService.route({
-      origin,
-      destination: dest,
-      travelMode: google.maps.TravelMode.TRANSIT,
-      region: 'JP',
-      transitOptions: { departureTime: dep },
-    }, (result, status) => {
-      if (status === 'OK') {
-        directionsRenderer.setDirections(result);
-      } else {
-        console.warn('[transit]', status, result?.geocoded_waypoints);
-        // Fall back to Google Maps web — opens with full transit UI, real-time data, fares
-        const gmOrigin = encodeURIComponent(l.nearest_station ? l.nearest_station + '駅' : l.address || l.ward);
-        const gmDest   = encodeURIComponent(dest);
-        window.open(
-          `https://www.google.com/maps/dir/?api=1&origin=${gmOrigin}&destination=${gmDest}&travelmode=transit`,
-          '_blank'
-        );
-      }
-    });
+    // Transit leg: proxy through server to bypass JS API transit limitation
+    const origin = l.nearest_station ? l.nearest_station + '駅' : `${l.lat},${l.lng}`;
+    const dep    = Math.floor((Date.now() + 5 * 60000) / 1000);
+    const params = new URLSearchParams({ origin, destination: dest, mode: 'transit', departure_time: dep });
+
+    fetch(`${API}/route?${params}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.status !== 'OK') throw new Error(data.status);
+        const steps = data.routes[0].legs[0].steps;
+        steps.forEach(step => {
+          const isTransit = step.travel_mode === 'TRANSIT';
+          const color = isTransit
+            ? (step.transit_details?.line?.color || '#34d399')
+            : '#888888';
+          const pl = new google.maps.Polyline({
+            path: decodePolyline(step.polyline.points),
+            strokeColor:   isTransit ? color : '#888888',
+            strokeWeight:  isTransit ? 5 : 3,
+            strokeOpacity: isTransit ? 0.9 : 0,
+            icons: isTransit ? [] : [{
+              icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 },
+              offset: '0', repeat: '10px',
+            }],
+            map,
+          });
+          _transitPolylines.push(pl);
+        });
+      })
+      .catch(() => {
+        // Server not running or key missing — fall back to Google Maps web
+        const gmO = encodeURIComponent(origin);
+        const gmD = encodeURIComponent(dest);
+        window.open(`https://www.google.com/maps/dir/?api=1&origin=${gmO}&destination=${gmD}&travelmode=transit`, '_blank');
+      });
     return;
   }
 
@@ -1284,6 +1319,7 @@ function showRoute(listingId, travelMode) {
 function clearDirections() {
   directionsRenderer.setDirections({ routes: [] });
   walkRenderer.setDirections({ routes: [] });
+  clearTransitPolylines();
 }
 
 function selectListing(id) {

@@ -33,7 +33,8 @@ SLACK_CLIENT_ID     = os.environ.get("SLACK_CLIENT_ID", "")
 SLACK_CLIENT_SECRET = os.environ.get("SLACK_CLIENT_SECRET", "")
 SLACK_REDIRECT_URI  = os.environ.get("SLACK_REDIRECT_URI", "")
 
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_BOT_TOKEN      = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+GOOGLE_MAPS_SERVER_KEY  = os.environ.get("GOOGLE_MAPS_SERVER_KEY", "")
 
 DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "http://34.72.39.84:5050")
 
@@ -806,6 +807,37 @@ def get_disappeared():
     rows = [dict(r) for r in cur.fetchall()]
     con.close()
     return jsonify({"listings": rows})
+
+
+@app.route("/api/route")
+def proxy_directions():
+    origin      = request.args.get("origin", "").strip()
+    destination = request.args.get("destination", "").strip()
+    mode        = request.args.get("mode", "transit")
+    dep         = request.args.get("departure_time", "now")
+
+    if not origin or not destination:
+        return jsonify({"status": "INVALID_REQUEST"}), 400
+    if not GOOGLE_MAPS_SERVER_KEY:
+        return jsonify({"status": "REQUEST_DENIED", "error_message": "GOOGLE_MAPS_SERVER_KEY not set"}), 503
+
+    params = {
+        "origin":           origin,
+        "destination":      destination,
+        "mode":             mode,
+        "departure_time":   dep,
+        "language":         "ja",
+        "region":           "JP",
+        "key":              GOOGLE_MAPS_SERVER_KEY,
+    }
+    try:
+        r = requests.get(
+            "https://maps.googleapis.com/maps/api/directions/json",
+            params=params, timeout=10
+        )
+        return jsonify(r.json())
+    except Exception as e:
+        return jsonify({"status": "UNKNOWN_ERROR", "error_message": str(e)}), 502
 
 
 if __name__ == "__main__":
