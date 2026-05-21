@@ -383,24 +383,24 @@
   .pin-popup .src-tag.ur  { background: #3a86ff; }
   .route-btn {
     font-size: 11px; padding: 3px 8px; border-radius: 6px; border: none; cursor: pointer;
-    background: #383840; color: rgba(255,255,255,0.8); transition: background 0.1s;
+    background: var(--surface2); color: var(--text); transition: background 0.1s;
   }
   .route-btn:hover { background: var(--accent); color: #fff; }
-  .gm-style .gm-style-iw-c {
-    background: #ffffff !important;
-    color: #1a1a18 !important;
-    border-radius: 10px !important;
-    padding: 0 !important;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.18) !important;
+  #property-card {
+    display: none;
+    position: absolute; top: 50px; right: 10px; z-index: 500;
+    width: 268px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 13px 14px 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    font-size: 12px; line-height: 1.5; color: var(--text);
   }
-  .gm-style .gm-style-iw-d { overflow: hidden !important; }
-  .gm-style .gm-style-iw-d > div { padding: 12px 14px; }
-  .gm-style .gm-style-iw-t::after { background: #ffffff !important; }
-  .gm-style .gm-style-iw-ch, .gm-style .gm-style-iw-chr { display: none !important; }
-  .gm-style-iw button.gm-ui-hover-effect { display: none !important; }
-  .pin-popup { color: #1a1a18; }
-  .pin-popup .pin-meta { color: #6b6b66; }
-  .route-btn { background: #f0ede6; color: #1a1a18; }
+  #property-card-close {
+    position: absolute; top: 9px; right: 11px;
+    background: none; border: none; font-size: 16px; line-height: 1;
+    color: var(--muted); cursor: pointer; padding: 0;
+  }
+  #property-card-close:hover { color: var(--text); }
   .sort-table tbody tr.row-selected td { background: var(--accent-light); }
   .layer-row {
     display: flex; align-items: center; justify-content: space-between;
@@ -798,6 +798,10 @@
         <span id="map-summary" style="color:var(--muted);"></span>
         <button class="map-refresh-btn" onclick="loadListings()">更新</button>
       </div>
+      <div id="property-card">
+        <button id="property-card-close" onclick="closePropCard()">×</button>
+        <div id="property-card-body" class="pin-popup"></div>
+      </div>
       <div id="map"></div>
     </div>
   </main>
@@ -1095,7 +1099,7 @@ function fmtDuration(firstSeen, endIso) {
 }
 
 // ── Map ─────────────────────────────────────────────────────────
-let map, infoWindow, directionsService, directionsRenderer, walkRenderer;
+let map, directionsService, directionsRenderer, walkRenderer;
 let _allListings = [];
 let _pendingCount = 0;
 let _markers = {};
@@ -1349,7 +1353,6 @@ function initMap() {
     fullscreenControl: false,
   });
 
-  infoWindow = new google.maps.InfoWindow({ maxWidth: 280 });
   directionsService = new google.maps.DirectionsService();
   directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: true });
   directionsRenderer.setMap(map);
@@ -1435,8 +1438,7 @@ function popupHtml(l) {
   const station = stationStr(l.nearest_station, l.walk_min);
   const eid     = escHtml(l.id);
   return `
-    <div class="pin-popup">
-      <div class="pin-name">${escHtml(l.name)}<span class="src-tag ${l.source}">${tag}</span></div>
+      <div class="pin-name" style="padding-right:18px;">${escHtml(l.name)}<span class="src-tag ${l.source}">${tag}</span></div>
       <div class="pin-meta">${escHtml(l.address || l.ward)}</div>
       <div><span class="pin-rent">${rent}</span> · ${escHtml(l.layout || '—')} · ${size}</div>
       ${station ? `<div style="margin-top:3px;">${escHtml(station)}</div>` : ''}
@@ -1447,15 +1449,14 @@ function popupHtml(l) {
           oninput="updateCommuteDest(this.value)"
           placeholder="目的地（例: 新宿駅）"
           autocomplete="new-password"
-          style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:11px;font-family:inherit;outline:none;" />
+          style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:6px;font-size:11px;font-family:inherit;outline:none;" />
       </div>
       <div style="margin-top:6px;display:flex;gap:5px;">
         <button onclick="showRoute('${eid}','TRANSIT')" class="route-btn">🚃 電車</button>
         <button onclick="showRoute('${eid}','DRIVING')" class="route-btn">🚗 車</button>
         <button onclick="showRoute('${eid}','WALKING')" class="route-btn">🚶 徒歩</button>
         <button onclick="clearDirections()" class="route-btn" style="margin-left:auto;">✕</button>
-      </div>
-    </div>`;
+      </div>`;
 }
 
 function showRoute(listingId, travelMode) {
@@ -1572,6 +1573,23 @@ function clearDirections() {
   Object.values(_markers).forEach(e => e.marker.setVisible(true));
 }
 
+function openPropCard(l) {
+  document.getElementById('property-card-body').innerHTML = popupHtml(l);
+  document.getElementById('property-card').style.display = 'block';
+}
+
+function closePropCard() {
+  document.getElementById('property-card').style.display = 'none';
+  if (_selectedId) {
+    if (_markers[_selectedId]) {
+      _markers[_selectedId].marker.setIcon(markerIcon(_markers[_selectedId].source, false));
+    }
+    document.querySelectorAll('.sort-table tbody tr.row-selected')
+      .forEach(r => r.classList.remove('row-selected'));
+    _selectedId = null;
+  }
+}
+
 function selectListing(id) {
   if (_selectedId && _markers[_selectedId]) {
     _markers[_selectedId].marker.setIcon(markerIcon(_markers[_selectedId].source, false));
@@ -1579,7 +1597,7 @@ function selectListing(id) {
   document.querySelectorAll('.sort-table tbody tr.row-selected')
     .forEach(r => r.classList.remove('row-selected'));
 
-  if (_selectedId === id) { _selectedId = null; infoWindow.close(); return; }
+  if (_selectedId === id) { _selectedId = null; closePropCard(); return; }
 
   _selectedId = id;
   const entry = _markers[id];
@@ -1587,8 +1605,7 @@ function selectListing(id) {
     entry.marker.setIcon(markerIcon(entry.source, true));
     map.panTo(entry.marker.getPosition());
     if (map.getZoom() < 14) map.setZoom(14);
-    infoWindow.setContent(popupHtml(entry.listing));
-    infoWindow.open(map, entry.marker);
+    openPropCard(entry.listing);
   }
   const row = document.querySelector(`.sort-table tbody tr[data-id="${CSS.escape(id)}"]`);
   if (row) { row.classList.add('row-selected'); row.scrollIntoView({ block: 'nearest' }); }
@@ -1606,7 +1623,7 @@ function applyMapFilters() {
   Object.values(_markers).forEach(e => e.marker.setMap(null));
   _markers = {};
   _filteredListings = [];
-  infoWindow.close();
+  document.getElementById('property-card').style.display = 'none';
   _selectedId = null;
 
   _allListings.forEach(l => {
