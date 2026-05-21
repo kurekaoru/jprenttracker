@@ -476,14 +476,23 @@ def send_slack(listing):
         ]
     }
 
-    try:
-        r = requests.post(webhook, json=payload, timeout=10)
-        r.raise_for_status()
-        log.info(f"Slack sent ✓  [{label}] {listing['name']}")
-        return True
-    except Exception as e:
-        log.error(f"Slack send failed: {e}")
-        return False
+    for attempt in range(3):
+        try:
+            r = requests.post(webhook, json=payload, timeout=10)
+            if r.status_code == 429:
+                retry_after = int(r.headers.get("Retry-After", 1))
+                log.warning(f"Slack rate-limited, waiting {retry_after}s (attempt {attempt+1}/3)")
+                time.sleep(retry_after)
+                continue
+            r.raise_for_status()
+            log.info(f"Slack sent ✓  [{label}] {listing['name']}")
+            time.sleep(1)  # stay within ~1 msg/sec rate limit
+            return True
+        except Exception as e:
+            log.error(f"Slack send failed: {e}")
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+    return False
 
 
 def run():
