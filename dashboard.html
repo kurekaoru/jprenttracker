@@ -629,64 +629,36 @@ function buildChips() {
   });
 }
 
-async function loadConfig() {
-  try {
-    const r = await fetch(`${API}/config`);
-    if (!r.ok) return;
-    const d = await r.json();
-    document.getElementById('min-rent').value     = d.min_rent || '';
-    document.getElementById('max-rent').value     = d.max_rent || '';
-    document.getElementById('min-size').value     = d.min_size_m2 || '';
-    document.getElementById('max-walk').value     = d.max_walk_min || '';
-    selectedWards   = new Set(d.wards   || []);
-    selectedLayouts = new Set(d.layouts || []);
-    // refresh chips
-    document.getElementById('ward-chips').innerHTML = '';
-    document.getElementById('layout-chips').innerHTML = '';
-    buildChips();
-  } catch(e) {
-    // server not running — show local fallback
-  }
+function loadConfig() {
+  const d = JSON.parse(localStorage.getItem('jkktrackr_config') || '{}');
+  document.getElementById('min-rent').value = d.min_rent || '';
+  document.getElementById('max-rent').value = d.max_rent || '';
+  document.getElementById('min-size').value = d.min_size_m2 || '';
+  document.getElementById('max-walk').value = d.max_walk_min || '';
+  selectedWards   = new Set(d.wards   || []);
+  selectedLayouts = new Set(d.layouts || []);
+  document.getElementById('ward-chips').innerHTML = '';
+  document.getElementById('layout-chips').innerHTML = '';
+  buildChips();
 }
 
-async function saveConfig() {
+function saveConfig() {
   const btn = document.getElementById('save-btn');
   const msg = document.getElementById('saved-msg');
   btn.classList.add('saving');
   btn.textContent = '保存中...';
 
   const payload = {
-    min_rent:      parseInt(document.getElementById('min-rent').value) || 0,
-    max_rent:      parseInt(document.getElementById('max-rent').value) || 0,
-    layouts:       [...selectedLayouts],
-    wards:         [...selectedWards],
-    min_size_m2:   parseFloat(document.getElementById('min-size').value) || 0,
-    max_walk_min:  parseInt(document.getElementById('max-walk').value) || 0,
+    min_rent:     parseInt(document.getElementById('min-rent').value) || 0,
+    max_rent:     parseInt(document.getElementById('max-rent').value) || 0,
+    layouts:      [...selectedLayouts],
+    wards:        [...selectedWards],
+    min_size_m2:  parseFloat(document.getElementById('min-size').value) || 0,
+    max_walk_min: parseInt(document.getElementById('max-walk').value) || 0,
   };
 
-  // also write to config.json locally via clipboard hint when server down
-  try {
-    const r = await fetch(`${API}/config`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(payload)
-    });
-    if (r.ok) {
-      msg.textContent = '✓ 保存しました';
-      const rd = await r.json();
-      } else {
-      throw new Error();
-    }
-  } catch {
-    // Server not running — copy JSON to clipboard
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-      msg.textContent = 'サーバー未起動 — JSONをクリップボードにコピーしました';
-    } catch {
-      msg.textContent = '保存失敗 — server.py が起動しているか確認してください';
-    }
-  }
-
+  localStorage.setItem('jkktrackr_config', JSON.stringify(payload));
+  msg.textContent = '✓ 保存しました';
   btn.classList.remove('saving');
   btn.textContent = '設定を保存';
   setTimeout(() => msg.textContent = '', 3500);
