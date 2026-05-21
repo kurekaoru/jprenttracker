@@ -52,7 +52,6 @@
 
   .topbar {
     background: var(--surface);
-    border-bottom: 1px solid var(--border);
     padding: 0 1.2rem;
     display: flex;
     align-items: center;
@@ -61,6 +60,14 @@
     position: sticky;
     top: 0;
     z-index: 10;
+    position: relative;
+  }
+  .topbar::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 52px; right: 0;
+    height: 1px;
+    background: var(--border);
   }
   .logo {
     display: flex;
@@ -107,7 +114,6 @@
   }
   .icon-rail {
     background: var(--surface);
-    border-right: 1px solid var(--border);
     display: flex; flex-direction: column; align-items: center;
     padding: 10px 0; gap: 2px; z-index: 20;
   }
@@ -1367,7 +1373,7 @@ function openPanel(name) {
     document.getElementById(`rail-${n}`)?.classList.toggle('active', n === name);
     document.getElementById(`panel-${n}`)?.classList.toggle('active', n === name);
   });
-  panel.style.width = name === 'listings' ? '720px' : '260px';
+  panel.style.width = name === 'listings' ? '864px' : '260px';
   document.getElementById('panel-title').textContent = _panelTitles[name] || '';
   panel.classList.add('open');
   backdrop.classList.add('open');
