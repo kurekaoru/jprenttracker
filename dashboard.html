@@ -230,23 +230,6 @@
   }
 
   /* Stat row */
-  .stat-row {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin-bottom: 1rem;
-  }
-  .stat-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 8px 10px;
-  }
-  .stat-label { font-size: 10px; color: var(--muted); margin-bottom: 3px; }
-  .stat-value { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; font-family: var(--mono); }
-  .stat-value.green { color: var(--accent); }
-  .stat-value.amber { color: var(--warn); }
-
   /* Log */
   .log-box {
     background: var(--surface);
@@ -323,7 +306,8 @@
   .map-legend .jkk { background: var(--accent); }
   .map-legend .ur  { background: #3a86ff; }
   #map {
-    height: 540px;
+    height: calc(100vh - 220px);
+    min-height: 480px;
     border-radius: 8px;
     z-index: 0;
   }
@@ -380,7 +364,6 @@
   @media (max-width: 680px) {
     .layout { grid-template-columns: 1fr; }
     .sidebar { border-right: none; border-bottom: 1px solid var(--border); }
-    .stat-row { grid-template-columns: 1fr 1fr; }
   }
 
   /* ── Auth modal ── */
@@ -615,21 +598,6 @@
         5. このダッシュボードで条件を設定 → 保存
       </div>
     </details>
-
-    <div class="stat-row">
-      <div class="stat-card">
-        <div class="stat-label">確認済み物件</div>
-        <div class="stat-value" id="stat-seen">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">本日の新着</div>
-        <div class="stat-value green" id="stat-new">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Slack通知</div>
-        <div class="stat-value amber" id="stat-notif">—</div>
-      </div>
-    </div>
 
     <!-- Map of currently-available listings -->
     <div class="map-card">
@@ -962,13 +930,6 @@ async function loadLog() {
     }).join('');
     box.scrollTop = box.scrollHeight;
 
-    // naive stats from log
-    const seen  = d.lines.filter(l => l.includes('Cycle done')).length;
-    const newM  = d.lines.filter(l => l.includes('NEW match')).length;
-    const notif = d.lines.filter(l => l.includes('Slack notification')).length;
-    if (seen)  document.getElementById('stat-seen').textContent  = seen;
-    if (newM)  document.getElementById('stat-new').textContent   = newM;
-    if (notif) document.getElementById('stat-notif').textContent = notif;
   } catch { /* server not running */ }
 }
 
