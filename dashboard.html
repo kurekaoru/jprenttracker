@@ -495,6 +495,20 @@
     background: var(--surface2); color: var(--text);
     font-size: 12px; font-family: var(--mono);
   }
+  .notif-type-row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .notif-type-card {
+    flex: 1; padding: 14px 8px 10px; border: 2px solid var(--border);
+    border-radius: 12px; background: var(--surface2);
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    cursor: pointer; transition: all 0.15s; font-family: var(--font);
+    font-size: 11px; font-weight: 600; color: var(--muted);
+  }
+  .notif-type-card:hover { border-color: var(--accent); color: var(--text); }
+  .notif-type-card.active { border-color: var(--accent); background: var(--accent-light); color: var(--accent); }
+  .notif-type-card svg { width: 30px; height: 30px; }
+  .notif-input-area { animation: fadeIn 0.15s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+  .qr-img { border-radius: 10px; border: 4px solid var(--surface2); display: block; }
 </style>
 </head>
 <body>
@@ -703,20 +717,61 @@
     <button class="modal-close" onclick="document.getElementById('add-notif-modal').classList.remove('open')">×</button>
     <div style="font-size:16px;font-weight:600;margin-bottom:1.1rem;">通知先を追加</div>
     <div class="modal-err" id="notif-err"></div>
-    <label>種類</label>
-    <select id="notif-type" onchange="updateNotifPlaceholder()" style="margin-bottom:9px;">
-      <option value="slack">Slack Webhook</option>
-      <option value="line">LINE Notify トークン</option>
-      <option value="email">メールアドレス</option>
-    </select>
-    <label id="notif-target-label">Webhook URL</label>
-    <input type="text" id="notif-target" class="notif-target-input"
-           placeholder="https://hooks.slack.com/services/...">
-    <label>ラベル（任意）</label>
-    <input type="text" id="notif-label" placeholder="例: 自分のSlack"
-           style="width:100%;padding:8px 10px;margin-bottom:9px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:13px;font-family:var(--font);"
-           onkeydown="if(event.key==='Enter')submitAddNotif()">
-    <button class="modal-submit" onclick="submitAddNotif()">追加</button>
+
+    <!-- Type picker -->
+    <div class="notif-type-row">
+      <button class="notif-type-card active" id="nt-slack" onclick="selectNotifType('slack')">
+        <!-- Slack logo -->
+        <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zm10.122 2.521a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zm-2.523 10.122a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/>
+        </svg>
+        Slack
+      </button>
+      <button class="notif-type-card" id="nt-line" onclick="selectNotifType('line')">
+        <!-- LINE logo -->
+        <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+          <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63h2.386c.349 0 .63.285.63.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63.349 0 .631.285.631.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.281.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
+        </svg>
+        LINE
+      </button>
+      <button class="notif-type-card" id="nt-email" onclick="selectNotifType('email')">
+        <!-- Email icon -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="4" width="20" height="16" rx="2"/>
+          <path d="m2 7 10 7 10-7"/>
+        </svg>
+        メール
+      </button>
+    </div>
+
+    <!-- Dynamic input area -->
+    <div class="notif-input-area" id="notif-input-area">
+      <label id="notif-target-label">Webhook URL</label>
+      <input type="text" id="notif-target" class="notif-target-input"
+             placeholder="https://hooks.slack.com/services/..."
+             onkeydown="if(event.key==='Enter')submitAddNotif()">
+      <label>ラベル（任意）</label>
+      <input type="text" id="notif-label"
+             style="width:100%;padding:8px 10px;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:13px;font-family:var(--font);"
+             placeholder="例: 自分のSlack"
+             onkeydown="if(event.key==='Enter')submitAddNotif()">
+      <div id="notif-hint" style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5;"></div>
+    </div>
+
+    <button class="modal-submit" onclick="submitAddNotif()">追加する</button>
+  </div>
+</div>
+
+<!-- QR code share modal -->
+<div class="modal-overlay" id="qr-modal">
+  <div class="modal-box" style="text-align:center;">
+    <button class="modal-close" onclick="document.getElementById('qr-modal').classList.remove('open')">×</button>
+    <div style="font-size:16px;font-weight:600;margin-bottom:4px;">📲 ダッシュボードを共有</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:1.2rem;">QRコードをスキャンしてアクセス・新規登録</p>
+    <div style="display:flex;justify-content:center;margin-bottom:1rem;">
+      <img id="qr-img-el" class="qr-img" width="180" height="180" alt="QR code">
+    </div>
+    <p id="qr-url-text" style="font-size:10px;color:var(--muted);word-break:break-all;"></p>
   </div>
 </div>
 
@@ -1309,6 +1364,7 @@ function renderUserChip() {
       <span class="user-name">${escHtml(AUTH.user.display_name || AUTH.user.email)}</span>
       <div class="user-menu" id="user-menu">
         <div class="user-menu-email">${escHtml(AUTH.user.email)}</div>
+        <button class="user-menu-item" onclick="openQrModal()">📲 QRコードで共有</button>
         <button class="user-menu-item danger" onclick="doLogout()">ログアウト</button>
       </div>
     </div>`;
@@ -1445,33 +1501,52 @@ function renderNotifications(list) {
     </div>`).join('');
 }
 
-function openAddNotif() {
-  document.getElementById('notif-err').textContent = '';
-  document.getElementById('notif-target').value = '';
-  document.getElementById('notif-label').value  = '';
-  document.getElementById('notif-type').value   = 'slack';
-  updateNotifPlaceholder();
-  document.getElementById('add-notif-modal').classList.add('open');
-}
+let _notifType = 'slack';
 
-function updateNotifPlaceholder() {
-  const type = document.getElementById('notif-type').value;
+function selectNotifType(type) {
+  _notifType = type;
+  ['slack','line','email'].forEach(t => {
+    document.getElementById(`nt-${t}`)?.classList.toggle('active', t === type);
+  });
   const input = document.getElementById('notif-target');
   const label = document.getElementById('notif-target-label');
+  const hint  = document.getElementById('notif-hint');
   if (type === 'slack') {
     label.textContent = 'Webhook URL';
     input.placeholder = 'https://hooks.slack.com/services/...';
+    hint.textContent  = 'Slack の「Incoming Webhooks」アプリから取得できます。';
   } else if (type === 'line') {
     label.textContent = 'LINE Notify アクセストークン';
-    input.placeholder = 'xxxxxxxxxxxxxxxxxxxx';
+    input.placeholder = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+    hint.innerHTML    = '<a href="https://notify-bot.line.me/my/" target="_blank" style="color:var(--accent)">notify-bot.line.me/my/</a> でトークンを発行してください。';
   } else {
     label.textContent = 'メールアドレス';
     input.placeholder = 'you@example.com';
+    hint.textContent  = 'サーバーの .env に SMTP 設定が必要です。';
   }
+  input.value = '';
+  input.focus();
+}
+
+function openAddNotif() {
+  document.getElementById('notif-err').textContent = '';
+  document.getElementById('notif-target').value    = '';
+  document.getElementById('notif-label').value     = '';
+  selectNotifType('slack');
+  document.getElementById('add-notif-modal').classList.add('open');
+}
+
+function openQrModal() {
+  const url = window.location.href;
+  document.getElementById('qr-url-text').textContent = url;
+  document.getElementById('qr-img-el').src =
+    `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=10&data=${encodeURIComponent(url)}`;
+  document.getElementById('qr-modal').classList.add('open');
+  document.getElementById('user-menu')?.classList.remove('open');
 }
 
 async function submitAddNotif() {
-  const type   = document.getElementById('notif-type').value;
+  const type   = _notifType;
   const target = document.getElementById('notif-target').value.trim();
   const label  = document.getElementById('notif-label').value.trim();
   const errEl  = document.getElementById('notif-err');
