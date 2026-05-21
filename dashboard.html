@@ -1391,7 +1391,7 @@ function openPanel(name) {
     document.getElementById(`rail-${n}`)?.classList.toggle('active', n === name);
     document.getElementById(`panel-${n}`)?.classList.toggle('active', n === name);
   });
-  panel.style.width = name === 'listings' ? '360px' : '260px';
+  panel.style.width = name === 'listings' ? '720px' : '260px';
   document.getElementById('panel-title').textContent = _panelTitles[name] || '';
   panel.classList.add('open');
   backdrop.classList.add('open');
