@@ -1067,7 +1067,7 @@ function fmtDuration(firstSeen, endIso) {
 }
 
 // ── Map ─────────────────────────────────────────────────────────
-let map, infoWindow, directionsService, directionsRenderer;
+let map, infoWindow, directionsService, directionsRenderer, walkRenderer;
 let _allListings = [];
 let _pendingCount = 0;
 let _markers = {};
@@ -1160,6 +1160,14 @@ function initMap() {
     polylineOptions: { strokeColor: '#34d399', strokeWeight: 5, strokeOpacity: 0.85 },
   });
   directionsRenderer.setMap(map);
+  walkRenderer = new google.maps.DirectionsRenderer({
+    suppressMarkers: true,
+    polylineOptions: {
+      strokeColor: '#777777', strokeWeight: 4, strokeOpacity: 0,
+      icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 }, offset: '0', repeat: '10px' }],
+    },
+  });
+  walkRenderer.setMap(map);
 
   loadTokyoBoundary();
   loadListings();
@@ -1225,15 +1233,26 @@ function showRoute(listingId, travelMode) {
     ? l.nearest_station + '駅'
     : entry.marker.getPosition();
 
+  if (travelMode === 'TRANSIT' && l.nearest_station) {
+    // Walking leg: property → nearest station (dashed grey)
+    directionsService.route({
+      origin: entry.marker.getPosition(),
+      destination: l.nearest_station + '駅',
+      travelMode: google.maps.TravelMode.WALKING,
+      region: 'JP',
+    }, (r, s) => { if (s === 'OK') walkRenderer.setDirections(r); });
+  } else {
+    walkRenderer.setDirections({ routes: [] });
+  }
+
+  // Main leg
   const req = {
     origin: transitOrigin,
     destination: dest,
     travelMode: google.maps.TravelMode[travelMode],
     region: 'JP',
   };
-  if (travelMode === 'TRANSIT') {
-    req.transitOptions = { departureTime: new Date() };
-  }
+  if (travelMode === 'TRANSIT') req.transitOptions = { departureTime: new Date() };
   directionsService.route(req, (result, status) => {
     if (status === 'OK') {
       directionsRenderer.setDirections(result);
@@ -1245,6 +1264,7 @@ function showRoute(listingId, travelMode) {
 
 function clearDirections() {
   directionsRenderer.setDirections({ routes: [] });
+  walkRenderer.setDirections({ routes: [] });
 }
 
 function selectListing(id) {
