@@ -644,10 +644,6 @@
         <p class="section-label" style="margin-top:10px;">駅徒歩</p>
         <label>最大徒歩分数 (分)</label>
         <input type="number" id="max-walk" placeholder="例: 10 (0=上限なし)" step="1" min="0" oninput="applyMapFilters()" />
-        <p class="section-label" style="margin-top:10px;">通勤先（経路検索）</p>
-        <label>目的地（駅名・住所）</label>
-        <input type="text" id="commute-dest" placeholder="例: 新宿駅, 渋谷" />
-        <button class="save-btn" style="margin-top:6px;background:#383840;font-size:12px;" onclick="clearDirections()">経路をクリア</button>
         <p class="section-label" style="margin-top:10px;">データソース</p>
         <div class="chips" id="source-chips"></div>
         <button class="save-btn" id="save-btn" onclick="saveConfig()" style="margin-top:14px;">設定を保存</button>
@@ -1073,6 +1069,9 @@ let _pendingCount = 0;
 let _markers = {};
 let _selectedId = null;
 let _transitPolylines = [];
+let _commuteDest = '';
+
+function updateCommuteDest(v) { _commuteDest = v; }
 
 function decodePolyline(encoded) {
   const pts = []; let i = 0, lat = 0, lng = 0;
@@ -1227,20 +1226,26 @@ function popupHtml(l) {
       ${station ? `<div style="margin-top:3px;">${escHtml(station)}</div>` : ''}
       <div class="pin-meta" style="margin-top:3px;">初回発見: ${fmtDate(l.first_seen)}${daysStr ? ` · ${daysStr}` : ''}</div>
       ${l.url ? `<div style="margin-top:4px;"><a href="${escHtml(l.url)}" target="_blank" rel="noopener">物件ページを開く →</a></div>` : ''}
-      <div style="margin-top:8px;display:flex;gap:5px;">
+      <div style="margin-top:10px;">
+        <input id="popup-dest-${eid}" type="text" value="${escHtml(_commuteDest)}"
+          oninput="updateCommuteDest(this.value)"
+          placeholder="目的地（例: 新宿駅）"
+          style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:11px;font-family:inherit;outline:none;" />
+      </div>
+      <div style="margin-top:6px;display:flex;gap:5px;">
         <button onclick="showRoute('${eid}','TRANSIT')" class="route-btn">🚃 電車</button>
         <button onclick="showRoute('${eid}','DRIVING')" class="route-btn">🚗 車</button>
         <button onclick="showRoute('${eid}','WALKING')" class="route-btn">🚶 徒歩</button>
+        <button onclick="clearDirections()" class="route-btn" style="margin-left:auto;">✕</button>
       </div>
     </div>`;
 }
 
 function showRoute(listingId, travelMode) {
-  const destInput = document.getElementById('commute-dest');
-  const dest = destInput ? destInput.value.trim() : '';
+  const dest = _commuteDest.trim();
   if (!dest) {
-    openPanel('filter');
-    destInput?.focus();
+    const input = document.getElementById(`popup-dest-${listingId}`);
+    if (input) input.focus();
     return;
   }
   const entry = _markers[listingId];
