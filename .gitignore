@@ -24,5 +24,8 @@ __pycache__/
 venv/
 env/
 
+# Notes
+note.txt
+
 # macOS
 .DS_Store

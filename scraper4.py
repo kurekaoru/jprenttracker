@@ -178,16 +178,22 @@ def fetch_listings():
 
     try:
         with sync_playwright() as p:
+            _chrome_args = [
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",               # required in cloud VMs / containers
+                "--disable-dev-shm-usage",    # avoids OOM on low-memory machines
+                "--disable-gpu",
+            ]
             try:
                 browser = p.chromium.launch(
                     headless=True,
                     channel="chrome",
-                    args=["--disable-blink-features=AutomationControlled"]
+                    args=_chrome_args,
                 )
             except Exception:
                 browser = p.chromium.launch(
                     headless=True,
-                    args=["--disable-blink-features=AutomationControlled"]
+                    args=_chrome_args,
                 )
 
             ctx = browser.new_context(
