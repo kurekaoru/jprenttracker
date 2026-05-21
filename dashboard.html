@@ -1548,16 +1548,22 @@ async function startOAuthConnect(type) {
   const descEl   = document.getElementById('notif-oauth-desc');
   const statusEl = document.getElementById('notif-oauth-status');
 
-  qrEl.src      = '';
+  qrEl.style.display   = 'none';
+  linkEl.style.display = 'none';
   statusEl.textContent = '接続URLを生成中…';
 
   try {
     const r = await fetch(`${API}/auth/${type}/start`, { headers: authHeaders() });
     const d = await r.json();
-    if (!r.ok) { statusEl.textContent = d.error || '設定が必要です'; return; }
+    if (!r.ok) {
+      statusEl.textContent = '⚠️ ' + (d.error || 'サーバーで設定が必要です');
+      return;
+    }
 
     const url = d.url;
-    qrEl.src  = `https://api.qrserver.com/v1/create-qr-code/?size=130x130&margin=6&data=${encodeURIComponent(url)}`;
+    qrEl.src           = `https://api.qrserver.com/v1/create-qr-code/?size=130x130&margin=6&data=${encodeURIComponent(url)}`;
+    qrEl.style.display = 'block';
+    linkEl.style.display = 'inline-block';
 
     if (type === 'line') {
       descEl.textContent = 'QRコードをスキャンするか、ボタンを押してLINEで認証してください。';
