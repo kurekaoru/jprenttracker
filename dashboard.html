@@ -14,6 +14,7 @@
   :root {
     --bg: #f6f5f0;
     --surface: #ffffff;
+    --rail-bg: #27272b;
     --surface2: #f0ede6;
     --border: rgba(0,0,0,0.1);
     --text: #1a1a18;
@@ -51,40 +52,33 @@
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
 
   .topbar {
-    background: var(--surface);
-    padding: 0 1.2rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 52px 1fr;
     height: 40px;
     position: sticky;
     top: 0;
     z-index: 10;
-    position: relative;
   }
-  .topbar::after {
-    content: '';
-    position: absolute;
-    bottom: 0; left: 52px; right: 0;
-    height: 1px;
-    background: var(--border);
+  .topbar-rail {
+    background: var(--rail-bg);
+    display: flex; align-items: center; justify-content: center;
   }
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
+  .topbar-main {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 1.2rem;
   }
-  .logo .dot {
+  .topbar-title {
+    font-size: 13px; font-weight: 600; letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  .dot {
     width: 22px; height: 22px;
     background: var(--accent);
     border-radius: 6px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 11px;
-    color: #fff;
-    font-weight: 700;
+    font-size: 11px; color: #fff; font-weight: 700;
   }
   .status-pill {
     display: flex; align-items: center; gap: 5px;
@@ -113,18 +107,18 @@
     overflow: hidden;
   }
   .icon-rail {
-    background: var(--surface);
+    background: var(--rail-bg);
     display: flex; flex-direction: column; align-items: center;
     padding: 10px 0; gap: 2px; z-index: 20;
   }
   .rail-btn {
     width: 38px; height: 38px; border: none; border-radius: 10px;
-    background: transparent; color: var(--muted);
+    background: transparent; color: rgba(255,255,255,0.38);
     cursor: pointer; display: flex; align-items: center; justify-content: center;
     transition: all 0.15s; position: relative;
   }
-  .rail-btn:hover { background: var(--surface2); color: var(--text); }
-  .rail-btn.active { background: var(--accent-light); color: var(--accent); }
+  .rail-btn:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.85); }
+  .rail-btn.active { background: rgba(255,255,255,0.14); color: #fff; }
   .rail-btn svg { width: 18px; height: 18px; pointer-events: none; }
   .rail-tip {
     position: absolute; left: 46px; top: 50%; transform: translateY(-50%);
@@ -551,14 +545,14 @@
 <body>
 
 <div class="topbar">
-  <div class="logo">
-    <div class="dot">J</div>
-    JKK Monitor
-  </div>
-  <div style="display:flex;align-items:center;gap:12px;">
-    <div class="status-pill"><div class="pulse"></div>監視中</div>
-    <div id="user-area">
-      <button class="login-btn" onclick="openAuthModal()">ログイン</button>
+  <div class="topbar-rail"><div class="dot">J</div></div>
+  <div class="topbar-main">
+    <span class="topbar-title">JKK Monitor</span>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="status-pill"><div class="pulse"></div>監視中</div>
+      <div id="user-area">
+        <button class="login-btn" onclick="openAuthModal()">ログイン</button>
+      </div>
     </div>
   </div>
 </div>
