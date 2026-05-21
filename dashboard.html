@@ -64,14 +64,14 @@
     display: flex; align-items: center; justify-content: center;
   }
   .topbar-main {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
+    background: var(--rail-bg);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
     display: flex; align-items: center; justify-content: space-between;
     padding: 0 1.2rem;
   }
   .topbar-title {
     font-size: 13px; font-weight: 600; letter-spacing: -0.02em;
-    color: var(--text);
+    color: rgba(255,255,255,0.85);
   }
   .dot {
     width: 22px; height: 22px;
@@ -83,8 +83,8 @@
   .status-pill {
     display: flex; align-items: center; gap: 5px;
     font-size: 11px;
-    background: var(--accent-light);
-    color: var(--accent-dark);
+    background: rgba(93,202,165,0.15);
+    color: #5DCAA5;
     padding: 3px 8px;
     border-radius: 20px;
     font-weight: 500;
@@ -467,7 +467,7 @@
     display: flex; align-items: center; justify-content: center;
     font-size: 12px; font-weight: 700; cursor: pointer; user-select: none;
   }
-  .user-name { font-size: 12px; font-weight: 500; color: var(--text); }
+  .user-name { font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.85); }
   .user-menu {
     display: none; position: absolute; top: 38px; right: 0;
     background: var(--surface); border: 1px solid var(--border);
@@ -488,10 +488,10 @@
   .user-menu-item.danger { color: var(--danger); }
   .login-btn {
     font-size: 12px; padding: 5px 12px; border-radius: 20px;
-    border: 1px solid var(--accent); background: none; color: var(--accent);
+    border: 1px solid rgba(255,255,255,0.25); background: none; color: rgba(255,255,255,0.75);
     cursor: pointer; font-family: var(--font); font-weight: 500;
   }
-  .login-btn:hover { background: var(--accent); color: #fff; }
+  .login-btn:hover { background: rgba(255,255,255,0.1); color: #fff; border-color: rgba(255,255,255,0.5); }
 
   /* ── Notification list ── */
   .notif-item {
