@@ -1099,7 +1099,7 @@ function fmtDuration(firstSeen, endIso) {
 }
 
 // ── Map ─────────────────────────────────────────────────────────
-let map, directionsService, directionsRenderer, walkRenderer;
+let map, directionsService, directionsRenderer;
 let _allListings = [];
 let _pendingCount = 0;
 let _markers = {};
@@ -1356,15 +1356,6 @@ function initMap() {
   directionsService = new google.maps.DirectionsService();
   directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: true });
   directionsRenderer.setMap(map);
-  walkRenderer = new google.maps.DirectionsRenderer({
-    suppressMarkers: true,
-    polylineOptions: {
-      strokeColor: '#4285F4', strokeWeight: 4, strokeOpacity: 0,
-      icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 }, offset: '0', repeat: '10px' }],
-    },
-  });
-  walkRenderer.setMap(map);
-
   _placesService = new google.maps.places.PlacesService(map);
 
   map.addListener('idle', () => {
@@ -1478,16 +1469,6 @@ function showRoute(listingId, travelMode) {
     clearTransitPolylines();
     directionsRenderer.setDirections({ routes: [] });
 
-    // Walking leg: property → nearest station (dashed grey, JS API works fine for walking)
-    if (l.nearest_station) {
-      directionsService.route({
-        origin: entry.marker.getPosition(),
-        destination: l.nearest_station + '駅',
-        travelMode: google.maps.TravelMode.WALKING,
-        region: 'JP',
-      }, (r, s) => { if (s === 'OK') walkRenderer.setDirections(r); });
-    }
-
     // Transit leg: proxy through server to bypass JS API transit limitation
     const origin = l.nearest_station ? l.nearest_station + '駅' : `${l.lat},${l.lng}`;
     const dep    = Math.floor((Date.now() + 5 * 60000) / 1000);
@@ -1536,7 +1517,6 @@ function showRoute(listingId, travelMode) {
   }
 
   // Driving / Bicycling / Walking
-  walkRenderer.setDirections({ routes: [] });
   clearTransitPolylines();
   const isWalking = travelMode === 'WALKING';
   directionsRenderer.setOptions({
@@ -1567,7 +1547,6 @@ function showRoute(listingId, travelMode) {
 
 function clearDirections() {
   directionsRenderer.setDirections({ routes: [] });
-  walkRenderer.setDirections({ routes: [] });
   clearTransitPolylines();
   hideRouteInfo();
   Object.values(_markers).forEach(e => e.marker.setVisible(true));
