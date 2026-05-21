@@ -709,28 +709,59 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
               駅・路線
             </span>
-            <label class="tog"><input type="checkbox" id="layer-transit" onchange="toggleLayer('transit',this.checked)"><span class="tog-slider"></span></label>
+            <label class="tog"><input type="checkbox" id="layer-transit" checked onchange="toggleLayer('transit',this.checked)"><span class="tog-slider"></span></label>
           </div>
           <div class="layer-row">
             <span class="layer-label">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20H5a2 2 0 0 1-2-2V6l3-3h11a2 2 0 0 1 2 2v3"/><path d="M13 20h6m-3-3v6"/></svg>
               道路名
             </span>
-            <label class="tog"><input type="checkbox" id="layer-roadLabels" onchange="toggleLayer('roadLabels',this.checked)"><span class="tog-slider"></span></label>
+            <label class="tog"><input type="checkbox" id="layer-roadLabels" checked onchange="toggleLayer('roadLabels',this.checked)"><span class="tog-slider"></span></label>
           </div>
           <div class="layer-row">
             <span class="layer-label">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
               丁目・町名
             </span>
-            <label class="tog"><input type="checkbox" id="layer-neighborhoods" onchange="toggleLayer('neighborhoods',this.checked)"><span class="tog-slider"></span></label>
+            <label class="tog"><input type="checkbox" id="layer-neighborhoods" checked onchange="toggleLayer('neighborhoods',this.checked)"><span class="tog-slider"></span></label>
           </div>
           <div class="layer-row">
             <span class="layer-label">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
               公園
             </span>
-            <label class="tog"><input type="checkbox" id="layer-parks" onchange="toggleLayer('parks',this.checked)" checked><span class="tog-slider"></span></label>
+            <label class="tog"><input type="checkbox" id="layer-parks" checked onchange="toggleLayer('parks',this.checked)"><span class="tog-slider"></span></label>
+          </div>
+        </div>
+        <p class="section-label" style="margin-top:14px;">周辺施設</p>
+        <div style="margin-top:8px;">
+          <div class="layer-row">
+            <span class="layer-label">
+              <span style="width:10px;height:10px;border-radius:50%;background:#7C3AED;flex-shrink:0;display:inline-block;"></span>
+              コンビニ
+            </span>
+            <label class="tog"><input type="checkbox" id="poi-konbini" onchange="togglePoiLayer('konbini',this.checked)"><span class="tog-slider"></span></label>
+          </div>
+          <div class="layer-row">
+            <span class="layer-label">
+              <span style="width:10px;height:10px;border-radius:50%;background:#EA580C;flex-shrink:0;display:inline-block;"></span>
+              スーパー
+            </span>
+            <label class="tog"><input type="checkbox" id="poi-supermarket" onchange="togglePoiLayer('supermarket',this.checked)"><span class="tog-slider"></span></label>
+          </div>
+          <div class="layer-row">
+            <span class="layer-label">
+              <span style="width:10px;height:10px;border-radius:50%;background:#DB2777;flex-shrink:0;display:inline-block;"></span>
+              幼稚園・保育園
+            </span>
+            <label class="tog"><input type="checkbox" id="poi-kindergarten" onchange="togglePoiLayer('kindergarten',this.checked)"><span class="tog-slider"></span></label>
+          </div>
+          <div class="layer-row">
+            <span class="layer-label">
+              <span style="width:10px;height:10px;border-radius:50%;background:#0369A1;flex-shrink:0;display:inline-block;"></span>
+              クリニック・病院
+            </span>
+            <label class="tog"><input type="checkbox" id="poi-clinic" onchange="togglePoiLayer('clinic',this.checked)"><span class="tog-slider"></span></label>
           </div>
         </div>
       </div>
@@ -981,6 +1012,7 @@ function loadConfig() {
   filterSources   = new Set(DEFAULT_SOURCES);
   buildChips();
   applyMapFilters();
+  loadUserLayers();
   // If logged in, server settings will override this via loadUserSettings()
 }
 
@@ -1128,7 +1160,18 @@ function clearTransitPolylines() {
   _transitPolylines = [];
 }
 
-const _mapLayers = { transit: false, roadLabels: false, neighborhoods: false, parks: true };
+const _mapLayers = { transit: true, roadLabels: true, neighborhoods: true, parks: true };
+const _poiLayers  = { konbini: false, supermarket: false, kindergarten: false, clinic: false };
+const _poiMarkers = { konbini: [], supermarket: [], kindergarten: [], clinic: [] };
+const _poiConfig  = {
+  konbini:      { type: 'convenience_store', color: '#7C3AED' },
+  supermarket:  { type: 'supermarket',       color: '#EA580C' },
+  kindergarten: { type: 'school', keyword: '幼稚園', color: '#DB2777' },
+  clinic:       { type: 'hospital',          color: '#0369A1' },
+};
+let _placesService = null;
+let _poiRefetchTimeout = null;
+let _layerSaveTimer = null;
 
 function buildMapStyle() {
   const s = [
@@ -1176,6 +1219,104 @@ function buildMapStyle() {
 function toggleLayer(layer, on) {
   _mapLayers[layer] = on;
   if (map) map.setOptions({ styles: buildMapStyle() });
+  saveLayerPrefs();
+}
+
+function poiMarkerIcon(color) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+    <circle cx="8" cy="8" r="7" fill="${color}" stroke="white" stroke-width="1.5"/>
+  </svg>`;
+  return {
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+    scaledSize: new google.maps.Size(16, 16),
+    anchor: new google.maps.Point(8, 8),
+  };
+}
+
+function clearPoiMarkers(layer) {
+  (_poiMarkers[layer] || []).forEach(m => m.setMap(null));
+  _poiMarkers[layer] = [];
+}
+
+function fetchPoiMarkers(layer) {
+  if (!_placesService || !map?.getBounds()) return;
+  const cfg = _poiConfig[layer];
+  if (!cfg) return;
+  const req = { bounds: map.getBounds(), type: cfg.type };
+  if (cfg.keyword) req.keyword = cfg.keyword;
+  _placesService.nearbySearch(req, (results, status) => {
+    if (status !== google.maps.places.PlacesServiceStatus.OK &&
+        status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) return;
+    _poiMarkers[layer] = (results || []).map(place => new google.maps.Marker({
+      position: place.geometry.location,
+      map,
+      icon: poiMarkerIcon(cfg.color),
+      title: place.name,
+      zIndex: 5,
+    }));
+  });
+}
+
+function togglePoiLayer(layer, on) {
+  _poiLayers[layer] = on;
+  clearPoiMarkers(layer);
+  if (on) fetchPoiMarkers(layer);
+  saveLayerPrefs();
+}
+
+function saveLayerPrefs() {
+  clearTimeout(_layerSaveTimer);
+  _layerSaveTimer = setTimeout(async () => {
+    const layers = { ..._mapLayers, ..._poiLayers };
+    if (AUTH.token) {
+      try {
+        await fetch(`${API}/user/map_layers`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          body: JSON.stringify(layers),
+        });
+      } catch {}
+    } else {
+      const cfg = JSON.parse(localStorage.getItem('jkktrackr_config') || '{}');
+      cfg.map_layers = layers;
+      localStorage.setItem('jkktrackr_config', JSON.stringify(cfg));
+    }
+  }, 600);
+}
+
+async function loadUserLayers() {
+  let layers = null;
+  if (AUTH.token) {
+    try {
+      const r = await fetch(`${API}/user/map_layers`, { headers: authHeaders() });
+      if (r.ok) layers = await r.json();
+    } catch {}
+  } else {
+    const cfg = JSON.parse(localStorage.getItem('jkktrackr_config') || '{}');
+    if (cfg.map_layers) layers = cfg.map_layers;
+  }
+  if (!layers || !Object.keys(layers).length) return;
+
+  // Apply map style layers
+  Object.keys(_mapLayers).forEach(k => {
+    if (k in layers) {
+      _mapLayers[k] = !!layers[k];
+      const el = document.getElementById(`layer-${k}`);
+      if (el) el.checked = !!layers[k];
+    }
+  });
+  if (map) map.setOptions({ styles: buildMapStyle() });
+
+  // Apply POI layers
+  Object.keys(_poiLayers).forEach(k => {
+    if (k in layers) {
+      const was = _poiLayers[k];
+      _poiLayers[k] = !!layers[k];
+      const el = document.getElementById(`poi-${k}`);
+      if (el) el.checked = !!layers[k];
+      if (!was && !!layers[k]) fetchPoiMarkers(k);
+    }
+  });
 }
 
 function markerIcon(source, selected) {
@@ -1220,6 +1361,19 @@ function initMap() {
     },
   });
   walkRenderer.setMap(map);
+
+  _placesService = new google.maps.places.PlacesService(map);
+
+  map.addListener('idle', () => {
+    if (!Object.values(_poiLayers).some(Boolean)) return;
+    clearTimeout(_poiRefetchTimeout);
+    _poiRefetchTimeout = setTimeout(() => {
+      Object.keys(_poiLayers).filter(k => _poiLayers[k]).forEach(layer => {
+        clearPoiMarkers(layer);
+        fetchPoiMarkers(layer);
+      });
+    }, 800);
+  });
 
   _RouteChipOverlayClass = class extends google.maps.OverlayView {
     constructor() { super(); this._div = null; this._pos = null; }
@@ -1882,6 +2036,7 @@ async function loadUserSettings() {
     buildChips();
     applyMapFilters();
   } catch {}
+  loadUserLayers();
 }
 
 // ── Notifications ─────────────────────────────────────────────────────────────

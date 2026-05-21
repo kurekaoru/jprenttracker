@@ -155,6 +155,13 @@ def db():
     """)
     con.commit()
 
+    # Migrate: add map_layers column if it doesn't exist yet
+    try:
+        con.execute("ALTER TABLE user_settings ADD COLUMN map_layers TEXT DEFAULT '{}'")
+        con.commit()
+    except Exception:
+        pass  # column already exists
+
     # JWT secret — stored in DB so it survives server restarts
     row = con.execute("SELECT value FROM app_config WHERE key='jwt_secret'").fetchone()
     if row:
@@ -427,6 +434,38 @@ def set_user_settings():
         "layouts":  json.dumps(data.get("layouts") or []),
         "wards":    json.dumps(data.get("wards")   or []),
     })
+    con.commit()
+    con.close()
+    return jsonify({"status": "ok"})
+
+
+# ── Map layer preferences ─────────────────────────────────────────────────────
+
+@app.route("/api/user/map_layers", methods=["GET"])
+@jwt_required()
+def get_map_layers():
+    user_id = int(get_jwt_identity())
+    con     = db()
+    row     = con.execute("SELECT map_layers FROM user_settings WHERE user_id=?", (user_id,)).fetchone()
+    con.close()
+    if not row or not row["map_layers"]:
+        return jsonify({})
+    return jsonify(json.loads(row["map_layers"]))
+
+
+@app.route("/api/user/map_layers", methods=["POST"])
+@jwt_required()
+def set_map_layers():
+    user_id = int(get_jwt_identity())
+    data    = request.get_json() or {}
+    allowed = {"transit","roadLabels","neighborhoods","parks","konbini","supermarket","kindergarten","clinic"}
+    layers  = {k: bool(v) for k, v in data.items() if k in allowed}
+    con     = db()
+    con.execute("""
+        INSERT INTO user_settings (user_id, map_layers)
+        VALUES (:uid, :ml)
+        ON CONFLICT(user_id) DO UPDATE SET map_layers=excluded.map_layers, updated_at=datetime('now')
+    """, {"uid": user_id, "ml": json.dumps(layers)})
     con.commit()
     con.close()
     return jsonify({"status": "ok"})
