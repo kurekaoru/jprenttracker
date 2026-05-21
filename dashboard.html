@@ -1227,6 +1227,7 @@ function popupHtml(l) {
         <input id="popup-dest-${eid}" type="text" value="${escHtml(_commuteDest)}"
           oninput="updateCommuteDest(this.value)"
           placeholder="目的地（例: 新宿駅）"
+          autocomplete="off" autocorrect="off" autocapitalize="off"
           style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:11px;font-family:inherit;outline:none;" />
       </div>
       <div style="margin-top:6px;display:flex;gap:5px;">
