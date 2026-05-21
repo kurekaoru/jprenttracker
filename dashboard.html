@@ -565,10 +565,6 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
       <span class="rail-tip">フィルター</span>
     </button>
-    <button class="rail-btn" id="rail-visual" onclick="openPanel('visual')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
-      <span class="rail-tip">表示設定</span>
-    </button>
     <button class="rail-btn" id="rail-listings" onclick="openPanel('listings')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
       <span class="rail-tip">空室一覧</span>
@@ -612,14 +608,10 @@
         <p class="section-label" style="margin-top:10px;">駅徒歩</p>
         <label>最大徒歩分数 (分)</label>
         <input type="number" id="max-walk" placeholder="例: 10 (0=上限なし)" step="1" min="0" oninput="applyMapFilters()" />
+        <p class="section-label" style="margin-top:10px;">データソース</p>
+        <div class="chips" id="source-chips"></div>
         <button class="save-btn" id="save-btn" onclick="saveConfig()" style="margin-top:14px;">設定を保存</button>
         <div class="saved-msg" id="saved-msg"></div>
-      </div>
-
-      <!-- Visual page -->
-      <div class="panel-page" id="panel-visual">
-        <p class="section-label">データソース</p>
-        <div class="chips" id="source-chips"></div>
       </div>
 
       <!-- Notifications page -->
@@ -1376,9 +1368,9 @@ function closeAuthModal() { document.getElementById('auth-modal').classList.remo
 
 // ── Icon-rail panel ───────────────────────────────────────────────────────────
 let _activePanel = null;
-const _allPanels  = ['filter','visual','listings','notif','account','about'];
+const _allPanels  = ['filter','listings','notif','account','about'];
 const _panelTitles = {
-  filter: 'フィルター', visual: '表示設定', listings: '空室一覧',
+  filter: 'フィルター', listings: '空室一覧',
   notif: '通知設定', account: 'アカウント', about: 'セットアップ'
 };
 
