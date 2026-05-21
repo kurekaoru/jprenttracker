@@ -362,13 +362,6 @@
     cursor: pointer; font-family: var(--font); transition: all 0.15s;
   }
   .map-refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
-  #route-info {
-    display: none; align-items: center; gap: 6px;
-    background: #4285F4; color: #fff; border-radius: 12px;
-    padding: 3px 10px; font-size: 11px; font-weight: 600; white-space: nowrap;
-    cursor: pointer;
-  }
-  #route-info.visible { display: inline-flex; }
   #map { width: 100%; height: 100%; z-index: 0; }
   .pin-popup {
     font-family: var(--font);
@@ -772,7 +765,6 @@
           <span><span class="swatch ur"></span>UR</span>
         </div>
         <span id="map-summary" style="color:var(--muted);"></span>
-        <span id="route-info"></span>
         <button class="map-refresh-btn" onclick="loadListings()">更新</button>
       </div>
       <div id="map"></div>
@@ -1079,6 +1071,8 @@ let _selectedId = null;
 let _transitPolylines = [];
 let _commuteDest = '';
 let _destMarker = null;
+let _routeChip = null;
+let _RouteChipOverlayClass = null;
 
 function updateCommuteDest(v) { _commuteDest = v; }
 
@@ -1092,24 +1086,27 @@ function _destPinSvg() {
     scaledSize: new google.maps.Size(26, 36), anchor: new google.maps.Point(13, 36) };
 }
 
-function showRouteInfo(distText, durText, destLatLng) {
+function showRouteInfo(distText, durText, midLatLng, destLatLng) {
   if (_destMarker) _destMarker.setMap(null);
   if (destLatLng) {
     _destMarker = new google.maps.Marker({
       position: destLatLng, map, icon: _destPinSvg(), zIndex: 20,
     });
   }
-  const el = document.getElementById('route-info');
-  if (!el) return;
-  el.innerHTML = `📍 ${durText || '—'}${distText ? ' · ' + distText : ''} &nbsp;✕`;
-  el.style.display = 'inline-flex';
-  el.onclick = clearDirections;
+  if (!midLatLng) return;
+  if (!_routeChip && _RouteChipOverlayClass) {
+    _routeChip = new _RouteChipOverlayClass();
+    _routeChip.setMap(map);
+  }
+  if (_routeChip) {
+    _routeChip.setContent(`📍 ${durText || '—'}${distText ? ' · ' + distText : ''} &nbsp;✕`);
+    _routeChip.setPosition(midLatLng);
+  }
 }
 
 function hideRouteInfo() {
   if (_destMarker) { _destMarker.setMap(null); _destMarker = null; }
-  const el = document.getElementById('route-info');
-  if (el) { el.style.display = 'none'; el.onclick = null; }
+  if (_routeChip) { _routeChip.setMap(null); _routeChip = null; }
 }
 
 function decodePolyline(encoded) {
@@ -1224,6 +1221,35 @@ function initMap() {
   });
   walkRenderer.setMap(map);
 
+  _RouteChipOverlayClass = class extends google.maps.OverlayView {
+    constructor() { super(); this._div = null; this._pos = null; }
+    onAdd() {
+      this._div = document.createElement('div');
+      Object.assign(this._div.style, {
+        position: 'absolute', background: '#4285F4', color: '#fff',
+        borderRadius: '14px', padding: '5px 13px', fontSize: '12px',
+        fontWeight: '600', fontFamily: 'DM Sans,system-ui,sans-serif',
+        whiteSpace: 'nowrap', cursor: 'pointer',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
+        transform: 'translate(-50%,-50%)', pointerEvents: 'auto',
+        zIndex: '99',
+      });
+      this._div.onclick = clearDirections;
+      this.getPanes().floatPane.appendChild(this._div);
+    }
+    draw() {
+      if (!this._pos || !this._div) return;
+      const pt = this.getProjection().fromLatLngToDivPixel(this._pos);
+      this._div.style.left = pt.x + 'px';
+      this._div.style.top  = pt.y + 'px';
+    }
+    setPosition(pos) { this._pos = pos; if (this.getMap()) this.draw(); }
+    setContent(html) { if (this._div) this._div.innerHTML = html; }
+    onRemove() {
+      if (this._div) { this._div.parentNode?.removeChild(this._div); this._div = null; }
+    }
+  };
+
   loadTokyoBoundary();
   loadListings();
 }
@@ -1337,8 +1363,13 @@ function showRoute(listingId, travelMode) {
         });
         const leg = data.routes[0].legs[0];
         const endLoc = leg.end_location;
-        showRouteInfo(leg.distance?.text, leg.duration?.text,
-          endLoc ? new google.maps.LatLng(endLoc.lat, endLoc.lng) : null);
+        const destLatLng = endLoc ? new google.maps.LatLng(endLoc.lat, endLoc.lng) : null;
+        // compute midpoint across all decoded step polylines
+        const allPts = [];
+        steps.forEach(step => allPts.push(...decodePolyline(step.polyline.points)));
+        const midPt = allPts[Math.floor(allPts.length / 2)];
+        const midLatLng = midPt ? new google.maps.LatLng(midPt.lat, midPt.lng) : destLatLng;
+        showRouteInfo(leg.distance?.text, leg.duration?.text, midLatLng, destLatLng);
       })
       .catch(() => {
         // Server not running or key missing — fall back to Google Maps web
@@ -1370,7 +1401,9 @@ function showRoute(listingId, travelMode) {
     if (status === 'OK') {
       directionsRenderer.setDirections(result);
       const leg = result.routes[0].legs[0];
-      showRouteInfo(leg.distance?.text, leg.duration?.text, leg.end_location);
+      const path = result.routes[0].overview_path;
+      const midLatLng = path && path.length ? path[Math.floor(path.length / 2)] : null;
+      showRouteInfo(leg.distance?.text, leg.duration?.text, midLatLng, leg.end_location);
     } else {
       alert('経路を取得できませんでした: ' + status + '\n\n目的地を確認してください（例: 新宿駅、渋谷区役所）');
     }
