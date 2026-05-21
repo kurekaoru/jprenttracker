@@ -1174,16 +1174,13 @@ function initMap() {
 
   infoWindow = new google.maps.InfoWindow({ maxWidth: 280 });
   directionsService = new google.maps.DirectionsService();
-  directionsRenderer = new google.maps.DirectionsRenderer({
-    suppressMarkers: true,
-    polylineOptions: { strokeColor: '#34d399', strokeWeight: 5, strokeOpacity: 0.85 },
-  });
+  directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: true });
   directionsRenderer.setMap(map);
   walkRenderer = new google.maps.DirectionsRenderer({
     suppressMarkers: true,
     polylineOptions: {
-      strokeColor: '#777777', strokeWeight: 4, strokeOpacity: 0,
-      icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 }, offset: '0', repeat: '10px' }],
+      strokeColor: '#4285F4', strokeWeight: 4, strokeOpacity: 0,
+      icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 }, offset: '0', repeat: '10px' }],
     },
   });
   walkRenderer.setMap(map);
@@ -1305,8 +1302,18 @@ function showRoute(listingId, travelMode) {
     return;
   }
 
-  // Driving / Walking
+  // Driving / Bicycling / Walking
   walkRenderer.setDirections({ routes: [] });
+  clearTransitPolylines();
+  const isWalking = travelMode === 'WALKING';
+  directionsRenderer.setOptions({
+    polylineOptions: isWalking ? {
+      strokeColor: '#4285F4', strokeWeight: 4, strokeOpacity: 0,
+      icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 }, offset: '0', repeat: '10px' }],
+    } : {
+      strokeColor: '#4285F4', strokeWeight: 5, strokeOpacity: 0.9, icons: [],
+    },
+  });
   directionsService.route({
     origin: entry.marker.getPosition(),
     destination: dest,
