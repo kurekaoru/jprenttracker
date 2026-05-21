@@ -1470,7 +1470,7 @@ function showRoute(listingId, travelMode) {
     directionsRenderer.setDirections({ routes: [] });
 
     // Transit leg: proxy through server to bypass JS API transit limitation
-    const origin = l.nearest_station ? l.nearest_station + '駅' : `${l.lat},${l.lng}`;
+    const origin = `${l.lat},${l.lng}`;
     const dep    = Math.floor((Date.now() + 5 * 60000) / 1000);
     const params = new URLSearchParams({ origin, destination: dest, mode: 'transit', departure_time: dep });
 
@@ -1509,7 +1509,7 @@ function showRoute(listingId, travelMode) {
       })
       .catch(() => {
         // Server not running or key missing — fall back to Google Maps web
-        const gmO = encodeURIComponent(origin);
+        const gmO = encodeURIComponent(`${l.lat},${l.lng}`);
         const gmD = encodeURIComponent(dest);
         window.open(`https://www.google.com/maps/dir/?api=1&origin=${gmO}&destination=${gmD}&travelmode=transit`, '_blank');
       });
