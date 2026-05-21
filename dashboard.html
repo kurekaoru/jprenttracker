@@ -1261,11 +1261,11 @@ function popupHtml(l) {
       <div class="pin-meta" style="margin-top:3px;">初回発見: ${fmtDate(l.first_seen)}${daysStr ? ` · ${daysStr}` : ''}</div>
       ${l.url ? `<div style="margin-top:4px;"><a href="${escHtml(l.url)}" target="_blank" rel="noopener">物件ページを開く →</a></div>` : ''}
       <div style="margin-top:10px;">
-        <input id="popup-dest-${eid}" type="text" value="${escHtml(_commuteDest)}"
+        <input id="popup-dest-${eid}" type="search" value="${escHtml(_commuteDest)}"
           oninput="updateCommuteDest(this.value)"
           placeholder="目的地（例: 新宿駅）"
-          autocomplete="off" autocorrect="off" autocapitalize="off"
-          style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:11px;font-family:inherit;outline:none;" />
+          autocomplete="off"
+          style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:11px;font-family:inherit;outline:none;-webkit-appearance:none;" />
       </div>
       <div style="margin-top:6px;display:flex;gap:5px;">
         <button onclick="showRoute('${eid}','TRANSIT')" class="route-btn">🚃 電車</button>
