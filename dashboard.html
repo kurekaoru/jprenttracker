@@ -1226,34 +1226,52 @@ function showRoute(listingId, travelMode) {
   const entry = _markers[listingId];
   if (!entry) return;
 
-  // For transit, snap origin to nearest station name rather than raw lat/lng
-  // — the Directions API often returns ZERO_RESULTS when given a residential lat/lng for transit
   const l = entry.listing;
-  const transitOrigin = (travelMode === 'TRANSIT' && l.nearest_station)
-    ? l.nearest_station + '駅'
-    : entry.marker.getPosition();
 
-  if (travelMode === 'TRANSIT' && l.nearest_station) {
+  if (travelMode === 'TRANSIT') {
     // Walking leg: property → nearest station (dashed grey)
+    if (l.nearest_station) {
+      directionsService.route({
+        origin: entry.marker.getPosition(),
+        destination: l.nearest_station + '駅',
+        travelMode: google.maps.TravelMode.WALKING,
+        region: 'JP',
+      }, (r, s) => { if (s === 'OK') walkRenderer.setDirections(r); });
+    }
+
+    // Transit leg: try on-map first, fall back to Google Maps web
+    const origin = l.nearest_station ? l.nearest_station + '駅' : entry.marker.getPosition();
+    const dep = new Date(Date.now() + 5 * 60000); // 5 min from now
     directionsService.route({
-      origin: entry.marker.getPosition(),
-      destination: l.nearest_station + '駅',
-      travelMode: google.maps.TravelMode.WALKING,
+      origin,
+      destination: dest,
+      travelMode: google.maps.TravelMode.TRANSIT,
       region: 'JP',
-    }, (r, s) => { if (s === 'OK') walkRenderer.setDirections(r); });
-  } else {
-    walkRenderer.setDirections({ routes: [] });
+      transitOptions: { departureTime: dep },
+    }, (result, status) => {
+      if (status === 'OK') {
+        directionsRenderer.setDirections(result);
+      } else {
+        // Fall back to Google Maps web — opens with full transit UI, real-time data, fares
+        const gmOrigin = encodeURIComponent(l.nearest_station ? l.nearest_station + '駅' : l.address || l.ward);
+        const gmDest   = encodeURIComponent(dest);
+        window.open(
+          `https://www.google.com/maps/dir/?api=1&origin=${gmOrigin}&destination=${gmDest}&travelmode=transit`,
+          '_blank'
+        );
+      }
+    });
+    return;
   }
 
-  // Main leg
-  const req = {
-    origin: transitOrigin,
+  // Driving / Walking
+  walkRenderer.setDirections({ routes: [] });
+  directionsService.route({
+    origin: entry.marker.getPosition(),
     destination: dest,
     travelMode: google.maps.TravelMode[travelMode],
     region: 'JP',
-  };
-  if (travelMode === 'TRANSIT') req.transitOptions = { departureTime: new Date() };
-  directionsService.route(req, (result, status) => {
+  }, (result, status) => {
     if (status === 'OK') {
       directionsRenderer.setDirections(result);
     } else {
