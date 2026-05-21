@@ -777,22 +777,6 @@
       </div>
     </div>
 
-    <!-- Telegram area -->
-    <div id="notif-telegram-area" style="display:none;" class="notif-input-area">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.8;">
-        1. Telegram で <a href="https://t.me/BotFather" target="_blank" style="color:var(--accent)">@BotFather</a> を開き <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;">/newbot</code> でBotを作成<br>
-        2. 表示された <strong>トークン</strong>（数字:文字列）を入力<br>
-        3. あなたのBotにメッセージを1件送る<br>
-        4. 「接続する」を押す
-      </div>
-      <label>Bot トークン</label>
-      <input type="text" id="tg-token" class="notif-target-input"
-             placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
-             onkeydown="if(event.key==='Enter')connectTelegram()">
-      <div id="tg-status" style="font-size:12px;color:var(--muted);margin-bottom:8px;min-height:16px;"></div>
-      <button class="modal-submit" onclick="connectTelegram()">接続する</button>
-    </div>
-
     <!-- Email area -->
     <div id="notif-manual-area" style="display:none;" class="notif-input-area">
       <label>メールアドレス</label>
@@ -1584,49 +1568,20 @@ function selectNotifType(type) {
   ['slack','telegram','email'].forEach(t =>
     document.getElementById(`nt-${t}`)?.classList.toggle('active', t === type)
   );
-  const oauthArea     = document.getElementById('notif-oauth-area');
-  const telegramArea  = document.getElementById('notif-telegram-area');
-  const manualArea    = document.getElementById('notif-manual-area');
+  const oauthArea  = document.getElementById('notif-oauth-area');
+  const manualArea = document.getElementById('notif-manual-area');
 
   oauthArea.style.display    = 'none';
-  telegramArea.style.display = 'none';
   manualArea.style.display   = 'none';
 
   if (type === 'email') {
     manualArea.style.display = 'block';
-  } else if (type === 'telegram') {
-    telegramArea.style.display = 'block';
-    document.getElementById('tg-token').value = '';
-    document.getElementById('tg-status').textContent = '';
   } else {
     oauthArea.style.display = 'block';
     startOAuthConnect(type);
   }
 }
 
-async function connectTelegram() {
-  const token    = document.getElementById('tg-token').value.trim();
-  const statusEl = document.getElementById('tg-status');
-  if (!token) { statusEl.textContent = 'トークンを入力してください'; return; }
-  statusEl.textContent = '接続中…';
-  try {
-    const r = await fetch(`${API}/auth/telegram/connect`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', ...authHeaders()},
-      body: JSON.stringify({token})
-    });
-    const d = await r.json();
-    if (!r.ok) {
-      statusEl.textContent = '⚠️ ' + (d.error || 'エラーが発生しました');
-      return;
-    }
-    statusEl.innerHTML = '✅ 連携完了！';
-    setTimeout(() => {
-      document.getElementById('add-notif-modal').classList.remove('open');
-      loadNotifications();
-    }, 1200);
-  } catch { statusEl.textContent = 'サーバーエラー'; }
-}
 
 async function startOAuthConnect(type) {
   clearInterval(_oauthPollTimer);
@@ -1652,7 +1607,11 @@ async function startOAuthConnect(type) {
     qrEl.style.display = 'block';
     linkEl.style.display = 'inline-block';
 
-    if (type === 'line') {
+    if (type === 'telegram') {
+      descEl.textContent = 'QRコードをスキャンしてBotを開き、STARTを押すと自動で連携されます。';
+      linkEl.textContent = 'Telegram で開く →';
+      linkEl.style.background = '#2AABEE';
+    } else if (type === 'line') {
       descEl.textContent = 'QRコードをスキャンするか、ボタンを押してLINEで認証してください。';
       linkEl.textContent = 'LINE で連携する →';
       linkEl.style.background = '#06c755';
@@ -1664,7 +1623,8 @@ async function startOAuthConnect(type) {
     linkEl.href = url;
     statusEl.textContent = '認証完了を待っています…';
 
-    const before = Date.now();
+    const before  = Date.now();
+    const tgCode  = d.code;
     _oauthPollTimer = setInterval(async () => {
       if (Date.now() - before > 120_000) {
         clearInterval(_oauthPollTimer);
@@ -1672,11 +1632,18 @@ async function startOAuthConnect(type) {
         return;
       }
       try {
-        const pr = await fetch(`${API}/user/notifications`, { headers: authHeaders() });
-        const pd = await pr.json();
-        const found = pd.notifications?.some(
-          n => n.type === type && new Date(n.created_at).getTime() > before - 5000
-        );
+        let found = false;
+        if (type === 'telegram') {
+          const pr = await fetch(`${API}/auth/telegram/poll?code=${tgCode}`, { headers: authHeaders() });
+          const pd = await pr.json();
+          found = pd.done;
+        } else {
+          const pr = await fetch(`${API}/user/notifications`, { headers: authHeaders() });
+          const pd = await pr.json();
+          found = pd.notifications?.some(
+            n => n.type === type && new Date(n.created_at).getTime() > before - 5000
+          );
+        }
         if (found) {
           clearInterval(_oauthPollTimer);
           statusEl.innerHTML = '✅ 連携完了！';

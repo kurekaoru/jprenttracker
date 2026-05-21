@@ -33,6 +33,8 @@ SLACK_CLIENT_ID     = os.environ.get("SLACK_CLIENT_ID", "")
 SLACK_CLIENT_SECRET = os.environ.get("SLACK_CLIENT_SECRET", "")
 SLACK_REDIRECT_URI  = os.environ.get("SLACK_REDIRECT_URI", "")
 
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+
 DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "http://34.72.39.84:5050")
 
 TOKYO_WARDS = [
@@ -86,6 +88,7 @@ HEARTRAILS_TIMEOUT_S = 5
 
 _geo_lock    = threading.Lock()
 _geo_running = False
+_tg_poll_lock = threading.Lock()
 
 
 # ── DB ────────────────────────────────────────────────────────────────────────
@@ -633,37 +636,89 @@ def slack_oauth_callback():
     return _connected_page("Slack")
 
 
-@app.route("/api/auth/telegram/connect", methods=["POST"])
+@app.route("/api/auth/telegram/start")
 @jwt_required()
-def telegram_connect():
+def telegram_start():
+    if not TELEGRAM_BOT_TOKEN:
+        return jsonify({"error": "TELEGRAM_BOT_TOKEN が設定されていません"}), 503
     user_id = int(get_jwt_identity())
-    token   = (request.json or {}).get("token", "").strip()
-    if not token:
-        return jsonify({"error": "token が必要です"}), 400
     try:
-        r = requests.get(
-            f"https://api.telegram.org/bot{token}/getUpdates",
-            timeout=10
-        )
+        r = requests.get(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getMe", timeout=10)
         d = r.json()
         if not d.get("ok"):
-            return jsonify({"error": "トークンが無効です: " + d.get("description", "")}), 400
-        updates = d.get("result", [])
-        if not updates:
-            return jsonify({"error": "Botにメッセージを1件送ってから再試行してください"}), 400
-        chat_id = str(updates[-1]["message"]["chat"]["id"])
+            return jsonify({"error": "Bot token 無効: " + d.get("description", "")}), 503
+        bot_username = d["result"]["username"]
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    target = f"{token}|{chat_id}"
-    label  = f"Telegram ({chat_id})"
-    con    = db()
-    con.execute(
-        "INSERT INTO user_notifications (user_id, type, target, label) VALUES (?,?,?,?)",
-        (user_id, "telegram", target, label)
-    )
-    con.commit()
+    code = secrets.token_hex(16)
+    con  = db()
+    _store_oauth_state(con, f"tg_state_{code}", user_id)
     con.close()
-    return jsonify({"ok": True, "chat_id": int(chat_id)})
+    return jsonify({"url": f"https://t.me/{bot_username}?start={code}", "code": code})
+
+
+@app.route("/api/auth/telegram/poll")
+@jwt_required()
+def telegram_poll():
+    if not TELEGRAM_BOT_TOKEN:
+        return jsonify({"done": False})
+    user_id = int(get_jwt_identity())
+    code    = request.args.get("code", "")
+    if not code:
+        return jsonify({"done": False})
+    with _tg_poll_lock:
+        con = db()
+        try:
+            row    = con.execute("SELECT value FROM app_config WHERE key='tg_offset'").fetchone()
+            offset = int(row[0]) + 1 if row else 0
+            r = requests.get(
+                f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates",
+                params={"offset": offset, "timeout": 0, "limit": 100},
+                timeout=15,
+            )
+            d = r.json()
+            if not d.get("ok"):
+                con.close()
+                return jsonify({"done": False})
+            updates    = d.get("result", [])
+            done       = False
+            new_offset = offset - 1
+            for upd in updates:
+                new_offset = max(new_offset, upd["update_id"])
+                msg      = upd.get("message", {})
+                text     = msg.get("text", "")
+                chat_id  = str(msg.get("chat", {}).get("id", ""))
+                if not text.startswith("/start"):
+                    continue
+                parts    = text.split(None, 1)
+                upd_code = parts[1].strip() if len(parts) > 1 else ""
+                if not upd_code:
+                    continue
+                state_row = con.execute(
+                    "SELECT value FROM app_config WHERE key=?", (f"tg_state_{upd_code}",)
+                ).fetchone()
+                if not state_row:
+                    continue
+                uid = int(state_row[0])
+                con.execute("DELETE FROM app_config WHERE key=?", (f"tg_state_{upd_code}",))
+                con.execute(
+                    "INSERT OR IGNORE INTO user_notifications (user_id, type, target, label) VALUES (?,?,?,?)",
+                    (uid, "telegram", f"{TELEGRAM_BOT_TOKEN}|{chat_id}", f"Telegram ({chat_id})")
+                )
+                con.commit()
+                if uid == user_id and upd_code == code:
+                    done = True
+            if updates:
+                con.execute(
+                    "INSERT OR REPLACE INTO app_config (key, value) VALUES ('tg_offset', ?)",
+                    (str(new_offset),)
+                )
+                con.commit()
+            con.close()
+            return jsonify({"done": done})
+        except Exception as e:
+            con.close()
+            return jsonify({"done": False, "error": str(e)})
 
 
 # ── Legacy config (scraper still reads this for its own filter) ───────────────
