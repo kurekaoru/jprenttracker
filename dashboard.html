@@ -1129,15 +1129,18 @@ function showRoute(listingId, travelMode) {
   }
   const entry = _markers[listingId];
   if (!entry) return;
-  directionsService.route({
+  const req = {
     origin: entry.marker.getPosition(),
     destination: dest,
     travelMode: google.maps.TravelMode[travelMode],
-  }, (result, status) => {
+    region: 'JP',
+  };
+  if (travelMode === 'TRANSIT') req.transitOptions = { departureTime: new Date() };
+  directionsService.route(req, (result, status) => {
     if (status === 'OK') {
       directionsRenderer.setDirections(result);
     } else {
-      alert('経路を取得できませんでした: ' + status);
+      alert('経路を取得できませんでした: ' + status + '\n\n目的地を確認してください（例: 新宿駅、渋谷区役所）');
     }
   });
 }
