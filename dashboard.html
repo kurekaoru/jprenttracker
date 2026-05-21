@@ -354,8 +354,8 @@
     display: inline-block; width: 8px; height: 8px;
     border-radius: 50%; margin-right: 3px; vertical-align: middle;
   }
-  .map-legend .jkk { background: var(--accent); }
-  .map-legend .ur  { background: #3a86ff; }
+  .map-legend .jkk { background: #dc2626; }
+  .map-legend .ur  { background: #dc2626; }
   .map-refresh-btn {
     background: none; border: 1px solid var(--border); border-radius: 12px;
     padding: 2px 8px; font-size: 10px; color: var(--muted);
@@ -1017,31 +1017,37 @@ const DARK_MAP_STYLE = [
   { elementType: 'labels.text.stroke', stylers: [{ color: '#242f3e' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
   { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
+  { featureType: 'administrative.neighborhood', elementType: 'labels', stylers: [{ visibility: 'off' }] },
   { featureType: 'poi', stylers: [{ visibility: 'off' }] },
   { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#263c3f' }, { visibility: 'on' }] },
   { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#38414e' }] },
   { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#212a37' }] },
-  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#9ca5b3' }] },
+  { featureType: 'road.local', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road.arterial', elementType: 'labels', stylers: [{ visibility: 'off' }] },
   { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#746855' }] },
   { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#1f2835' }] },
   { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#f3d19c' }] },
-  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#2f3948' }] },
-  { featureType: 'transit.station', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-  { featureType: 'transit.station', elementType: 'labels.text.fill', stylers: [{ color: '#d59563' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#17263c' }] },
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#515c6d' }] },
   { featureType: 'water', elementType: 'labels.text.stroke', stylers: [{ color: '#17263c' }] },
 ];
 
 function markerIcon(source, selected) {
-  const color = source === 'ur' ? '#3a86ff' : '#1D9E75';
+  const fill   = selected ? '#b91c1c' : '#dc2626';
+  const border = selected ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.7)';
+  const w = selected ? 30 : 22;
+  const h = Math.round(w * 1.45);
+  const cx = w / 2, cr = w * 0.28;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <path d="M${cx} 1 C${cx - w*0.42} 1 1 ${w*0.38} 1 ${w*0.5} C1 ${w*0.92} ${cx} ${h} ${cx} ${h} C${cx} ${h} ${w-1} ${w*0.92} ${w-1} ${w*0.5} C${w-1} ${w*0.38} ${cx + w*0.42} 1 ${cx} 1 Z"
+      fill="${fill}" stroke="${border}" stroke-width="1.5"/>
+    <circle cx="${cx}" cy="${w * 0.5}" r="${cr}" fill="rgba(255,255,255,0.88)"/>
+  </svg>`;
   return {
-    path: google.maps.SymbolPath.CIRCLE,
-    fillColor: color,
-    fillOpacity: selected ? 1 : 0.85,
-    strokeColor: selected ? '#f59e0b' : '#ffffff',
-    strokeWeight: selected ? 2.5 : 1.5,
-    scale: selected ? 10 : 7,
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+    scaledSize: new google.maps.Size(w, h),
+    anchor: new google.maps.Point(cx, h),
   };
 }
 
