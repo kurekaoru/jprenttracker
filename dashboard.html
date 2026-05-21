@@ -876,6 +876,7 @@ function loadConfig() {
   selectedLayouts = d.layouts?.length ? new Set(d.layouts) : new Set(DEFAULT_LAYOUTS);
   filterSources   = new Set(DEFAULT_SOURCES);
   buildChips();
+  applyMapFilters();
   // If logged in, server settings will override this via loadUserSettings()
 }
 
@@ -1469,6 +1470,7 @@ async function loadUserSettings() {
     selectedLayouts = d.layouts?.length ? new Set(d.layouts) : new Set(DEFAULT_LAYOUTS);
     filterSources   = new Set(DEFAULT_SOURCES);
     buildChips();
+    applyMapFilters();
   } catch {}
 }
 
@@ -1581,7 +1583,6 @@ setInterval(() => {
 }, 1000);
 
 // Init
-buildChips();
 loadConfig();
 initAuth();
 loadLog();
