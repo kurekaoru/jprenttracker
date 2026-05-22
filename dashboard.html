@@ -417,12 +417,12 @@
   .pin-popup .pin-rent { font-family: var(--mono); font-weight: 600; }
   .pin-popup a { color: var(--accent); text-decoration: none; }
   .pin-popup a:hover { text-decoration: underline; }
-  .pin-popup .src-tag {
+  .src-tag {
     display: inline-block; font-size: 10px; padding: 1px 6px;
     border-radius: 10px; color: #fff; margin-left: 4px; vertical-align: middle;
   }
-  .pin-popup .src-tag.jkk { background: var(--accent); }
-  .pin-popup .src-tag.ur  { background: #3a86ff; }
+  .src-tag.jkk { background: #dc2626; }
+  .src-tag.ur  { background: #3a86ff; }
   .route-btn {
     font-size: 11px; padding: 3px 8px; border-radius: 6px; border: none; cursor: pointer;
     background: var(--surface2); color: var(--text); transition: background 0.1s;
@@ -2106,7 +2106,8 @@ function recordView(listingId) {
 }
 
 function markerIcon(source, selected) {
-  const fill   = selected ? '#b91c1c' : '#dc2626';
+  const isUR   = source === 'ur';
+  const fill   = selected ? (isUR ? '#1d4ed8' : '#b91c1c') : (isUR ? '#3a86ff' : '#dc2626');
   const border = selected ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.7)';
   const w = selected ? 30 : 22;
   const h = Math.round(w * 1.45);
@@ -2521,7 +2522,7 @@ function renderAvailableTable() {
   ).join('');
 
   const tbody = sorted.map(l => {
-    const tag     = l.source === 'ur' ? '🏢' : '🏠';
+    const tag     = l.source === 'ur' ? '<span class="src-tag ur">UR</span>' : '<span class="src-tag jkk">JKK</span>';
     const station = stationStr(l.nearest_station, l.walk_min);
     const href    = l.url ? escHtml(l.url) : '#';
     const sel     = l.id === _selectedId ? ' row-selected' : '';
@@ -2628,7 +2629,7 @@ function renderDisappearedTable() {
   ).join('');
 
   const tbody = sorted.map(l => {
-    const tag      = l.source === 'ur' ? '🏢' : '🏠';
+    const tag      = l.source === 'ur' ? '<span class="src-tag ur">UR</span>' : '<span class="src-tag jkk">JKK</span>';
     const href     = l.url ? escHtml(l.url) : '#';
     return `<tr onclick="if(event.target.tagName!='A'&&'${l.url}')window.open('${l.url}','_blank')">
       <td>${tag} <a href="${href}" target="_blank" rel="noopener">${escHtml(l.name)}</a></td>
