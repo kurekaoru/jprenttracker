@@ -457,6 +457,15 @@
     font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
     color: var(--muted); margin-bottom: 8px;
   }
+  .fac-tog-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+    margin-bottom: 6px;
+  }
+  .fac-tog-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 6px 4px 0; border-bottom: 1px solid var(--border); gap: 4px;
+  }
+  .fac-tog-row:nth-child(odd) { padding-right: 10px; border-right: 1px solid var(--border); }
   .fac-table td { padding: 4px 8px 4px 0; font-size: 11px; }
   .fac-table th { padding: 2px 8px 4px 0; }
   .fac-row:hover td { background: var(--surface2); }
@@ -1192,6 +1201,12 @@ const STRINGS = {
   // Facility table
   col_type:             { ja:'種別',                    en:'Type' },
   col_dist:             { ja:'距離',                    en:'Dist.' },
+  school_label:         { ja:'学校',                    en:'School' },
+  hospital_label:       { ja:'病院',                    en:'Hospital' },
+  doctors_label:        { ja:'診療所',                  en:'Clinic/GP' },
+  pharmacy_label:       { ja:'薬局',                    en:'Pharmacy' },
+  park_label:           { ja:'公園',                    en:'Park' },
+  station_label:        { ja:'駅',                      en:'Station' },
 };
 
 function t(key, ...args) {
@@ -1542,80 +1557,68 @@ function _renderFacilitySection(facilities) {
   const wrap = document.getElementById('fac-section');
   if (!wrap) return;
 
-  // POI layer toggles
-  const poiRows = Object.entries({
-    konbini:      { color: '#7C3AED', label: t('konbini') },
-    supermarket:  { color: '#EA580C', label: t('supermarket') },
-    kindergarten: { color: '#DB2777', label: t('kindergarten') },
-    clinic:       { color: '#0369A1', label: t('clinic') },
-  }).map(([k, d]) => `
-    <div class="layer-row">
-      <span class="layer-label">
-        <span style="width:10px;height:10px;border-radius:50%;background:${d.color};display:inline-block;flex-shrink:0;"></span>
-        <span>${d.label}</span>
+  // All 10 type toggles in a 2-column grid
+  const allTypes = [
+    ['konbini', t('konbini')], ['supermarket', t('supermarket')],
+    ['kindergarten', t('kindergarten')], ['school', t('school_label')],
+    ['hospital', t('hospital_label')], ['clinic', t('clinic')],
+    ['doctors', t('doctors_label')], ['pharmacy', t('pharmacy_label')],
+    ['park', t('park_label')], ['station', t('station_label')],
+  ];
+  const toggleGrid = allTypes.map(([k, label]) => `
+    <div class="fac-tog-row">
+      <span class="layer-label" style="gap:5px;min-width:0;overflow:hidden;">
+        ${facilityIconHtml(k, 14)}
+        <span style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${label}</span>
       </span>
-      <label class="tog"><input type="checkbox" id="poi-${k}" ${_poiLayers[k] ? 'checked' : ''}
-        onchange="togglePoiLayer('${k}',this.checked)"><span class="tog-slider"></span></label>
+      <label class="tog" style="flex-shrink:0;">
+        <input type="checkbox" id="fac-tog-${k}" ${_facTypeLayers[k] !== false ? 'checked' : ''}
+          onchange="toggleFacType('${k}',this.checked)">
+        <span class="tog-slider"></span>
+      </label>
     </div>`).join('');
 
   if (facilities === null) {
     wrap.innerHTML = `
       <div class="fac-section-hdr">${t('nearby_facilities')}</div>
-      <div style="margin-bottom:8px;">${poiRows}</div>
+      <div class="fac-tog-grid">${toggleGrid}</div>
       <div style="font-size:11px;color:var(--muted);padding:6px 0;">${t('loading')}</div>`;
     return;
   }
-  // Filter out types whose POI toggle is off
-  const visible = facilities.filter(f =>
-    !Object.prototype.hasOwnProperty.call(_poiLayers, f.type) || _poiLayers[f.type]
-  );
 
-  if (!visible.length) {
-    wrap.innerHTML = `
-      <div class="fac-section-hdr">${t('nearby_facilities')}</div>
-      <div style="margin-bottom:8px;">${poiRows}</div>`;
-    return;
-  }
+  const visible = facilities.filter(f => _facTypeLayers[f.type] !== false);
 
-  // Sort
-  const sorted = [...visible].sort((a, b) => {
-    const va = a[_facTableSort.col] ?? '';
-    const vb = b[_facTableSort.col] ?? '';
-    return _facTableSort.asc ? (va < vb ? -1 : va > vb ? 1 : 0)
-                             : (va > vb ? -1 : va < vb ? 1 : 0);
-  });
-
-  function hdr(col, label) {
-    const active = _facTableSort.col === col;
-    const ind = active ? (_facTableSort.asc ? ' ▲' : ' ▼') : '';
-    return `<th class="${active ? 'sort-active' : ''}"
-      onclick="window._facSort('${col}')">${label}${ind}</th>`;
-  }
-
-  const rows = sorted.map((f, i) => {
-    const color = (_facilityIconDefs[f.type] || {}).color || '#888888';
-    const origIdx = _facilityMarkerObjs.findIndex(o => o.facility === f ||
-      (o.facility.name === f.name && o.facility.distance_m === f.distance_m));
-    return `<tr class="fac-row" onclick="window._facRowClick(${origIdx})" style="cursor:pointer;">
-      <td><span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;vertical-align:middle;margin-right:4px;"></span>${escHtml(facilityTypeLabel(f.type))}</td>
-      <td>${escHtml(f.name)}</td>
-      <td style="font-family:var(--mono);text-align:right;">${f.distance_m}m</td>
-    </tr>`;
-  }).join('');
+  const tableHtml = visible.length ? (() => {
+    const sorted = [...visible].sort((a, b) => {
+      const va = a[_facTableSort.col] ?? '';
+      const vb = b[_facTableSort.col] ?? '';
+      return _facTableSort.asc ? (va < vb ? -1 : va > vb ? 1 : 0)
+                               : (va > vb ? -1 : va < vb ? 1 : 0);
+    });
+    const hdr = (col, label) => {
+      const active = _facTableSort.col === col;
+      const ind = active ? (_facTableSort.asc ? ' ▲' : ' ▼') : '';
+      return `<th class="${active ? 'sort-active' : ''}" onclick="window._facSort('${col}')">${label}${ind}</th>`;
+    };
+    const rows = sorted.map(f => {
+      const idx = _facilityMarkerObjs.findIndex(o => o.facility === f ||
+        (o.facility.name === f.name && o.facility.distance_m === f.distance_m));
+      return `<tr class="fac-row" onclick="window._facRowClick(${idx})" style="cursor:pointer;">
+        <td style="white-space:nowrap;">${facilityIconHtml(f.type, 14)}&nbsp;${escHtml(facilityTypeLabel(f.type))}</td>
+        <td>${escHtml(f.name)}</td>
+        <td style="font-family:var(--mono);text-align:right;white-space:nowrap;">${f.distance_m}m</td>
+      </tr>`;
+    }).join('');
+    return `<div style="overflow-x:auto;margin-top:6px;">
+      <table class="sort-table fac-table"><thead><tr>
+        ${hdr('type', t('col_type'))}${hdr('name', t('col_name'))}${hdr('distance_m', t('col_dist'))}
+      </tr></thead><tbody>${rows}</tbody></table></div>`;
+  })() : '';
 
   wrap.innerHTML = `
     <div class="fac-section-hdr">${t('nearby_facilities')}</div>
-    <div style="margin-bottom:8px;">${poiRows}</div>
-    <div style="overflow-x:auto;">
-      <table class="sort-table fac-table">
-        <thead><tr>
-          ${hdr('type', t('col_type'))}
-          ${hdr('name', t('col_name'))}
-          ${hdr('distance_m', t('col_dist'))}
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
+    <div class="fac-tog-grid">${toggleGrid}</div>
+    ${tableHtml}`;
 }
 
 window._facSort = function(col) {
@@ -1689,6 +1692,10 @@ function clearTransitPolylines() {
 
 const _mapLayers = { transit: true, roadLabels: true, neighborhoods: true, parks: true };
 const _poiLayers  = { konbini: true, supermarket: true, kindergarten: true, clinic: true };
+const _facTypeLayers = {
+  konbini: true, supermarket: true, kindergarten: true, school: true,
+  hospital: true, clinic: true, doctors: true, pharmacy: true, park: true, station: true,
+};
 const _poiMarkers = { konbini: [], supermarket: [], kindergarten: [], clinic: [] };
 const POI_ZOOM_THRESHOLD = 13;
 const _poiConfig  = {
@@ -1840,12 +1847,21 @@ function facilityMarkerIcon(type) {
   };
 }
 
+function facilityIconHtml(type, size = 18) {
+  const def = _facilityIconDefs[type] || { color: '#888888',
+    icon: `<circle cx="12" cy="12" r="6" fill="white"/>` };
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24"><rect width="24" height="24" rx="5" fill="${def.color}" opacity="0.85"/>${def.icon}</svg>`;
+  return `<img src="data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}" width="${size}" height="${size}" style="vertical-align:middle;flex-shrink:0;">`;
+}
+
 function _applyZoomVisibility() {
   if (!map) return;
-  const visible = map.getZoom() >= POI_ZOOM_THRESHOLD;
-  _facilityMarkers.forEach(m => m.setVisible(visible));
-  if (_facilityCircle) _facilityCircle.setVisible(visible);
-  Object.values(_poiMarkers).forEach(arr => arr.forEach(m => m.setVisible(visible)));
+  const zoomOk = map.getZoom() >= POI_ZOOM_THRESHOLD;
+  _facilityMarkerObjs.forEach(({ marker, facility }) => {
+    marker.setVisible(zoomOk && _facTypeLayers[facility.type] !== false);
+  });
+  if (_facilityCircle) _facilityCircle.setVisible(zoomOk);
+  Object.values(_poiMarkers).forEach(arr => arr.forEach(m => m.setVisible(zoomOk)));
 }
 
 function clearPoiMarkers(layer) {
@@ -1881,8 +1897,27 @@ function fetchPoiMarkers(layer) {
   });
 }
 
+function toggleFacType(type, on) {
+  _facTypeLayers[type] = on;
+  // Update Overpass marker visibility for this type
+  const zoomOk = map && map.getZoom() >= POI_ZOOM_THRESHOLD;
+  _facilityMarkerObjs.forEach(({ marker, facility }) => {
+    if (facility.type === type) marker.setVisible(zoomOk && on);
+  });
+  // For POI types, also control Google Places markers
+  if (type in _poiLayers) {
+    _poiLayers[type] = on;
+    clearPoiMarkers(type);
+    if (on) fetchPoiMarkers(type);
+    saveLayerPrefs();
+  }
+  if (_facilityMarkerObjs.length)
+    _renderFacilitySection(_facilityMarkerObjs.map(o => o.facility));
+}
+
 function togglePoiLayer(layer, on) {
   _poiLayers[layer] = on;
+  if (layer in _facTypeLayers) _facTypeLayers[layer] = on;
   clearPoiMarkers(layer);
   if (on) fetchPoiMarkers(layer);
   saveLayerPrefs();
