@@ -48,7 +48,7 @@
 
   .topbar {
     display: grid;
-    grid-template-columns: 52px 1fr;
+    grid-template-columns: 52px 1fr 52px;
     height: 40px;
     position: sticky;
     top: 0;
@@ -64,6 +64,27 @@
     display: flex; align-items: center; justify-content: space-between;
     padding: 0 1.2rem;
   }
+  .topbar-legend {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; color: rgba(255,255,255,0.5);
+  }
+  .topbar-legend .tl-item {
+    display: flex; align-items: center; gap: 4px;
+  }
+  .topbar-legend .tl-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  }
+  .topbar-legend .tl-sep {
+    width: 1px; height: 14px; background: rgba(255,255,255,0.1);
+  }
+  .topbar-legend #map-summary { color: rgba(255,255,255,0.32); }
+  .topbar-refresh-btn {
+    background: none; border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px; padding: 2px 7px; font-size: 10px;
+    color: rgba(255,255,255,0.38); cursor: pointer; font-family: var(--font);
+    transition: all 0.15s;
+  }
+  .topbar-refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
   .topbar-title {
     font-size: 13px; font-weight: 600; letter-spacing: -0.02em;
     color: rgba(255,255,255,0.85);
@@ -97,10 +118,31 @@
 
   .layout {
     display: grid;
-    grid-template-columns: 52px 1fr;
+    grid-template-columns: 52px 1fr 52px;
     height: calc(100vh - 40px);
     overflow: hidden;
   }
+  .right-rail {
+    background: var(--rail-bg);
+    border-left: 1px solid rgba(255,255,255,0.05);
+    z-index: 20;
+  }
+  .right-panel {
+    position: fixed; right: 52px; top: 40px;
+    width: 280px; height: calc(100vh - 40px);
+    overflow-y: auto; z-index: 15;
+    transform: translateX(calc(100% + 52px));
+    transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
+    box-shadow: -4px 0 32px rgba(0,0,0,0.35);
+    --surface:  #2d2d30; --surface2: #383840;
+    --border:   rgba(255,255,255,0.08);
+    --text:     rgba(255,255,255,0.87);
+    --muted:    rgba(255,255,255,0.42);
+    --accent:   #5DCAA5;
+    background: #2d2d30; color: rgba(255,255,255,0.87);
+    border-left: 1px solid rgba(255,255,255,0.06);
+  }
+  .right-panel.open { transform: translateX(0); }
   .icon-rail {
     background: var(--rail-bg);
     display: flex; flex-direction: column; align-items: center;
@@ -342,26 +384,6 @@
 
   /* Map */
   .map-wrap { position: relative; width: 100%; height: 100%; }
-  .map-overlay-bar {
-    position: absolute; top: 10px; right: 10px; z-index: 500;
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 20px; padding: 5px 12px;
-    display: flex; align-items: center; gap: 10px;
-    font-size: 11px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  }
-  .map-legend { display: flex; gap: 8px; align-items: center; }
-  .map-legend .swatch {
-    display: inline-block; width: 8px; height: 8px;
-    border-radius: 50%; margin-right: 3px; vertical-align: middle;
-  }
-  .map-legend .jkk { background: #dc2626; }
-  .map-legend .ur  { background: #dc2626; }
-  .map-refresh-btn {
-    background: none; border: 1px solid var(--border); border-radius: 12px;
-    padding: 2px 8px; font-size: 10px; color: var(--muted);
-    cursor: pointer; font-family: var(--font); transition: all 0.15s;
-  }
-  .map-refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
   #map { width: 100%; height: 100%; z-index: 0; }
   .pin-popup {
     font-family: var(--font);
@@ -386,21 +408,6 @@
     background: var(--surface2); color: var(--text); transition: background 0.1s;
   }
   .route-btn:hover { background: var(--accent); color: #fff; }
-  #property-card {
-    display: none;
-    position: absolute; top: 50px; right: 10px; z-index: 500;
-    width: 268px;
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 12px; padding: 13px 14px 12px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-    font-size: 12px; line-height: 1.5; color: var(--text);
-  }
-  #property-card-close {
-    position: absolute; top: 9px; right: 11px;
-    background: none; border: none; font-size: 16px; line-height: 1;
-    color: var(--muted); cursor: pointer; padding: 0;
-  }
-  #property-card-close:hover { color: var(--text); }
   .sort-table tbody tr.row-selected td { background: var(--accent-light); }
   .layer-row {
     display: flex; align-items: center; justify-content: space-between;
@@ -581,12 +588,20 @@
   <div class="topbar-main">
     <span class="topbar-title">JKK Monitor</span>
     <div style="display:flex;align-items:center;gap:12px;">
+      <div class="topbar-legend">
+        <span class="tl-item"><span class="tl-dot" style="background:#dc2626;"></span>JKK</span>
+        <span class="tl-item"><span class="tl-dot" style="background:#3a86ff;"></span>UR</span>
+        <span class="tl-sep"></span>
+        <span id="map-summary"></span>
+        <button class="topbar-refresh-btn" onclick="loadListings()">更新</button>
+      </div>
       <div class="status-pill"><div class="pulse"></div>監視中</div>
       <div id="user-area">
         <button class="login-btn" onclick="openAuthModal()">ログイン</button>
       </div>
     </div>
   </div>
+  <div class="topbar-rail"></div>
 </div>
 
 <div class="layout">
@@ -790,21 +805,24 @@
   <!-- ── Main (map only) ── -->
   <main class="main">
     <div class="map-wrap">
-      <div class="map-overlay-bar">
-        <div class="map-legend">
-          <span><span class="swatch jkk"></span>JKK</span>
-          <span><span class="swatch ur"></span>UR</span>
-        </div>
-        <span id="map-summary" style="color:var(--muted);"></span>
-        <button class="map-refresh-btn" onclick="loadListings()">更新</button>
-      </div>
-      <div id="property-card">
-        <button id="property-card-close" onclick="closePropCard()">×</button>
-        <div id="property-card-body" class="pin-popup"></div>
-      </div>
       <div id="map"></div>
     </div>
   </main>
+
+  <!-- ── Right icon rail ── -->
+  <aside class="right-rail"></aside>
+
+</div>
+
+<!-- ── Right slide-in panel (property card) ── -->
+<div class="right-panel" id="right-panel">
+  <div class="panel-header">
+    <span class="panel-title" id="right-panel-title">物件情報</span>
+    <button class="panel-close-btn" onclick="closePropCard()">×</button>
+  </div>
+  <div class="panel-body">
+    <div id="property-card-body" class="pin-popup"></div>
+  </div>
 </div>
 
 <!-- Auth modal -->
@@ -1554,11 +1572,12 @@ function clearDirections() {
 
 function openPropCard(l) {
   document.getElementById('property-card-body').innerHTML = popupHtml(l);
-  document.getElementById('property-card').style.display = 'block';
+  document.getElementById('right-panel-title').textContent = l.ward || '物件情報';
+  document.getElementById('right-panel').classList.add('open');
 }
 
 function closePropCard() {
-  document.getElementById('property-card').style.display = 'none';
+  document.getElementById('right-panel').classList.remove('open');
   if (_selectedId) {
     if (_markers[_selectedId]) {
       _markers[_selectedId].marker.setIcon(markerIcon(_markers[_selectedId].source, false));
@@ -1602,7 +1621,7 @@ function applyMapFilters() {
   Object.values(_markers).forEach(e => e.marker.setMap(null));
   _markers = {};
   _filteredListings = [];
-  document.getElementById('property-card').style.display = 'none';
+  document.getElementById('right-panel').classList.remove('open');
   _selectedId = null;
 
   _allListings.forEach(l => {
