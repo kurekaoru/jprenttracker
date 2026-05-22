@@ -428,10 +428,11 @@
     background: var(--surface2); color: var(--text); transition: background 0.1s;
   }
   .route-btn:hover { background: var(--accent); color: #fff; }
-  /* Compact facility InfoWindow — hide default X, remove its reserved space */
+  /* Compact facility InfoWindow — hide default X and its header row */
   .gm-style .gm-style-iw-c { padding: 0 !important; border-radius: 8px !important; box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important; }
   .gm-style .gm-style-iw-d { overflow: hidden !important; }
   .gm-style .gm-ui-hover-effect { display: none !important; }
+  .gm-style .gm-style-iw-ch { display: none !important; }
   .fac-popup {
     font-family: var(--font); font-size: 12px; line-height: 1.5;
     padding: 8px 10px; min-width: 130px; max-width: 200px;
@@ -452,6 +453,13 @@
   .fac-popup-name { font-weight: 600; font-size: 12px; }
   .fac-popup-dist { font-size: 10px; color: var(--muted); margin-top: 1px; }
   .sort-table tbody tr.row-selected td { background: var(--accent-light); }
+  .fac-section-hdr {
+    font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 8px;
+  }
+  .fac-table td { padding: 4px 8px 4px 0; font-size: 11px; }
+  .fac-table th { padding: 2px 8px 4px 0; }
+  .fac-row:hover td { background: var(--surface2); }
   .layer-row {
     display: flex; align-items: center; justify-content: space-between;
     padding: 8px 0; border-bottom: 1px solid var(--border);
@@ -814,37 +822,6 @@
               <span data-i18n="parks">公園</span>
             </span>
             <label class="tog"><input type="checkbox" id="layer-parks" checked onchange="toggleLayer('parks',this.checked)"><span class="tog-slider"></span></label>
-          </div>
-        </div>
-        <p class="section-label" style="margin-top:14px;" data-i18n="nearby_facilities">周辺施設</p>
-        <div style="margin-top:8px;">
-          <div class="layer-row">
-            <span class="layer-label">
-              <span style="width:10px;height:10px;border-radius:50%;background:#7C3AED;flex-shrink:0;display:inline-block;"></span>
-              <span data-i18n="konbini">コンビニ</span>
-            </span>
-            <label class="tog"><input type="checkbox" id="poi-konbini" checked onchange="togglePoiLayer('konbini',this.checked)"><span class="tog-slider"></span></label>
-          </div>
-          <div class="layer-row">
-            <span class="layer-label">
-              <span style="width:10px;height:10px;border-radius:50%;background:#EA580C;flex-shrink:0;display:inline-block;"></span>
-              <span data-i18n="supermarket">スーパー</span>
-            </span>
-            <label class="tog"><input type="checkbox" id="poi-supermarket" checked onchange="togglePoiLayer('supermarket',this.checked)"><span class="tog-slider"></span></label>
-          </div>
-          <div class="layer-row">
-            <span class="layer-label">
-              <span style="width:10px;height:10px;border-radius:50%;background:#DB2777;flex-shrink:0;display:inline-block;"></span>
-              <span data-i18n="kindergarten">幼稚園・保育園</span>
-            </span>
-            <label class="tog"><input type="checkbox" id="poi-kindergarten" checked onchange="togglePoiLayer('kindergarten',this.checked)"><span class="tog-slider"></span></label>
-          </div>
-          <div class="layer-row">
-            <span class="layer-label">
-              <span style="width:10px;height:10px;border-radius:50%;background:#0369A1;flex-shrink:0;display:inline-block;"></span>
-              <span data-i18n="clinic">クリニック・病院</span>
-            </span>
-            <label class="tog"><input type="checkbox" id="poi-clinic" checked onchange="togglePoiLayer('clinic',this.checked)"><span class="tog-slider"></span></label>
           </div>
         </div>
       </div>
@@ -1212,6 +1189,9 @@ const STRINGS = {
   // Property card
   save_listing:         { ja:'保存',                    en:'Save' },
   saved_listing:        { ja:'保存済み',                 en:'Saved' },
+  // Facility table
+  col_type:             { ja:'種別',                    en:'Type' },
+  col_dist:             { ja:'距離',                    en:'Dist.' },
 };
 
 function t(key, ...args) {
@@ -1477,6 +1457,7 @@ let _destMarker = null;
 let _routeChip = null;
 let _RouteChipOverlayClass = null;
 let _facilityMarkers = [];
+let _facilityMarkerObjs = []; // [{marker, facility}] for table click highlight
 let _facilityCircle  = null;
 let _facPopup = null;
 
@@ -1515,6 +1496,7 @@ function _facPopupHtml(color, name, typeLabel, distM) {
 function clearFacilities() {
   _facilityMarkers.forEach(m => m.setMap(null));
   _facilityMarkers = [];
+  _facilityMarkerObjs = [];
   if (_facilityCircle) { _facilityCircle.setMap(null); _facilityCircle = null; }
   if (_facPopup) _facPopup.close();
 }
@@ -1528,11 +1510,13 @@ async function showFacilities(listing) {
     strokeColor: '#4285F4', strokeOpacity: 0.25, strokeWeight: 1.5,
     clickable: false,
   });
+  _renderFacilitySection(null); // show loading state
   try {
     const r = await fetch(`${API}/listings/${encodeURIComponent(listing.id)}/facilities`);
-    if (!r.ok) return;
+    if (!r.ok) { _renderFacilitySection([]); return; }
     const { facilities } = await r.json();
     facilities.forEach(f => {
+      const color = (_facilityIconDefs[f.type] || {}).color || '#888888';
       const marker = new google.maps.Marker({
         position: { lat: f.lat, lng: f.lng },
         map,
@@ -1540,16 +1524,109 @@ async function showFacilities(listing) {
         title: f.name,
         zIndex: 6,
       });
-      const color = (_facilityIconDefs[f.type] || {}).color || '#888888';
       marker.addListener('click', () => {
         _facPopup.setContent(_facPopupHtml(color, f.name, facilityTypeLabel(f.type), f.distance_m));
         _facPopup.open({ map, anchor: marker });
       });
       _facilityMarkers.push(marker);
+      _facilityMarkerObjs.push({ marker, facility: f, color });
     });
     _applyZoomVisibility();
-  } catch {}
+    _renderFacilitySection(facilities);
+  } catch { _renderFacilitySection([]); }
 }
+
+let _facTableSort = { col: 'distance_m', asc: true };
+
+function _renderFacilitySection(facilities) {
+  const wrap = document.getElementById('fac-section');
+  if (!wrap) return;
+
+  // POI layer toggles
+  const poiRows = Object.entries({
+    konbini:      { color: '#7C3AED', label: t('konbini') },
+    supermarket:  { color: '#EA580C', label: t('supermarket') },
+    kindergarten: { color: '#DB2777', label: t('kindergarten') },
+    clinic:       { color: '#0369A1', label: t('clinic') },
+  }).map(([k, d]) => `
+    <div class="layer-row">
+      <span class="layer-label">
+        <span style="width:10px;height:10px;border-radius:50%;background:${d.color};display:inline-block;flex-shrink:0;"></span>
+        <span>${d.label}</span>
+      </span>
+      <label class="tog"><input type="checkbox" id="poi-${k}" ${_poiLayers[k] ? 'checked' : ''}
+        onchange="togglePoiLayer('${k}',this.checked)"><span class="tog-slider"></span></label>
+    </div>`).join('');
+
+  if (facilities === null) {
+    wrap.innerHTML = `
+      <div class="fac-section-hdr">${t('nearby_facilities')}</div>
+      <div style="margin-bottom:8px;">${poiRows}</div>
+      <div style="font-size:11px;color:var(--muted);padding:6px 0;">${t('loading')}</div>`;
+    return;
+  }
+  if (!facilities.length) {
+    wrap.innerHTML = `
+      <div class="fac-section-hdr">${t('nearby_facilities')}</div>
+      <div style="margin-bottom:8px;">${poiRows}</div>`;
+    return;
+  }
+
+  // Sort
+  const sorted = [...facilities].sort((a, b) => {
+    const va = a[_facTableSort.col] ?? '';
+    const vb = b[_facTableSort.col] ?? '';
+    return _facTableSort.asc ? (va < vb ? -1 : va > vb ? 1 : 0)
+                             : (va > vb ? -1 : va < vb ? 1 : 0);
+  });
+
+  function hdr(col, label) {
+    const active = _facTableSort.col === col;
+    const ind = active ? (_facTableSort.asc ? ' ▲' : ' ▼') : '';
+    return `<th class="${active ? 'sort-active' : ''}"
+      onclick="window._facSort('${col}')">${label}${ind}</th>`;
+  }
+
+  const rows = sorted.map((f, i) => {
+    const color = (_facilityIconDefs[f.type] || {}).color || '#888888';
+    const origIdx = _facilityMarkerObjs.findIndex(o => o.facility === f ||
+      (o.facility.name === f.name && o.facility.distance_m === f.distance_m));
+    return `<tr class="fac-row" onclick="window._facRowClick(${origIdx})" style="cursor:pointer;">
+      <td><span style="width:8px;height:8px;border-radius:50%;background:${color};display:inline-block;vertical-align:middle;margin-right:4px;"></span>${escHtml(facilityTypeLabel(f.type))}</td>
+      <td>${escHtml(f.name)}</td>
+      <td style="font-family:var(--mono);text-align:right;">${f.distance_m}m</td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div class="fac-section-hdr">${t('nearby_facilities')}</div>
+    <div style="margin-bottom:8px;">${poiRows}</div>
+    <div style="overflow-x:auto;">
+      <table class="sort-table fac-table">
+        <thead><tr>
+          ${hdr('type', t('col_type'))}
+          ${hdr('name', t('col_name'))}
+          ${hdr('distance_m', t('col_dist'))}
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+window._facSort = function(col) {
+  if (_facTableSort.col === col) _facTableSort.asc = !_facTableSort.asc;
+  else { _facTableSort.col = col; _facTableSort.asc = true; }
+  const currentFacs = _facilityMarkerObjs.map(o => o.facility);
+  _renderFacilitySection(currentFacs);
+};
+
+window._facRowClick = function(idx) {
+  if (idx < 0 || idx >= _facilityMarkerObjs.length) return;
+  const { marker, facility, color } = _facilityMarkerObjs[idx];
+  _facPopup.setContent(_facPopupHtml(color, facility.name, facilityTypeLabel(facility.type), facility.distance_m));
+  _facPopup.open({ map, anchor: marker });
+  map.panTo(marker.getPosition());
+};
 
 function updateCommuteDest(v) { _commuteDest = v; }
 
@@ -2103,7 +2180,8 @@ function popupHtml(l) {
         <button onclick="showRoute('${eid}','DRIVING')" class="route-btn">${t('route_drive')}</button>
         <button onclick="showRoute('${eid}','WALKING')" class="route-btn">${t('route_walk')}</button>
         <button onclick="clearDirections()" class="route-btn" style="margin-left:auto;">✕</button>
-      </div>`;
+      </div>
+      <div id="fac-section" style="margin-top:14px;border-top:1px solid var(--border);padding-top:10px;"></div>`;
 }
 
 function showRoute(listingId, travelMode) {
