@@ -1262,6 +1262,45 @@ const KAWASAKI = [
   '川崎市麻生区','川崎市多摩区','川崎市宮前区'
 ];
 const SAGAMIHARA = ['相模原市緑区','相模原市中央区','相模原市南区'];
+const WARD_EN = {
+  // 23 Tokyo Wards
+  '千代田区':'Chiyoda','中央区':'Chuo','港区':'Minato','新宿区':'Shinjuku',
+  '文京区':'Bunkyo','台東区':'Taito','墨田区':'Sumida','江東区':'Koto',
+  '品川区':'Shinagawa','目黒区':'Meguro','大田区':'Ota','世田谷区':'Setagaya',
+  '渋谷区':'Shibuya','中野区':'Nakano','杉並区':'Suginami','豊島区':'Toshima',
+  '北区':'Kita','荒川区':'Arakawa','板橋区':'Itabashi','練馬区':'Nerima',
+  '足立区':'Adachi','葛飾区':'Katsushika','江戸川区':'Edogawa',
+  // Tokyo cities
+  '八王子市':'Hachioji','立川市':'Tachikawa','武蔵野市':'Musashino','三鷹市':'Mitaka',
+  '府中市':'Fuchu','昭島市':'Akishima','調布市':'Chofu','町田市':'Machida',
+  '小金井市':'Koganei','小平市':'Kodaira','日野市':'Hino','東村山市':'Higashi-Murayama',
+  '国分寺市':'Kokubunji','国立市':'Kunitachi','西東京市':'Nishi-Tokyo',
+  '福生市':'Fussa','狛江市':'Komae','東大和市':'Higashi-Yamato','清瀬市':'Kiyose',
+  '東久留米市':'Higashi-Kurume','武蔵村山市':'Musashimurayama','多摩市':'Tama',
+  '稲城市':'Inagi','羽村市':'Hamura','あきる野市':'Akiruno','日の出町':'Hinode',
+  '檜原村':'Hinohara','奥多摩町':'Okutama','瑞穂町':'Mizuho',
+  // Yokohama
+  '横浜市鶴見区':'Yokohama Tsurumi','横浜市神奈川区':'Yokohama Kanagawa',
+  '横浜市西区':'Yokohama Nishi','横浜市中区':'Yokohama Naka','横浜市南区':'Yokohama Minami',
+  '横浜市保土ケ谷区':'Yokohama Hodogaya','横浜市磯子区':'Yokohama Isogo',
+  '横浜市金沢区':'Yokohama Kanazawa','横浜市港北区':'Yokohama Kohoku',
+  '横浜市戸塚区':'Yokohama Totsuka','横浜市港南区':'Yokohama Konan',
+  '横浜市旭区':'Yokohama Asahi','横浜市緑区':'Yokohama Midori',
+  '横浜市瀬谷区':'Yokohama Seya','横浜市栄区':'Yokohama Sakae',
+  '横浜市青葉区':'Yokohama Aoba','横浜市都筑区':'Yokohama Tsuzuki',
+  // Kawasaki
+  '川崎市川崎区':'Kawasaki Kawasaki','川崎市幸区':'Kawasaki Saiwai',
+  '川崎市中原区':'Kawasaki Nakahara','川崎市高津区':'Kawasaki Takatsu',
+  '川崎市麻生区':'Kawasaki Asao','川崎市多摩区':'Kawasaki Tama','川崎市宮前区':'Kawasaki Miyamae',
+  // Sagamihara
+  '相模原市緑区':'Sagamihara Midori','相模原市中央区':'Sagamihara Chuo','相模原市南区':'Sagamihara Minami',
+};
+
+function wardLabel(ja) {
+  if (_lang !== 'en') return ja;
+  return WARD_EN[ja] || ja;
+}
+
 const LAYOUTS = ['1R','1K','1DK','1LDK','2K','2DK','2LDK','3K','3DK','3LDK','4LDK以上'];
 
 const DEFAULT_WARDS   = new Set([...KU, ...SI]);   // Kanagawa is opt-in
@@ -1272,10 +1311,10 @@ let selectedWards   = new Set(DEFAULT_WARDS);
 let selectedLayouts = new Set(DEFAULT_LAYOUTS);
 let filterSources   = new Set(DEFAULT_SOURCES);
 
-function makeChip(label, set, container, onChange) {
+function makeChip(label, set, container, onChange, displayLabel) {
   const c = document.createElement('div');
   c.className = 'chip' + (set.has(label) ? ' active' : '');
-  c.textContent = label;
+  c.textContent = displayLabel || label;
   c.onclick = () => {
     set.has(label) ? set.delete(label) : set.add(label);
     c.classList.toggle('active');
@@ -1300,19 +1339,19 @@ function buildChips() {
   sc.innerHTML = '';
 
   addSectionLabel(wc, t('ward_ku'), 2);
-  KU.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
+  KU.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters, wardLabel(w)));
 
   addSectionLabel(wc, t('ward_si'));
-  SI.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
+  SI.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters, wardLabel(w)));
 
   addSectionLabel(wc, t('ward_yokohama'));
-  YOKOHAMA.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
+  YOKOHAMA.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters, wardLabel(w)));
 
   addSectionLabel(wc, t('ward_kawasaki'));
-  KAWASAKI.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
+  KAWASAKI.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters, wardLabel(w)));
 
   addSectionLabel(wc, t('ward_sagamihara'));
-  SAGAMIHARA.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
+  SAGAMIHARA.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters, wardLabel(w)));
 
   LAYOUTS.forEach(l => makeChip(l, selectedLayouts, lc, applyMapFilters));
 
@@ -2039,7 +2078,7 @@ function popupHtml(l) {
       <div style="display:flex;align-items:flex-start;gap:6px;">
         <div style="flex:1;">
           <div class="pin-name">${escHtml(l.name)}<span class="src-tag ${l.source}">${tag}</span></div>
-          <div class="pin-meta">${escHtml(l.address || l.ward)}</div>
+          <div class="pin-meta">${escHtml(l.address || wardLabel(l.ward))}</div>
         </div>
         <button id="save-btn-${eid}" class="save-listing-btn${isSaved ? ' saved' : ''}"
           title="${isSaved ? t('saved_listing') : t('save_listing')}"
@@ -2170,7 +2209,7 @@ function clearDirections() {
 
 function openPropCard(l) {
   document.getElementById('property-card-body').innerHTML = popupHtml(l);
-  document.getElementById('right-panel-title').textContent = l.ward || t('property_info');
+  document.getElementById('right-panel-title').textContent = wardLabel(l.ward) || t('property_info');
   document.getElementById('right-panel').classList.add('open');
   recordView(l.id);
 }
@@ -2325,7 +2364,7 @@ function renderAvailableTable() {
     const sel     = l.id === _selectedId ? ' row-selected' : '';
     return `<tr class="${sel}" data-id="${escHtml(l.id)}" onclick="if(event.target.tagName!='A')selectListing('${l.id}','${l.url||''}')">
       <td>${tag} <a href="${href}" target="_blank" rel="noopener">${escHtml(l.name)}</a></td>
-      <td>${escHtml(l.ward)}</td>
+      <td>${escHtml(wardLabel(l.ward))}</td>
       <td style="font-family:var(--mono);">¥${(l.rent||0).toLocaleString()}</td>
       <td>${escHtml(l.layout||'—')}</td>
       <td style="font-family:var(--mono);">${l.size_m2 ? l.size_m2+'m²' : '—'}</td>
@@ -2430,7 +2469,7 @@ function renderDisappearedTable() {
     const href     = l.url ? escHtml(l.url) : '#';
     return `<tr onclick="if(event.target.tagName!='A'&&'${l.url}')window.open('${l.url}','_blank')">
       <td>${tag} <a href="${href}" target="_blank" rel="noopener">${escHtml(l.name)}</a></td>
-      <td>${escHtml(l.ward)}</td>
+      <td>${escHtml(wardLabel(l.ward))}</td>
       <td style="font-family:var(--mono);">¥${(l.rent||0).toLocaleString()}</td>
       <td>${escHtml(l.layout||'—')}</td>
       <td style="font-family:var(--mono);">${l.size_m2 ? l.size_m2+'m²' : '—'}</td>
