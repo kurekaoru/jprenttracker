@@ -1560,6 +1560,7 @@ async function showFacilities(listing) {
       const marker = new google.maps.Marker({
         position: { lat: f.lat, lng: f.lng },
         map,
+        visible: false,
         icon: facilityMarkerIcon(f.type),
         title: f.name,
         zIndex: 6,
