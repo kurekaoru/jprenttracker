@@ -1166,5 +1166,14 @@ def proxy_directions():
 
 
 if __name__ == "__main__":
-    db()  # init tables + JWT secret on startup
+    con = db()  # init tables + JWT secret on startup
+    # Kick worker if geocoded listings exist with no facilities (e.g. after migration wipe)
+    needs = con.execute(
+        "SELECT COUNT(*) FROM listings WHERE lat IS NOT NULL "
+        "AND id NOT IN (SELECT DISTINCT listing_id FROM listing_facilities)"
+    ).fetchone()[0]
+    con.close()
+    if needs:
+        logging.info(f"Startup: {needs} listings need facility fetch, starting worker")
+        _ensure_geocoding()
     app.run(host="0.0.0.0", port=5050, debug=False)
