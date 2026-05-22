@@ -429,7 +429,7 @@
   }
   .route-btn:hover { background: var(--accent); color: #fff; }
   /* Compact facility InfoWindow — hide default X and its header row */
-  .gm-style .gm-style-iw-c { padding: 0 !important; border-radius: 8px !important; box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important; }
+  .gm-style .gm-style-iw-c { padding: 0 !important; border-radius: 8px !important; box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important; opacity: 0.5; }
   .gm-style .gm-style-iw-d { overflow: hidden !important; }
   .gm-style .gm-ui-hover-effect { display: none !important; }
   .gm-style .gm-style-iw-ch { display: none !important; }
@@ -2225,7 +2225,7 @@ function initMap() {
         whiteSpace: 'nowrap', cursor: 'pointer',
         boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
         transform: 'translate(-50%,-50%)', pointerEvents: 'auto',
-        zIndex: '99',
+        opacity: '0.5', zIndex: '99',
       });
       this._div.innerHTML = this._html;
       this._div.onclick = clearDirections;
