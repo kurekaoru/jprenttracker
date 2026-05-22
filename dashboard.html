@@ -1357,14 +1357,14 @@ const _facilityIconDefs = {
 function facilityMarkerIcon(type) {
   const def = _facilityIconDefs[type] || { color: '#888888',
     icon: `<circle cx="12" cy="12" r="6" fill="white"/>` };
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24">
-    <rect width="24" height="24" rx="5" fill="${def.color}"/>
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24">
+    <rect width="24" height="24" rx="5" fill="${def.color}" opacity="0.6"/>
     ${def.icon}
   </svg>`;
   return {
     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-    scaledSize: new google.maps.Size(28, 28),
-    anchor: new google.maps.Point(14, 14),
+    scaledSize: new google.maps.Size(14, 14),
+    anchor: new google.maps.Point(7, 7),
   };
 }
 
