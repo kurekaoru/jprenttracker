@@ -2398,10 +2398,7 @@ function showRoute(listingId, travelMode) {
   const isWalking = travelMode === 'WALKING';
   directionsRenderer.setOptions({
     preserveViewport: false,
-    polylineOptions: isWalking ? {
-      strokeColor: '#4285F4', strokeWeight: 4, strokeOpacity: 0,
-      icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 }, offset: '0', repeat: '10px' }],
-    } : {
+    polylineOptions: isWalking ? { strokeOpacity: 0, icons: [] } : {
       strokeColor: '#4285F4', strokeWeight: 5, strokeOpacity: 0.9, icons: [],
     },
   });
@@ -2412,11 +2409,20 @@ function showRoute(listingId, travelMode) {
     region: 'JP',
   }, (result, status) => {
     if (status === 'OK') {
-      directionsRenderer.setDirections(result);
-      const leg = result.routes[0].legs[0];
-      const path = result.routes[0].overview_path;
-      const midLatLng = path && path.length ? path[Math.floor(path.length / 2)] : null;
-      showRouteInfo(leg.distance?.text, leg.duration?.text, midLatLng, leg.end_location);
+      if (isWalking) {
+        directionsRenderer.setDirections({ routes: [] });
+        _renderWalkingPolylines(result);
+        const leg = result.routes[0].legs[0];
+        const allPts = leg.steps.flatMap(s => decodePolyline(s.polyline.points));
+        const mid = allPts.length ? new google.maps.LatLng(allPts[Math.floor(allPts.length / 2)].lat, allPts[Math.floor(allPts.length / 2)].lng) : null;
+        showRouteInfo(leg.distance?.text, leg.duration?.text, mid, leg.end_location);
+      } else {
+        directionsRenderer.setDirections(result);
+        const leg = result.routes[0].legs[0];
+        const path = result.routes[0].overview_path;
+        const midLatLng = path && path.length ? path[Math.floor(path.length / 2)] : null;
+        showRouteInfo(leg.distance?.text, leg.duration?.text, midLatLng, leg.end_location);
+      }
     } else {
       alert(t('route_error') + status + t('route_error_hint'));
     }
@@ -2430,16 +2436,28 @@ function clearDirections() {
   Object.values(_markers).forEach(e => e.marker.setVisible(true));
 }
 
-function showFacilityRoute(facLat, facLng) {
-  if (!_facListing || !directionsService || !directionsRenderer) return;
-  clearTransitPolylines();
-  directionsRenderer.setOptions({
-    preserveViewport: true,
-    polylineOptions: {
-      strokeColor: '#4285F4', strokeWeight: 4, strokeOpacity: 0,
-      icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 }, offset: '0', repeat: '10px' }],
-    },
+function _renderWalkingPolylines(result) {
+  const steps = result.routes[0].legs[0].steps;
+  const allPts = steps.flatMap(step => decodePolyline(step.polyline.points));
+  const pl = new google.maps.Polyline({
+    path: allPts,
+    strokeWeight: 2, strokeOpacity: 0,
+    icons: [{
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        fillColor: '#4285F4', fillOpacity: 1, strokeWeight: 0, scale: 3.5,
+      },
+      offset: '0', repeat: '22px',
+    }],
+    map,
   });
+  _transitPolylines.push(pl);
+}
+
+function showFacilityRoute(facLat, facLng) {
+  if (!_facListing || !directionsService) return;
+  clearTransitPolylines();
+  directionsRenderer.setDirections({ routes: [] });
   directionsService.route({
     origin:      { lat: _facListing.lat, lng: _facListing.lng },
     destination: { lat: facLat, lng: facLng },
@@ -2447,10 +2465,11 @@ function showFacilityRoute(facLat, facLng) {
     region:      'JP',
   }, (result, status) => {
     if (status !== 'OK') return;
-    directionsRenderer.setDirections(result);
+    _renderWalkingPolylines(result);
     const leg  = result.routes[0].legs[0];
-    const path = result.routes[0].overview_path;
-    const mid  = path && path.length ? path[Math.floor(path.length / 2)] : null;
+    const steps = leg.steps;
+    const allPts = steps.flatMap(s => decodePolyline(s.polyline.points));
+    const mid  = allPts.length ? new google.maps.LatLng(allPts[Math.floor(allPts.length / 2)].lat, allPts[Math.floor(allPts.length / 2)].lng) : null;
     showRouteInfo(leg.distance?.text, leg.duration?.text, mid, leg.end_location);
   });
 }
