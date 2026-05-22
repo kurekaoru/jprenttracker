@@ -1,10 +1,18 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>JKK Monitor Dashboard</title>
-<script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBHw3d6FU73jXiJxUJoZ4MlDGu2CmhC4i8&libraries=places&language=ja&callback=initMap"></script>
+<script>
+(function(){
+  var l=localStorage.getItem('jkktrackr_lang')||'ja';
+  document.documentElement.lang=l;
+  var s=document.createElement('script');s.async=true;
+  s.src='https://maps.googleapis.com/maps/api/js?key=AIzaSyBHw3d6FU73jXiJxUJoZ4MlDGu2CmhC4i8&libraries=places&language='+l+'&callback=initMap';
+  document.head.appendChild(s);
+})();
+</script>
 <style>
   :root {
     --bg: #f6f5f0;
@@ -85,6 +93,16 @@
     transition: all 0.15s;
   }
   .topbar-refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .lang-toggle {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.55);
+    border-radius: 4px;
+    font-size: 10px; font-weight: 700; letter-spacing: .06em;
+    padding: 2px 7px; cursor: pointer;
+    font-family: var(--font); transition: border-color .15s, color .15s;
+  }
+  .lang-toggle:hover { border-color: var(--accent); color: var(--accent); }
   .topbar-title {
     font-size: 13px; font-weight: 600; letter-spacing: -0.02em;
     color: rgba(255,255,255,0.85);
@@ -497,6 +515,27 @@
     cursor: pointer; font-family: var(--font); width: 100%;
   }
   .modal-submit:hover { background: var(--accent-dark); }
+  .demo-section {
+    border-top: 1px solid var(--border); margin-top: 10px; padding-top: 10px;
+  }
+  .demo-label {
+    font-size: 10px; color: var(--muted); font-weight: 600; letter-spacing: .05em;
+    text-transform: uppercase; margin-bottom: 8px;
+  }
+  .demo-row { display: flex; gap: 6px; }
+  .demo-select {
+    flex: 1; padding: 7px 8px; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--surface2); color: var(--text);
+    font-size: 12px; font-family: var(--font); outline: none;
+  }
+  .demo-select:focus { border-color: var(--accent); }
+  .save-listing-btn {
+    background: none; border: none; cursor: pointer; padding: 2px 4px;
+    font-size: 16px; line-height: 1; color: var(--muted); transition: color .15s, transform .1s;
+    flex-shrink: 0;
+  }
+  .save-listing-btn.saved { color: #f59e0b; }
+  .save-listing-btn:hover { transform: scale(1.2); }
 
   /* ── User chip ── */
   .user-chip { display: flex; align-items: center; gap: 8px; position: relative; }
@@ -593,11 +632,12 @@
         <span class="tl-item"><span class="tl-dot" style="background:#3a86ff;"></span>UR</span>
         <span class="tl-sep"></span>
         <span id="map-summary"></span>
-        <button class="topbar-refresh-btn" onclick="loadListings()">更新</button>
+        <button class="topbar-refresh-btn" onclick="loadListings()" data-i18n="refresh">更新</button>
       </div>
-      <div class="status-pill"><div class="pulse"></div>監視中</div>
+      <div class="status-pill"><div class="pulse"></div><span data-i18n="monitoring">監視中</span></div>
+      <button id="lang-toggle" class="lang-toggle" onclick="toggleLang()">EN</button>
       <div id="user-area">
-        <button class="login-btn" onclick="openAuthModal()">ログイン</button>
+        <button class="login-btn" onclick="openAuthModal()" data-i18n="login">ログイン</button>
       </div>
     </div>
   </div>
@@ -610,27 +650,27 @@
   <aside class="icon-rail">
     <button class="rail-btn" id="rail-filter" onclick="openPanel('filter')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
-      <span class="rail-tip">フィルター</span>
+      <span class="rail-tip" data-i18n="filter">フィルター</span>
     </button>
     <button class="rail-btn" id="rail-listings" onclick="openPanel('listings')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-      <span class="rail-tip">空室一覧</span>
+      <span class="rail-tip" data-i18n="vacancies">空室一覧</span>
     </button>
     <button class="rail-btn" id="rail-notif" onclick="openPanel('notif')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-      <span class="rail-tip">通知設定</span>
+      <span class="rail-tip" data-i18n="notifications">通知設定</span>
     </button>
     <button class="rail-btn" id="rail-account" onclick="openPanel('account')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      <span class="rail-tip">アカウント</span>
+      <span class="rail-tip" data-i18n="account">アカウント</span>
     </button>
     <button class="rail-btn" id="rail-layers" onclick="openPanel('layers')" style="margin-top:auto;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-      <span class="rail-tip">地図レイヤー</span>
+      <span class="rail-tip" data-i18n="map_layers">地図レイヤー</span>
     </button>
     <button class="rail-btn" id="rail-about" onclick="openPanel('about')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-      <span class="rail-tip">セットアップ</span>
+      <span class="rail-tip" data-i18n="setup">セットアップ</span>
     </button>
   </aside>
 
@@ -644,158 +684,158 @@
 
       <!-- Filter page -->
       <div class="panel-page" id="panel-filter">
-        <p class="section-label">エリア（区・市）</p>
+        <p class="section-label" data-i18n="area">エリア（区・市）</p>
         <div class="chips" id="ward-chips"></div>
-        <p class="section-label" style="margin-top:10px;">家賃</p>
-        <label>最低家賃 (円)</label>
+        <p class="section-label" style="margin-top:10px;" data-i18n="rent">家賃</p>
+        <label data-i18n="min_rent">最低家賃 (円)</label>
         <input type="number" id="min-rent" placeholder="0" step="1000" oninput="applyMapFilters()" />
-        <label>上限家賃 (円)</label>
-        <input type="number" id="max-rent" placeholder="例: 200000 (0=上限なし)" step="1000" oninput="applyMapFilters()" />
-        <p class="section-label" style="margin-top:10px;">間取り</p>
+        <label data-i18n="max_rent_label">上限家賃 (円)</label>
+        <input type="number" id="max-rent" data-i18n-ph="max_rent_ph" placeholder="例: 200000 (0=上限なし)" step="1000" oninput="applyMapFilters()" />
+        <p class="section-label" style="margin-top:10px;" data-i18n="layout">間取り</p>
         <div class="layout-chips" id="layout-chips"></div>
-        <p class="section-label" style="margin-top:10px;">専有面積</p>
-        <label>最低面積 (m²)</label>
+        <p class="section-label" style="margin-top:10px;" data-i18n="floor_area">専有面積</p>
+        <label data-i18n="min_area">最低面積 (m²)</label>
         <input type="number" id="min-size" placeholder="0" step="1" oninput="applyMapFilters()" />
-        <p class="section-label" style="margin-top:10px;">駅徒歩</p>
-        <label>最大徒歩分数 (分)</label>
-        <input type="number" id="max-walk" placeholder="例: 10 (0=上限なし)" step="1" min="0" oninput="applyMapFilters()" />
-        <p class="section-label" style="margin-top:10px;">データソース</p>
+        <p class="section-label" style="margin-top:10px;" data-i18n="walk_station">駅徒歩</p>
+        <label data-i18n="max_walk">最大徒歩分数 (分)</label>
+        <input type="number" id="max-walk" data-i18n-ph="max_walk_ph" placeholder="例: 10 (0=上限なし)" step="1" min="0" oninput="applyMapFilters()" />
+        <p class="section-label" style="margin-top:10px;" data-i18n="source">データソース</p>
         <div class="chips" id="source-chips"></div>
-        <button class="save-btn" id="save-btn" onclick="saveConfig()" style="margin-top:14px;">設定を保存</button>
+        <button class="save-btn" id="save-btn" onclick="saveConfig()" style="margin-top:14px;" data-i18n="save_settings">設定を保存</button>
         <div class="saved-msg" id="saved-msg"></div>
       </div>
 
       <!-- Notifications page -->
       <div class="panel-page" id="panel-notif">
         <div id="notif-auth-prompt">
-          <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">通知設定はログイン後に利用できます。</p>
-          <button class="save-btn" onclick="openAuthModal()">ログイン</button>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:12px;" data-i18n="notif_login_required">通知設定はログイン後に利用できます。</p>
+          <button class="save-btn" onclick="openAuthModal()" data-i18n="login">ログイン</button>
         </div>
         <div id="notif-section" style="display:none;">
-          <div id="notif-list"><p style="font-size:11px;color:var(--muted);">登録なし</p></div>
-          <button class="add-notif-btn" onclick="openAddNotif()">＋ 通知先を追加</button>
+          <div id="notif-list"><p style="font-size:11px;color:var(--muted);" data-i18n="notif_none">登録なし</p></div>
+          <button class="add-notif-btn" onclick="openAddNotif()" data-i18n="add_notif">＋ 通知先を追加</button>
         </div>
       </div>
 
       <!-- Account page -->
       <div class="panel-page" id="panel-account">
         <div id="account-guest">
-          <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">ログインして設定を保存・通知を受け取りましょう。</p>
-          <button class="save-btn" onclick="openAuthModal()">ログイン / 新規登録</button>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:12px;" data-i18n="account_guest_msg">ログインして設定を保存・通知を受け取りましょう。</p>
+          <button class="save-btn" onclick="openAuthModal()" data-i18n="login_register">ログイン / 新規登録</button>
         </div>
         <div id="account-user" style="display:none;">
           <p style="font-size:11px;color:var(--muted);margin-bottom:14px;" id="account-email"></p>
-          <p class="section-label">パスワード変更</p>
-          <input type="password" id="pw-current" placeholder="現在のパスワード" style="margin-bottom:6px;">
-          <input type="password" id="pw-new" placeholder="新しいパスワード（8文字以上）" style="margin-bottom:6px;">
-          <button class="save-btn" onclick="doChangePassword()">変更する</button>
+          <p class="section-label" data-i18n="change_password">パスワード変更</p>
+          <input type="password" id="pw-current" data-i18n-ph="current_pw" placeholder="現在のパスワード" style="margin-bottom:6px;">
+          <input type="password" id="pw-new" data-i18n-ph="new_pw" placeholder="新しいパスワード（8文字以上）" style="margin-bottom:6px;">
+          <button class="save-btn" onclick="doChangePassword()" data-i18n="update">変更する</button>
           <div class="saved-msg" id="pw-msg"></div>
-          <button class="save-btn" style="background:var(--danger);margin-top:16px;" onclick="doLogout()">ログアウト</button>
+          <button class="save-btn" style="background:var(--danger);margin-top:16px;" onclick="doLogout()" data-i18n="logout">ログアウト</button>
         </div>
       </div>
 
       <!-- Listings page -->
       <div class="panel-page" id="panel-listings">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <p class="section-label" style="margin:0;">空室一覧</p>
+          <p class="section-label" style="margin:0;" data-i18n="vacancies">空室一覧</p>
           <span id="available-count" style="font-size:11px;color:var(--muted);"></span>
         </div>
         <div style="overflow-x:auto;margin-bottom:1.2rem;">
-          <div id="available-table" style="color:var(--muted);font-size:11px;">読み込み中…</div>
+          <div id="available-table" style="color:var(--muted);font-size:11px;" data-i18n="loading">読み込み中…</div>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <p class="section-label" style="margin:0;">最近消えた物件</p>
+          <p class="section-label" style="margin:0;" data-i18n="disappeared_title">最近消えた物件</p>
           <div style="display:flex;align-items:center;gap:6px;">
             <span id="disappeared-count" style="font-size:11px;color:var(--muted);"></span>
-            <button class="refresh-btn" onclick="loadDisappeared()">更新</button>
+            <button class="refresh-btn" onclick="loadDisappeared()" data-i18n="refresh">更新</button>
           </div>
         </div>
         <div style="overflow-x:auto;">
-          <div id="disappeared-table" style="color:var(--muted);font-size:11px;">読み込み中…</div>
+          <div id="disappeared-table" style="color:var(--muted);font-size:11px;" data-i18n="loading">読み込み中…</div>
         </div>
       </div>
 
       <!-- Layers page -->
       <div class="panel-page" id="panel-layers">
-        <p class="section-label">地図レイヤー</p>
+        <p class="section-label" data-i18n="map_layers">地図レイヤー</p>
         <div style="margin-top:8px;">
           <div class="layer-row">
             <span class="layer-label">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-              駅・路線
+              <span data-i18n="stations_lines">駅・路線</span>
             </span>
             <label class="tog"><input type="checkbox" id="layer-transit" checked onchange="toggleLayer('transit',this.checked)"><span class="tog-slider"></span></label>
           </div>
           <div class="layer-row">
             <span class="layer-label">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20H5a2 2 0 0 1-2-2V6l3-3h11a2 2 0 0 1 2 2v3"/><path d="M13 20h6m-3-3v6"/></svg>
-              道路名
+              <span data-i18n="road_labels">道路名</span>
             </span>
             <label class="tog"><input type="checkbox" id="layer-roadLabels" checked onchange="toggleLayer('roadLabels',this.checked)"><span class="tog-slider"></span></label>
           </div>
           <div class="layer-row">
             <span class="layer-label">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-              丁目・町名
+              <span data-i18n="neighborhoods">丁目・町名</span>
             </span>
             <label class="tog"><input type="checkbox" id="layer-neighborhoods" checked onchange="toggleLayer('neighborhoods',this.checked)"><span class="tog-slider"></span></label>
           </div>
           <div class="layer-row">
             <span class="layer-label">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              公園
+              <span data-i18n="parks">公園</span>
             </span>
             <label class="tog"><input type="checkbox" id="layer-parks" checked onchange="toggleLayer('parks',this.checked)"><span class="tog-slider"></span></label>
           </div>
         </div>
-        <p class="section-label" style="margin-top:14px;">周辺施設</p>
+        <p class="section-label" style="margin-top:14px;" data-i18n="nearby_facilities">周辺施設</p>
         <div style="margin-top:8px;">
           <div class="layer-row">
             <span class="layer-label">
               <span style="width:10px;height:10px;border-radius:50%;background:#7C3AED;flex-shrink:0;display:inline-block;"></span>
-              コンビニ
+              <span data-i18n="konbini">コンビニ</span>
             </span>
-            <label class="tog"><input type="checkbox" id="poi-konbini" onchange="togglePoiLayer('konbini',this.checked)"><span class="tog-slider"></span></label>
+            <label class="tog"><input type="checkbox" id="poi-konbini" checked onchange="togglePoiLayer('konbini',this.checked)"><span class="tog-slider"></span></label>
           </div>
           <div class="layer-row">
             <span class="layer-label">
               <span style="width:10px;height:10px;border-radius:50%;background:#EA580C;flex-shrink:0;display:inline-block;"></span>
-              スーパー
+              <span data-i18n="supermarket">スーパー</span>
             </span>
-            <label class="tog"><input type="checkbox" id="poi-supermarket" onchange="togglePoiLayer('supermarket',this.checked)"><span class="tog-slider"></span></label>
+            <label class="tog"><input type="checkbox" id="poi-supermarket" checked onchange="togglePoiLayer('supermarket',this.checked)"><span class="tog-slider"></span></label>
           </div>
           <div class="layer-row">
             <span class="layer-label">
               <span style="width:10px;height:10px;border-radius:50%;background:#DB2777;flex-shrink:0;display:inline-block;"></span>
-              幼稚園・保育園
+              <span data-i18n="kindergarten">幼稚園・保育園</span>
             </span>
-            <label class="tog"><input type="checkbox" id="poi-kindergarten" onchange="togglePoiLayer('kindergarten',this.checked)"><span class="tog-slider"></span></label>
+            <label class="tog"><input type="checkbox" id="poi-kindergarten" checked onchange="togglePoiLayer('kindergarten',this.checked)"><span class="tog-slider"></span></label>
           </div>
           <div class="layer-row">
             <span class="layer-label">
               <span style="width:10px;height:10px;border-radius:50%;background:#0369A1;flex-shrink:0;display:inline-block;"></span>
-              クリニック・病院
+              <span data-i18n="clinic">クリニック・病院</span>
             </span>
-            <label class="tog"><input type="checkbox" id="poi-clinic" onchange="togglePoiLayer('clinic',this.checked)"><span class="tog-slider"></span></label>
+            <label class="tog"><input type="checkbox" id="poi-clinic" checked onchange="togglePoiLayer('clinic',this.checked)"><span class="tog-slider"></span></label>
           </div>
         </div>
       </div>
 
       <!-- About page -->
       <div class="panel-page" id="panel-about">
-        <p class="section-label">セットアップ手順</p>
+        <p class="section-label" data-i18n="setup_instructions">セットアップ手順</p>
         <div class="notice" style="margin-bottom:1.2rem;">
           1. <code>pip install -r requirements.txt</code><br>
           2. <code>export SLACK_WEBHOOK_URL="https://..."</code><br>
-          3. <code>python server.py</code>（別ターミナル）<br>
+          3. <code>python server.py</code><span data-i18n="setup_terminal"></span><br>
           4. <code>python scraper4.py</code><br>
-          5. フィルターで条件を設定 → 保存
+          5. <span data-i18n="setup_step5">フィルターで条件を設定 → 保存</span>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-          <p class="section-label" style="margin:0;">実行ログ（最新50件）</p>
-          <button class="refresh-btn" onclick="loadLog()">更新</button>
+          <p class="section-label" style="margin:0;" data-i18n="activity_log">実行ログ（最新50件）</p>
+          <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
-        <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;">サーバーが起動するとここにログが表示されます。</div>
+        <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
       </div>
 
     </div>
@@ -817,7 +857,7 @@
 <!-- ── Right slide-in panel (property card) ── -->
 <div class="right-panel" id="right-panel">
   <div class="panel-header">
-    <span class="panel-title" id="right-panel-title">物件情報</span>
+    <span class="panel-title" id="right-panel-title" data-i18n="property_info">物件情報</span>
     <button class="panel-close-btn" onclick="closePropCard()">×</button>
   </div>
   <div class="panel-body">
@@ -830,23 +870,51 @@
   <div class="modal-box">
     <button class="modal-close" onclick="closeAuthModal()">×</button>
     <div class="modal-tabs">
-      <button class="modal-tab active" id="tab-login-btn" onclick="switchAuthTab('login')">ログイン</button>
-      <button class="modal-tab" id="tab-reg-btn" onclick="switchAuthTab('register')">新規登録</button>
+      <button class="modal-tab active" id="tab-login-btn" onclick="switchAuthTab('login')" data-i18n="login_tab">ログイン</button>
+      <button class="modal-tab" id="tab-reg-btn" onclick="switchAuthTab('register')" data-i18n="register_tab">新規登録</button>
     </div>
     <div id="tab-login" class="modal-form">
       <div class="modal-err" id="login-err"></div>
-      <input type="email" id="login-email" placeholder="メールアドレス" autocomplete="email">
-      <input type="password" id="login-password" placeholder="パスワード" autocomplete="current-password"
+      <input type="email" id="login-email" data-i18n-ph="email_ph" placeholder="メールアドレス" autocomplete="email">
+      <input type="password" id="login-password" data-i18n-ph="password_ph" placeholder="パスワード" autocomplete="current-password"
              onkeydown="if(event.key==='Enter')doLogin()">
-      <button class="modal-submit" onclick="doLogin()">ログイン</button>
+      <button class="modal-submit" onclick="doLogin()" data-i18n="login_tab">ログイン</button>
     </div>
     <div id="tab-register" class="modal-form" style="display:none;">
       <div class="modal-err" id="reg-err"></div>
-      <input type="text" id="reg-name" placeholder="表示名（任意）">
-      <input type="email" id="reg-email" placeholder="メールアドレス" autocomplete="email">
-      <input type="password" id="reg-password" placeholder="パスワード（8文字以上）" autocomplete="new-password"
+      <input type="text" id="reg-name" data-i18n-ph="display_name_ph" placeholder="表示名（任意）">
+      <input type="email" id="reg-email" data-i18n-ph="email_ph" placeholder="メールアドレス" autocomplete="email">
+      <input type="password" id="reg-password" data-i18n-ph="password_new_ph" placeholder="パスワード（8文字以上）" autocomplete="new-password"
              onkeydown="if(event.key==='Enter')doRegister()">
-      <button class="modal-submit" onclick="doRegister()">登録</button>
+      <div class="demo-section">
+        <div class="demo-label" data-i18n="demo_label">お部屋探しについて（任意）</div>
+        <div class="demo-row">
+          <select id="reg-household" class="demo-select">
+            <option value="" data-i18n="demo_household_ph">世帯構成</option>
+            <option value="single" data-i18n="demo_single">一人暮らし</option>
+            <option value="couple" data-i18n="demo_couple">二人暮らし</option>
+            <option value="family" data-i18n="demo_family">家族（子あり）</option>
+            <option value="other" data-i18n="demo_other">その他</option>
+          </select>
+          <select id="reg-age" class="demo-select">
+            <option value="" data-i18n="demo_age_ph">年代</option>
+            <option value="20s">20代</option>
+            <option value="30s">30代</option>
+            <option value="40s">40代</option>
+            <option value="50s">50代</option>
+            <option value="60s+">60代以上</option>
+          </select>
+        </div>
+        <select id="reg-income" class="demo-select" style="width:100%;margin-top:6px;">
+          <option value="" data-i18n="demo_income_ph">世帯年収（任意）</option>
+          <option value="<300" data-i18n="demo_inc1">300万円未満</option>
+          <option value="300-500" data-i18n="demo_inc2">300〜500万円</option>
+          <option value="500-800" data-i18n="demo_inc3">500〜800万円</option>
+          <option value="800-1200" data-i18n="demo_inc4">800〜1200万円</option>
+          <option value="1200+" data-i18n="demo_inc5">1200万円以上</option>
+        </select>
+      </div>
+      <button class="modal-submit" onclick="doRegister()" data-i18n="register_btn">登録</button>
     </div>
   </div>
 </div>
@@ -855,7 +923,7 @@
 <div class="modal-overlay" id="add-notif-modal">
   <div class="modal-box">
     <button class="modal-close" onclick="clearInterval(_oauthPollTimer);document.getElementById('add-notif-modal').classList.remove('open')">×</button>
-    <div style="font-size:16px;font-weight:600;margin-bottom:1.1rem;">通知先を追加</div>
+    <div style="font-size:16px;font-weight:600;margin-bottom:1.1rem;" data-i18n="add_notif_title">通知先を追加</div>
     <div class="modal-err" id="notif-err"></div>
 
     <!-- Type picker -->
@@ -880,7 +948,7 @@
           <rect x="2" y="4" width="20" height="16" rx="2"/>
           <path d="m2 7 10 7 10-7"/>
         </svg>
-        メール
+        <span data-i18n="email_label">メール</span>
       </button>
     </div>
 
@@ -890,7 +958,7 @@
         <div>
           <img id="notif-oauth-qr" width="130" height="130"
                style="border-radius:8px;border:4px solid var(--surface2);display:block;" alt="QR">
-          <div style="font-size:10px;color:var(--muted);text-align:center;margin-top:4px;">スマホでスキャン</div>
+          <div style="font-size:10px;color:var(--muted);text-align:center;margin-top:4px;" data-i18n="scan_phone">スマホでスキャン</div>
         </div>
         <div style="flex:1;">
           <div id="notif-oauth-desc" style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5;"></div>
@@ -903,17 +971,17 @@
 
     <!-- Email area -->
     <div id="notif-manual-area" style="display:none;" class="notif-input-area">
-      <label>メールアドレス</label>
+      <label data-i18n="email_address">メールアドレス</label>
       <input type="text" id="notif-target" class="notif-target-input"
              placeholder="you@example.com"
              onkeydown="if(event.key==='Enter')submitAddNotif()">
-      <label>ラベル（任意）</label>
+      <label data-i18n="label_optional">ラベル（任意）</label>
       <input type="text" id="notif-label"
              style="width:100%;padding:8px 10px;margin-bottom:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:13px;font-family:var(--font);"
-             placeholder="例: 自分のメール"
+             data-i18n-ph="label_ph" placeholder="例: 自分のメール"
              onkeydown="if(event.key==='Enter')submitAddNotif()">
-      <div id="notif-hint" style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5;">サーバーの .env に SMTP 設定が必要です。</div>
-      <button class="modal-submit" onclick="submitAddNotif()">追加する</button>
+      <div id="notif-hint" style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5;" data-i18n="smtp_hint">サーバーの .env に SMTP 設定が必要です。</div>
+      <button class="modal-submit" onclick="submitAddNotif()" data-i18n="add_btn">追加する</button>
     </div>
   </div>
 </div>
@@ -922,8 +990,8 @@
 <div class="modal-overlay" id="qr-modal">
   <div class="modal-box" style="text-align:center;">
     <button class="modal-close" onclick="document.getElementById('qr-modal').classList.remove('open')">×</button>
-    <div style="font-size:16px;font-weight:600;margin-bottom:4px;">📲 ダッシュボードを共有</div>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:1.2rem;">QRコードをスキャンしてアクセス・新規登録</p>
+    <div style="font-size:16px;font-weight:600;margin-bottom:4px;" data-i18n="share_title">📲 ダッシュボードを共有</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:1.2rem;" data-i18n="share_sub">QRコードをスキャンしてアクセス・新規登録</p>
     <div style="display:flex;justify-content:center;margin-bottom:1rem;">
       <img id="qr-img-el" class="qr-img" width="180" height="180" alt="QR code">
     </div>
@@ -933,6 +1001,215 @@
 
 <script>
 const API = 'https://jkk-monitor.duckdns.org/api';
+
+// ── i18n ─────────────────────────────────────────────────────────────────────
+let _lang = localStorage.getItem('jkktrackr_lang') || 'ja';
+
+const STRINGS = {
+  // Topbar
+  refresh:              { ja:'更新',              en:'Refresh' },
+  monitoring:           { ja:'監視中',             en:'Monitoring' },
+  login:                { ja:'ログイン',           en:'Login' },
+  // Rail
+  filter:               { ja:'フィルター',          en:'Filter' },
+  vacancies:            { ja:'空室一覧',            en:'Vacancies' },
+  notifications:        { ja:'通知設定',            en:'Alerts' },
+  account:              { ja:'アカウント',           en:'Account' },
+  map_layers:           { ja:'地図レイヤー',         en:'Map Layers' },
+  setup:                { ja:'セットアップ',          en:'Setup' },
+  // Right panel
+  property_info:        { ja:'物件情報',            en:'Property' },
+  // Filter panel
+  area:                 { ja:'エリア（区・市）',      en:'Area (Ward/City)' },
+  rent:                 { ja:'家賃',               en:'Rent' },
+  min_rent:             { ja:'最低家賃 (円)',        en:'Min Rent (¥)' },
+  max_rent_label:       { ja:'上限家賃 (円)',        en:'Max Rent (¥)' },
+  max_rent_ph:          { ja:'例: 200000 (0=上限なし)', en:'e.g. 200000 (0=no limit)' },
+  layout:               { ja:'間取り',              en:'Layout' },
+  floor_area:           { ja:'専有面積',             en:'Floor Area' },
+  min_area:             { ja:'最低面積 (m²)',        en:'Min Area (m²)' },
+  walk_station:         { ja:'駅徒歩',              en:'Walk to Station' },
+  max_walk:             { ja:'最大徒歩分数 (分)',     en:'Max Walk (min)' },
+  max_walk_ph:          { ja:'例: 10 (0=上限なし)',  en:'e.g. 10 (0=no limit)' },
+  source:               { ja:'データソース',          en:'Source' },
+  save_settings:        { ja:'設定を保存',           en:'Save Settings' },
+  // Layers panel
+  stations_lines:       { ja:'駅・路線',             en:'Stations & Lines' },
+  road_labels:          { ja:'道路名',               en:'Road Labels' },
+  neighborhoods:        { ja:'丁目・町名',           en:'Neighborhoods' },
+  parks:                { ja:'公園',                en:'Parks' },
+  nearby_facilities:    { ja:'周辺施設',             en:'Nearby Facilities' },
+  konbini:              { ja:'コンビニ',             en:'Convenience Stores' },
+  supermarket:          { ja:'スーパー',             en:'Supermarkets' },
+  kindergarten:         { ja:'幼稚園・保育園',        en:'Kindergartens' },
+  clinic:               { ja:'クリニック・病院',       en:'Clinics' },
+  // About panel
+  setup_instructions:   { ja:'セットアップ手順',      en:'Setup Instructions' },
+  setup_terminal:       { ja:'（別ターミナル）',       en:' (separate terminal)' },
+  setup_step5:          { ja:'フィルターで条件を設定 → 保存', en:'Set filter conditions → Save' },
+  activity_log:         { ja:'実行ログ（最新50件）',   en:'Activity Log (latest 50)' },
+  log_loading:          { ja:'サーバーが起動するとここにログが表示されます。', en:'Logs will appear here once the server is running.' },
+  // Notifications panel
+  notif_login_required: { ja:'通知設定はログイン後に利用できます。', en:'Notifications require login.' },
+  notif_none:           { ja:'登録なし',             en:'None registered' },
+  add_notif:            { ja:'＋ 通知先を追加',        en:'+ Add Notification' },
+  // Account panel
+  account_guest_msg:    { ja:'ログインして設定を保存・通知を受け取りましょう。', en:'Log in to save settings and receive notifications.' },
+  login_register:       { ja:'ログイン / 新規登録',   en:'Login / Register' },
+  change_password:      { ja:'パスワード変更',         en:'Change Password' },
+  current_pw:           { ja:'現在のパスワード',        en:'Current password' },
+  new_pw:               { ja:'新しいパスワード（8文字以上）', en:'New password (8+ chars)' },
+  update:               { ja:'変更する',              en:'Update' },
+  logout:               { ja:'ログアウト',             en:'Logout' },
+  // Listings panel
+  disappeared_title:    { ja:'最近消えた物件',          en:'Recently Removed' },
+  loading:              { ja:'読み込み中…',            en:'Loading…' },
+  // Auth modal
+  login_tab:            { ja:'ログイン',               en:'Login' },
+  register_tab:         { ja:'新規登録',               en:'Register' },
+  email_ph:             { ja:'メールアドレス',           en:'Email address' },
+  password_ph:          { ja:'パスワード',              en:'Password' },
+  display_name_ph:      { ja:'表示名（任意）',           en:'Display name (optional)' },
+  password_new_ph:      { ja:'パスワード（8文字以上）',   en:'Password (8+ chars)' },
+  register_btn:         { ja:'登録',                  en:'Register' },
+  // Add notif modal
+  add_notif_title:      { ja:'通知先を追加',             en:'Add Notification' },
+  email_label:          { ja:'メール',                 en:'Email' },
+  scan_phone:           { ja:'スマホでスキャン',          en:'Scan with phone' },
+  email_address:        { ja:'メールアドレス',           en:'Email address' },
+  label_optional:       { ja:'ラベル（任意）',           en:'Label (optional)' },
+  label_ph:             { ja:'例: 自分のメール',         en:'e.g. My email' },
+  smtp_hint:            { ja:'サーバーの .env に SMTP 設定が必要です。', en:'SMTP settings required in server .env file.' },
+  add_btn:              { ja:'追加する',               en:'Add' },
+  // QR modal
+  share_title:          { ja:'📲 ダッシュボードを共有',   en:'📲 Share Dashboard' },
+  share_sub:            { ja:'QRコードをスキャンしてアクセス・新規登録', en:'Scan QR code to access or register' },
+  // Columns
+  col_name:             { ja:'物件名',                en:'Name' },
+  col_ward:             { ja:'区・市',                en:'Ward/City' },
+  col_rent:             { ja:'家賃',                 en:'Rent' },
+  col_layout:           { ja:'間取り',                en:'Layout' },
+  col_size:             { ja:'面積',                 en:'Area' },
+  col_station:          { ja:'最寄り駅',              en:'Station' },
+  col_walk:             { ja:'徒歩',                 en:'Walk' },
+  col_first_seen:       { ja:'初回発見',              en:'First Seen' },
+  col_days:             { ja:'掲載日数',              en:'Listed' },
+  col_disappeared:      { ja:'消去日',               en:'Removed' },
+  col_duration:         { ja:'掲載期間',              en:'Duration' },
+  // buildChips labels
+  ward_ku:              { ja:'区部',                 en:'Tokyo Wards' },
+  ward_si:              { ja:'市部（東京）',            en:'Tokyo Cities' },
+  ward_yokohama:        { ja:'横浜市',                en:'Yokohama' },
+  ward_kawasaki:        { ja:'川崎市',                en:'Kawasaki' },
+  ward_sagamihara:      { ja:'相模原市',              en:'Sagamihara' },
+  // Status / errors
+  no_match:             { ja:'条件に合う物件がありません。', en:'No matching properties.' },
+  no_disappeared:       { ja:'まだ消えた物件はありません。', en:'No removed properties yet.' },
+  server_offline:       { ja:'サーバー未起動 — server.py を再起動してください', en:'Server offline — restart server.py' },
+  no_logs:              { ja:'ログがありません。',       en:'No logs.' },
+  saving:               { ja:'保存中...',              en:'Saving...' },
+  saved:                { ja:'✓ 保存しました',          en:'✓ Saved' },
+  saved_local:          { ja:'✓ 保存しました（ローカル）', en:'✓ Saved (local)' },
+  save_failed:          { ja:'保存失敗',               en:'Save failed' },
+  server_error:         { ja:'サーバーエラー',           en:'Server error' },
+  login_failed:         { ja:'ログイン失敗',             en:'Login failed' },
+  register_failed:      { ja:'登録失敗',               en:'Registration failed' },
+  cannot_connect:       { ja:'サーバーに接続できません',  en:'Cannot connect to server' },
+  pw_updated:           { ja:'✓ 変更しました',          en:'✓ Updated' },
+  pw_failed:            { ja:'失敗',                  en:'Failed' },
+  // Notifications
+  notif_delete_confirm: { ja:'この通知設定を削除しますか？', en:'Delete this notification?' },
+  notif_add_failed:     { ja:'追加失敗',               en:'Add failed' },
+  notif_enter_target:   { ja:'送信先を入力してください',  en:'Please enter a destination' },
+  notif_del_title:      { ja:'削除',                  en:'Delete' },
+  // OAuth
+  generating_url:       { ja:'接続URLを生成中…',        en:'Generating connection URL…' },
+  server_config_req:    { ja:'サーバーで設定が必要です',  en:'Server configuration required' },
+  timeout_msg:          { ja:'タイムアウトしました。もう一度お試しください。', en:'Timed out. Please try again.' },
+  connected:            { ja:'✅ 連携完了！',           en:'✅ Connected!' },
+  waiting_auth:         { ja:'認証完了を待っています…',  en:'Waiting for authentication…' },
+  telegram_desc:        { ja:'QRコードをスキャンしてBotを開き、STARTを押すと自動で連携されます。', en:'Scan the QR code to open the Bot, then press START to link automatically.' },
+  telegram_btn:         { ja:'Telegram で開く →',      en:'Open in Telegram →' },
+  line_desc:            { ja:'QRコードをスキャンするか、ボタンを押してLINEで認証してください。', en:'Scan the QR code or tap the button to authenticate with LINE.' },
+  line_btn:             { ja:'LINE で連携する →',       en:'Connect with LINE →' },
+  slack_desc:           { ja:'QRコードをスキャンするか、ボタンを押してSlackチャンネルを選択してください。', en:'Scan the QR code or tap the button to select a Slack channel.' },
+  slack_btn:            { ja:'Slack に追加する →',      en:'Add to Slack →' },
+  // Property card
+  first_seen_label:     { ja:'初回発見',               en:'First seen' },
+  listed_for:           { ja:'掲載中',                 en:'listed' },
+  open_listing:         { ja:'物件ページを開く →',       en:'Open listing →' },
+  dest_ph:              { ja:'目的地（例: 新宿駅）',     en:'Destination (e.g. Shinjuku)' },
+  route_transit:        { ja:'🚃 電車',                en:'🚃 Train' },
+  route_drive:          { ja:'🚗 車',                  en:'🚗 Drive' },
+  route_walk:           { ja:'🚶 徒歩',                en:'🚶 Walk' },
+  route_error:          { ja:'経路を取得できませんでした: ', en:'Could not get route: ' },
+  route_error_hint:     { ja:'\n\n目的地を確認してください（例: 新宿駅、渋谷区役所）', en:'\n\nCheck the destination (e.g. Shinjuku Sta., Shibuya City Hall)' },
+  // Walk string
+  walk_prefix:          { ja:'徒歩',                   en:'' },
+  walk_unit:            { ja:'分',                    en:' min' },
+  // Duration
+  duration_days:        { ja:(d,h)=>`${d}日 ${h}時間`, en:(d,h)=>`${d}d ${h}h` },
+  duration_hours:       { ja:(h)=>`${h}時間`,          en:(h)=>`${h}h` },
+  // Summary bar
+  summary_text:         { ja:(s,t)=>`${s} 件表示中 / ${t} 件`, en:(s,t)=>`${s} / ${t} showing` },
+  geo_pending:          { ja:(n)=>` · 位置情報取得中 (${n} 件)…`, en:(n)=>` · Geocoding (${n})…` },
+  station_pending:      { ja:(n)=>` · 最寄り駅調査中 (${n} 件)…`, en:(n)=>` · Finding stations (${n})…` },
+  // Countdown
+  next_refresh:         { ja:(m,s)=>`次回確認まで ${m}:${s}`, en:(m,s)=>`Next refresh in ${m}:${s}` },
+  // Panel titles
+  panel_filter:         { ja:'フィルター',               en:'Filter' },
+  panel_listings:       { ja:'空室一覧',                en:'Vacancies' },
+  panel_notif:          { ja:'通知設定',                en:'Alerts' },
+  panel_account:        { ja:'アカウント',               en:'Account' },
+  panel_layers:         { ja:'地図レイヤー',             en:'Map Layers' },
+  panel_about:          { ja:'セットアップ',             en:'Setup' },
+  // User menu
+  share_qr:             { ja:'📲 QRコードで共有',        en:'📲 Share via QR' },
+  // Table counts
+  count_items:          { ja:(n)=>`${n} 件`,            en:(n)=>`${n}` },
+  // Demographics / registration
+  demo_label:           { ja:'お部屋探しについて（任意）',  en:'About your search (optional)' },
+  demo_household_ph:    { ja:'世帯構成',                 en:'Household type' },
+  demo_single:          { ja:'一人暮らし',               en:'Single' },
+  demo_couple:          { ja:'二人暮らし',               en:'Couple' },
+  demo_family:          { ja:'家族（子あり）',             en:'Family (with children)' },
+  demo_other:           { ja:'その他',                  en:'Other' },
+  demo_age_ph:          { ja:'年代',                    en:'Age range' },
+  demo_income_ph:       { ja:'世帯年収（任意）',           en:'Household income (optional)' },
+  demo_inc1:            { ja:'300万円未満',              en:'Under ¥3M' },
+  demo_inc2:            { ja:'300〜500万円',             en:'¥3M – ¥5M' },
+  demo_inc3:            { ja:'500〜800万円',             en:'¥5M – ¥8M' },
+  demo_inc4:            { ja:'800〜1200万円',            en:'¥8M – ¥12M' },
+  demo_inc5:            { ja:'1200万円以上',             en:'¥12M+' },
+  // Property card
+  save_listing:         { ja:'保存',                    en:'Save' },
+  saved_listing:        { ja:'保存済み',                 en:'Saved' },
+};
+
+function t(key, ...args) {
+  const s = STRINGS[key];
+  if (!s) return key;
+  const v = s[_lang] !== undefined ? s[_lang] : s.ja;
+  return typeof v === 'function' ? v(...args) : v;
+}
+
+function applyLang() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+    el.placeholder = t(el.dataset.i18nPh);
+  });
+  const toggle = document.getElementById('lang-toggle');
+  if (toggle) toggle.textContent = _lang === 'ja' ? 'EN' : 'JP';
+}
+
+function toggleLang() {
+  _lang = _lang === 'ja' ? 'en' : 'ja';
+  localStorage.setItem('jkktrackr_lang', _lang);
+  if (AUTH.token) saveUserProfile({ lang: _lang });
+  location.reload();
+}
 
 const KU = [
   '千代田区','中央区','港区','新宿区','文京区','台東区','墨田区','江東区',
@@ -993,19 +1270,19 @@ function buildChips() {
   lc.innerHTML = '';
   sc.innerHTML = '';
 
-  addSectionLabel(wc, '区部', 2);
+  addSectionLabel(wc, t('ward_ku'), 2);
   KU.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
 
-  addSectionLabel(wc, '市部（東京）');
+  addSectionLabel(wc, t('ward_si'));
   SI.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
 
-  addSectionLabel(wc, '横浜市');
+  addSectionLabel(wc, t('ward_yokohama'));
   YOKOHAMA.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
 
-  addSectionLabel(wc, '川崎市');
+  addSectionLabel(wc, t('ward_kawasaki'));
   KAWASAKI.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
 
-  addSectionLabel(wc, '相模原市');
+  addSectionLabel(wc, t('ward_sagamihara'));
   SAGAMIHARA.forEach(w => makeChip(w, selectedWards, wc, applyMapFilters));
 
   LAYOUTS.forEach(l => makeChip(l, selectedLayouts, lc, applyMapFilters));
@@ -1042,7 +1319,7 @@ async function saveConfig() {
   const btn = document.getElementById('save-btn');
   const msg = document.getElementById('saved-msg');
   btn.classList.add('saving');
-  btn.textContent = '保存中...';
+  btn.textContent = t('saving');
 
   const payload = {
     min_rent:     parseInt(document.getElementById('min-rent').value) || 0,
@@ -1060,15 +1337,15 @@ async function saveConfig() {
         headers: {'Content-Type': 'application/json', ...authHeaders()},
         body: JSON.stringify(payload)
       });
-      msg.textContent = r.ok ? '✓ 保存しました' : '保存失敗';
-    } catch { msg.textContent = 'サーバーエラー'; }
+      msg.textContent = r.ok ? t('saved') : t('save_failed');
+    } catch { msg.textContent = t('server_error'); }
   } else {
     localStorage.setItem('jkktrackr_config', JSON.stringify(payload));
-    msg.textContent = '✓ 保存しました（ローカル）';
+    msg.textContent = t('saved_local');
   }
 
   btn.classList.remove('saving');
-  btn.textContent = '設定を保存';
+  btn.textContent = t('save_settings');
   setTimeout(() => msg.textContent = '', 3500);
 }
 
@@ -1078,7 +1355,7 @@ async function loadLog() {
     if (!r.ok) return;
     const d = await r.json();
     const box = document.getElementById('log-lines');
-    if (!d.lines.length) { box.textContent = 'ログがありません。'; return; }
+    if (!d.lines.length) { box.textContent = t('no_logs'); return; }
     box.innerHTML = d.lines.map(line => {
       let cls = 'log-line';
       if (line.includes('NEW match') || line.includes('Slack notification')) cls += ' match';
@@ -1112,8 +1389,8 @@ function marketDuration(firstSeen, endIso) {
 function fmtDuration(firstSeen, endIso) {
   const d = marketDuration(firstSeen, endIso);
   if (!d) return '—';
-  if (d.days === 0) return `${d.hours}時間`;
-  return `${d.days}日 ${d.hours}時間`;
+  if (d.days === 0) return t('duration_hours', d.hours);
+  return t('duration_days', d.days, d.hours);
 }
 
 // ── Map ─────────────────────────────────────────────────────────
@@ -1123,7 +1400,9 @@ let _pendingCount = 0;
 let _markers = {};
 let _selectedId = null;
 let _transitPolylines = [];
-let _commuteDest = '';
+let _commuteDest  = '';
+let _commuteDests = [];   // server-persisted list of recent destinations
+let _savedListings = new Set(); // server-persisted saved listing IDs
 let _destMarker = null;
 let _routeChip = null;
 let _RouteChipOverlayClass = null;
@@ -1159,6 +1438,7 @@ async function showFacilities(listing) {
         zIndex: 6,
       }));
     });
+    _applyZoomVisibility();
   } catch {}
 }
 
@@ -1217,8 +1497,9 @@ function clearTransitPolylines() {
 }
 
 const _mapLayers = { transit: true, roadLabels: true, neighborhoods: true, parks: true };
-const _poiLayers  = { konbini: false, supermarket: false, kindergarten: false, clinic: false };
+const _poiLayers  = { konbini: true, supermarket: true, kindergarten: true, clinic: true };
 const _poiMarkers = { konbini: [], supermarket: [], kindergarten: [], clinic: [] };
+const POI_ZOOM_THRESHOLD = 13;
 const _poiConfig  = {
   konbini:      { type: 'convenience_store', color: '#7C3AED' },
   supermarket:  { type: 'supermarket',       color: '#EA580C' },
@@ -1368,6 +1649,14 @@ function facilityMarkerIcon(type) {
   };
 }
 
+function _applyZoomVisibility() {
+  if (!map) return;
+  const visible = map.getZoom() >= POI_ZOOM_THRESHOLD;
+  _facilityMarkers.forEach(m => m.setVisible(visible));
+  if (_facilityCircle) _facilityCircle.setVisible(visible);
+  Object.values(_poiMarkers).forEach(arr => arr.forEach(m => m.setVisible(visible)));
+}
+
 function clearPoiMarkers(layer) {
   (_poiMarkers[layer] || []).forEach(m => m.setMap(null));
   _poiMarkers[layer] = [];
@@ -1389,6 +1678,7 @@ function fetchPoiMarkers(layer) {
       title: place.name,
       zIndex: 5,
     }));
+    _applyZoomVisibility();
   });
 }
 
@@ -1454,6 +1744,109 @@ async function loadUserLayers() {
   });
 }
 
+// ── User profile (lang, commute dests, AI demographics) ──────────────────────
+
+async function loadUserProfile() {
+  if (!AUTH.token) return;
+  try {
+    const r = await fetch(`${API}/user/profile`, { headers: authHeaders() });
+    if (!r.ok) return;
+    const d = await r.json();
+
+    // Sync language — if server has a different lang, apply it and reload
+    const serverLang = d.lang || 'ja';
+    if (serverLang !== _lang) {
+      _lang = serverLang;
+      localStorage.setItem('jkktrackr_lang', _lang);
+      location.reload();
+      return;
+    }
+
+    // Commute destinations
+    if (Array.isArray(d.commute_dests) && d.commute_dests.length) {
+      _commuteDests = d.commute_dests;
+      _buildCommuteDatelist();
+      if (!_commuteDest && _commuteDests[0]) {
+        _commuteDest = _commuteDests[0];
+      }
+    }
+  } catch {}
+}
+
+async function saveUserProfile(patch) {
+  if (!AUTH.token) return;
+  try {
+    await fetch(`${API}/user/profile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(patch),
+    });
+  } catch {}
+}
+
+function _buildCommuteDatelist() {
+  let dl = document.getElementById('commute-dests-list');
+  if (!dl) {
+    dl = document.createElement('datalist');
+    dl.id = 'commute-dests-list';
+    document.body.appendChild(dl);
+  }
+  dl.innerHTML = _commuteDests
+    .map(d => `<option value="${escHtml(d)}">`)
+    .join('');
+}
+
+async function addCommuteDest(dest) {
+  if (!dest.trim() || !AUTH.token) return;
+  if (_commuteDests[0] === dest) return;
+  _commuteDests = [dest, ..._commuteDests.filter(d => d !== dest)].slice(0, 10);
+  _buildCommuteDatelist();
+  await saveUserProfile({ commute_dests: _commuteDests });
+}
+
+// ── Saved listings ────────────────────────────────────────────────────────────
+
+async function loadSavedListings() {
+  if (!AUTH.token) return;
+  try {
+    const r = await fetch(`${API}/user/saved`, { headers: authHeaders() });
+    if (!r.ok) return;
+    const d = await r.json();
+    _savedListings = new Set((d.saved || []).map(s => s.listing_id));
+  } catch {}
+}
+
+async function toggleSave(listingId) {
+  const wasSaved = _savedListings.has(listingId);
+  if (wasSaved) {
+    _savedListings.delete(listingId);
+  } else {
+    _savedListings.add(listingId);
+  }
+  // Update button state
+  const btn = document.getElementById(`save-btn-${escHtml(listingId)}`);
+  if (btn) {
+    btn.classList.toggle('saved', !wasSaved);
+    btn.title = !wasSaved ? t('saved_listing') : t('save_listing');
+  }
+  if (!AUTH.token) return;
+  try {
+    await fetch(`${API}/user/saved/${encodeURIComponent(listingId)}`, {
+      method: wasSaved ? 'DELETE' : 'POST',
+      headers: authHeaders(),
+    });
+  } catch {}
+}
+
+// ── View recording ────────────────────────────────────────────────────────────
+
+function recordView(listingId) {
+  if (!AUTH.token) return;
+  fetch(`${API}/user/view/${encodeURIComponent(listingId)}`, {
+    method: 'POST', headers: authHeaders(),
+  }).catch(() => {});
+}
+
 function markerIcon(source, selected) {
   const fill   = selected ? '#b91c1c' : '#dc2626';
   const border = selected ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.7)';
@@ -1491,6 +1884,7 @@ function initMap() {
 
   map.addListener('idle', () => {
     if (!Object.values(_poiLayers).some(Boolean)) return;
+    if (map.getZoom() < POI_ZOOM_THRESHOLD) return;
     clearTimeout(_poiRefetchTimeout);
     _poiRefetchTimeout = setTimeout(() => {
       Object.keys(_poiLayers).filter(k => _poiLayers[k]).forEach(layer => {
@@ -1499,6 +1893,8 @@ function initMap() {
       });
     }, 800);
   });
+
+  map.addListener('zoom_changed', _applyZoomVisibility);
 
   _RouteChipOverlayClass = class extends google.maps.OverlayView {
     constructor() { super(); this._div = null; this._pos = null; }
@@ -1548,7 +1944,7 @@ async function loadTokyoBoundary() {
 
 function stationStr(nearest_station, walk_min) {
   if (!nearest_station || walk_min == null) return null;
-  return `🚉 ${nearest_station} 徒歩${walk_min}分`;
+  return `🚉 ${nearest_station} ${t('walk_prefix')}${walk_min}${t('walk_unit')}`;
 }
 
 function popupHtml(l) {
@@ -1556,27 +1952,36 @@ function popupHtml(l) {
   const size    = l.size_m2 ? `${l.size_m2} m²` : '—';
   const tag     = l.source === 'ur' ? 'UR' : 'JKK';
   const dur     = marketDuration(l.first_seen, l.disappeared_at);
-  const daysStr = dur ? fmtDuration(l.first_seen, l.disappeared_at) + '掲載中' : '';
+  const daysStr = dur ? fmtDuration(l.first_seen, l.disappeared_at) + ' ' + t('listed_for') : '';
   const station = stationStr(l.nearest_station, l.walk_min);
   const eid     = escHtml(l.id);
+  const isSaved = _savedListings.has(l.id);
   return `
-      <div class="pin-name" style="padding-right:18px;">${escHtml(l.name)}<span class="src-tag ${l.source}">${tag}</span></div>
-      <div class="pin-meta">${escHtml(l.address || l.ward)}</div>
+      <div style="display:flex;align-items:flex-start;gap:6px;">
+        <div style="flex:1;">
+          <div class="pin-name">${escHtml(l.name)}<span class="src-tag ${l.source}">${tag}</span></div>
+          <div class="pin-meta">${escHtml(l.address || l.ward)}</div>
+        </div>
+        <button id="save-btn-${eid}" class="save-listing-btn${isSaved ? ' saved' : ''}"
+          title="${isSaved ? t('saved_listing') : t('save_listing')}"
+          onclick="toggleSave('${l.id}')">★</button>
+      </div>
       <div><span class="pin-rent">${rent}</span> · ${escHtml(l.layout || '—')} · ${size}</div>
       ${station ? `<div style="margin-top:3px;">${escHtml(station)}</div>` : ''}
-      <div class="pin-meta" style="margin-top:3px;">初回発見: ${fmtDate(l.first_seen)}${daysStr ? ` · ${daysStr}` : ''}</div>
-      ${l.url ? `<div style="margin-top:4px;"><a href="${escHtml(l.url)}" target="_blank" rel="noopener">物件ページを開く →</a></div>` : ''}
+      <div class="pin-meta" style="margin-top:3px;">${t('first_seen_label')}: ${fmtDate(l.first_seen)}${daysStr ? ` · ${daysStr}` : ''}</div>
+      ${l.url ? `<div style="margin-top:4px;"><a href="${escHtml(l.url)}" target="_blank" rel="noopener">${t('open_listing')}</a></div>` : ''}
       <div style="margin-top:10px;">
         <input id="popup-dest-${eid}" type="text" value="${escHtml(_commuteDest)}"
           oninput="updateCommuteDest(this.value)"
-          placeholder="目的地（例: 新宿駅）"
+          placeholder="${t('dest_ph')}"
+          list="commute-dests-list"
           autocomplete="new-password"
           style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:6px;font-size:11px;font-family:inherit;outline:none;" />
       </div>
       <div style="margin-top:6px;display:flex;gap:5px;">
-        <button onclick="showRoute('${eid}','TRANSIT')" class="route-btn">🚃 電車</button>
-        <button onclick="showRoute('${eid}','DRIVING')" class="route-btn">🚗 車</button>
-        <button onclick="showRoute('${eid}','WALKING')" class="route-btn">🚶 徒歩</button>
+        <button onclick="showRoute('${eid}','TRANSIT')" class="route-btn">${t('route_transit')}</button>
+        <button onclick="showRoute('${eid}','DRIVING')" class="route-btn">${t('route_drive')}</button>
+        <button onclick="showRoute('${eid}','WALKING')" class="route-btn">${t('route_walk')}</button>
         <button onclick="clearDirections()" class="route-btn" style="margin-left:auto;">✕</button>
       </div>`;
 }
@@ -1588,6 +1993,7 @@ function showRoute(listingId, travelMode) {
     if (input) input.focus();
     return;
   }
+  addCommuteDest(dest);
   const entry = _markers[listingId];
   if (!entry) return;
 
@@ -1671,7 +2077,7 @@ function showRoute(listingId, travelMode) {
       const midLatLng = path && path.length ? path[Math.floor(path.length / 2)] : null;
       showRouteInfo(leg.distance?.text, leg.duration?.text, midLatLng, leg.end_location);
     } else {
-      alert('経路を取得できませんでした: ' + status + '\n\n目的地を確認してください（例: 新宿駅、渋谷区役所）');
+      alert(t('route_error') + status + t('route_error_hint'));
     }
   });
 }
@@ -1685,8 +2091,9 @@ function clearDirections() {
 
 function openPropCard(l) {
   document.getElementById('property-card-body').innerHTML = popupHtml(l);
-  document.getElementById('right-panel-title').textContent = l.ward || '物件情報';
+  document.getElementById('right-panel-title').textContent = l.ward || t('property_info');
   document.getElementById('right-panel').classList.add('open');
+  recordView(l.id);
 }
 
 function closePropCard() {
@@ -1765,9 +2172,9 @@ function applyMapFilters() {
   const shown = _filteredListings.length;
 
   const summary = document.getElementById('map-summary');
-  let txt = `${shown} 件表示中 / ${_allListings.length} 件`;
-  if (_geoPending      > 0) txt += ` · 位置情報取得中 (${_geoPending} 件)…`;
-  if (_stationPending  > 0) txt += ` · 最寄り駅調査中 (${_stationPending} 件)…`;
+  let txt = t('summary_text', shown, _allListings.length);
+  if (_geoPending      > 0) txt += t('geo_pending', _geoPending);
+  if (_stationPending  > 0) txt += t('station_pending', _stationPending);
   summary.textContent = txt;
   renderAvailableTable();
 }
@@ -1778,17 +2185,17 @@ let _filteredListings = [];
 let _sortCol          = 'first_seen';
 let _sortAsc          = false;
 
-const AVAIL_COLS = [
-  { key: 'name',            label: '物件名'   },
-  { key: 'ward',            label: '区・市'   },
-  { key: 'rent',            label: '家賃'     },
-  { key: 'layout',          label: '間取り'   },
-  { key: 'size_m2',         label: '面積'     },
-  { key: 'nearest_station', label: '最寄り駅' },
-  { key: 'walk_min',        label: '徒歩'     },
-  { key: 'first_seen',      label: '初回発見' },
-  { key: 'days',            label: '掲載日数' },
-];
+function availCols() { return [
+  { key: 'name',            label: t('col_name')    },
+  { key: 'ward',            label: t('col_ward')    },
+  { key: 'rent',            label: t('col_rent')    },
+  { key: 'layout',          label: t('col_layout')  },
+  { key: 'size_m2',         label: t('col_size')    },
+  { key: 'nearest_station', label: t('col_station') },
+  { key: 'walk_min',        label: t('col_walk')    },
+  { key: 'first_seen',      label: t('col_first_seen') },
+  { key: 'days',            label: t('col_days')    },
+]; }
 
 function sortListings(col) {
   _sortAsc = (_sortCol === col) ? !_sortAsc : (col === 'name' || col === 'ward' || col === 'layout');
@@ -1802,7 +2209,7 @@ function renderAvailableTable() {
   if (!el) return;
 
   if (!_filteredListings.length) {
-    el.innerHTML = '<div style="padding:8px;color:var(--muted);">条件に合う物件がありません。</div>';
+    el.innerHTML = `<div style="padding:8px;color:var(--muted);">${t('no_match')}</div>`;
     if (countEl) countEl.textContent = '';
     return;
   }
@@ -1828,7 +2235,7 @@ function renderAvailableTable() {
     ? `<span class="sort-ind">${_sortAsc ? '▴' : '▾'}</span>`
     : `<span class="sort-ind" style="opacity:.25">⇅</span>`;
 
-  const thead = AVAIL_COLS.map(c =>
+  const thead = availCols().map(c =>
     `<th class="${c.key === _sortCol ? 'sort-active' : ''}" onclick="sortListings('${c.key}')">${c.label}${ind(c.key)}</th>`
   ).join('');
 
@@ -1844,7 +2251,7 @@ function renderAvailableTable() {
       <td>${escHtml(l.layout||'—')}</td>
       <td style="font-family:var(--mono);">${l.size_m2 ? l.size_m2+'m²' : '—'}</td>
       <td>${l.nearest_station ? escHtml(l.nearest_station) : '—'}</td>
-      <td style="font-family:var(--mono);">${l.walk_min > 0 ? l.walk_min+'分' : '—'}</td>
+      <td style="font-family:var(--mono);">${l.walk_min > 0 ? l.walk_min + t('walk_unit') : '—'}</td>
       <td style="font-family:var(--mono);">${fmtDate(l.first_seen)}</td>
       <td style="font-family:var(--mono);color:var(--accent);">${fmtDuration(l.first_seen)}</td>
     </tr>`;
@@ -1855,7 +2262,7 @@ function renderAvailableTable() {
     <tbody>${tbody}</tbody>
   </table>`;
 
-  if (countEl) countEl.textContent = `${sorted.length} 件`;
+  if (countEl) countEl.textContent = t('count_items', sorted.length);
 }
 
 async function loadListings() {
@@ -1876,22 +2283,22 @@ async function loadListings() {
       _listingsPollTimer = setTimeout(loadListings, 2500);
     }
   } catch (e) {
-    summary.textContent = 'サーバー未起動 — server.py を再起動してください';
+    summary.textContent = t('server_offline');
   }
 }
 
-const DISAP_COLS = [
-  { key: 'name',            label: '物件名'   },
-  { key: 'ward',            label: '区・市'   },
-  { key: 'rent',            label: '家賃'     },
-  { key: 'layout',          label: '間取り'   },
-  { key: 'size_m2',         label: '面積'     },
-  { key: 'nearest_station', label: '最寄り駅' },
-  { key: 'walk_min',        label: '徒歩'     },
-  { key: 'first_seen',      label: '初回発見' },
-  { key: 'disappeared_at',  label: '消去日'   },
-  { key: 'duration',        label: '掲載期間' },
-];
+function disappCols() { return [
+  { key: 'name',            label: t('col_name')       },
+  { key: 'ward',            label: t('col_ward')       },
+  { key: 'rent',            label: t('col_rent')       },
+  { key: 'layout',          label: t('col_layout')     },
+  { key: 'size_m2',         label: t('col_size')       },
+  { key: 'nearest_station', label: t('col_station')    },
+  { key: 'walk_min',        label: t('col_walk')       },
+  { key: 'first_seen',      label: t('col_first_seen') },
+  { key: 'disappeared_at',  label: t('col_disappeared')},
+  { key: 'duration',        label: t('col_duration')   },
+]; }
 
 let _disappearedListings = [];
 let _dSortCol = 'disappeared_at';
@@ -1909,7 +2316,7 @@ function renderDisappearedTable() {
   if (!el) return;
 
   if (!_disappearedListings.length) {
-    el.innerHTML = '<div style="padding:8px;color:var(--muted);">まだ消えた物件はありません。</div>';
+    el.innerHTML = `<div style="padding:8px;color:var(--muted);">${t('no_disappeared')}</div>`;
     if (countEl) countEl.textContent = '';
     return;
   }
@@ -1935,7 +2342,7 @@ function renderDisappearedTable() {
     ? `<span class="sort-ind">${_dSortAsc ? '▴' : '▾'}</span>`
     : `<span class="sort-ind" style="opacity:.25">⇅</span>`;
 
-  const thead = DISAP_COLS.map(c =>
+  const thead = disappCols().map(c =>
     `<th class="${c.key === _dSortCol ? 'sort-active' : ''}" onclick="sortDisappeared('${c.key}')">${c.label}${ind(c.key)}</th>`
   ).join('');
 
@@ -1949,7 +2356,7 @@ function renderDisappearedTable() {
       <td>${escHtml(l.layout||'—')}</td>
       <td style="font-family:var(--mono);">${l.size_m2 ? l.size_m2+'m²' : '—'}</td>
       <td>${l.nearest_station ? escHtml(l.nearest_station) : '—'}</td>
-      <td style="font-family:var(--mono);">${l.walk_min > 0 ? l.walk_min+'分' : '—'}</td>
+      <td style="font-family:var(--mono);">${l.walk_min > 0 ? l.walk_min + t('walk_unit') : '—'}</td>
       <td style="font-family:var(--mono);">${fmtDate(l.first_seen)}</td>
       <td style="font-family:var(--mono);">${fmtDate(l.disappeared_at)}</td>
       <td style="font-family:var(--mono);color:var(--accent);">${fmtDuration(l.first_seen, l.disappeared_at)}</td>
@@ -1961,7 +2368,7 @@ function renderDisappearedTable() {
     <tbody>${tbody}</tbody>
   </table>`;
 
-  if (countEl) countEl.textContent = `${sorted.length} 件`;
+  if (countEl) countEl.textContent = t('count_items', sorted.length);
 }
 
 async function loadDisappeared() {
@@ -1973,7 +2380,7 @@ async function loadDisappeared() {
     _disappearedListings = d.listings;
     renderDisappearedTable();
   } catch {
-    if (el) el.textContent = 'サーバー未起動 — server.py を再起動してください';
+    if (el) el.textContent = t('server_offline');
   }
 }
 
@@ -1992,8 +2399,8 @@ function closeAuthModal() { document.getElementById('auth-modal').classList.remo
 let _activePanel = null;
 const _allPanels  = ['filter','listings','notif','account','layers','about'];
 const _panelTitles = {
-  filter: 'フィルター', listings: '空室一覧',
-  notif: '通知設定', account: 'アカウント', layers: '地図レイヤー', about: 'セットアップ'
+  filter: 'panel_filter', listings: 'panel_listings',
+  notif: 'panel_notif', account: 'panel_account', layers: 'panel_layers', about: 'panel_about'
 };
 
 function openPanel(name) {
@@ -2006,7 +2413,7 @@ function openPanel(name) {
     document.getElementById(`panel-${n}`)?.classList.toggle('active', n === name);
   });
   panel.style.width = name === 'listings' ? '864px' : '260px';
-  document.getElementById('panel-title').textContent = _panelTitles[name] || '';
+  document.getElementById('panel-title').textContent = _panelTitles[name] ? t(_panelTitles[name]) : '';
   panel.classList.add('open');
   backdrop.classList.add('open');
   setTimeout(() => { if (map) google.maps.event.trigger(map, 'resize'); }, 230);
@@ -2046,12 +2453,14 @@ function onAuthSuccess(data) {
   updateAuthPanels();
   loadUserSettings();
   loadNotifications();
+  loadUserProfile();
+  loadSavedListings();
 }
 
 function renderUserChip() {
   const area = document.getElementById('user-area');
   if (!AUTH.user) {
-    area.innerHTML = `<button class="login-btn" onclick="openAuthModal()">ログイン</button>`;
+    area.innerHTML = `<button class="login-btn" onclick="openAuthModal()">${t('login')}</button>`;
     return;
   }
   const initial = (AUTH.user.display_name || AUTH.user.email || '?')[0].toUpperCase();
@@ -2061,8 +2470,8 @@ function renderUserChip() {
       <span class="user-name">${escHtml(AUTH.user.display_name || AUTH.user.email)}</span>
       <div class="user-menu" id="user-menu">
         <div class="user-menu-email">${escHtml(AUTH.user.email)}</div>
-        <button class="user-menu-item" onclick="openQrModal()">📲 QRコードで共有</button>
-        <button class="user-menu-item danger" onclick="doLogout()">ログアウト</button>
+        <button class="user-menu-item" onclick="openQrModal()">${t('share_qr')}</button>
+        <button class="user-menu-item danger" onclick="doLogout()">${t('logout')}</button>
       </div>
     </div>`;
 }
@@ -2087,26 +2496,29 @@ async function doLogin() {
       body: JSON.stringify({email, password})
     });
     const d = await r.json();
-    if (!r.ok) { errEl.textContent = d.error || 'ログイン失敗'; return; }
+    if (!r.ok) { errEl.textContent = d.error || t('login_failed'); return; }
     onAuthSuccess(d);
-  } catch { errEl.textContent = 'サーバーに接続できません'; }
+  } catch { errEl.textContent = t('cannot_connect'); }
 }
 
 async function doRegister() {
-  const display_name = document.getElementById('reg-name').value.trim();
-  const email        = document.getElementById('reg-email').value.trim();
-  const password     = document.getElementById('reg-password').value;
-  const errEl        = document.getElementById('reg-err');
-  errEl.textContent  = '';
+  const display_name    = document.getElementById('reg-name').value.trim();
+  const email           = document.getElementById('reg-email').value.trim();
+  const password        = document.getElementById('reg-password').value;
+  const household       = document.getElementById('reg-household').value;
+  const age_range       = document.getElementById('reg-age').value;
+  const income_bracket  = document.getElementById('reg-income').value;
+  const errEl           = document.getElementById('reg-err');
+  errEl.textContent = '';
   try {
     const r = await fetch(`${API}/auth/register`, {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({email, password, display_name})
+      body: JSON.stringify({ email, password, display_name, household, age_range, income_bracket, lang: _lang })
     });
     const d = await r.json();
-    if (!r.ok) { errEl.textContent = d.error || '登録失敗'; return; }
+    if (!r.ok) { errEl.textContent = d.error || t('register_failed'); return; }
     onAuthSuccess(d);
-  } catch { errEl.textContent = 'サーバーに接続できません'; }
+  } catch { errEl.textContent = t('cannot_connect'); }
 }
 
 function doLogout() {
@@ -2130,6 +2542,8 @@ async function initAuth() {
     updateAuthPanels();
     loadUserSettings();
     loadNotifications();
+    loadUserProfile();
+    loadSavedListings();
   } catch {}
 }
 
@@ -2145,9 +2559,9 @@ async function doChangePassword() {
       body: JSON.stringify({current_password: current, new_password: new_pw})
     });
     const d = await r.json();
-    msgEl.textContent = r.ok ? '✓ 変更しました' : (d.error || '失敗');
+    msgEl.textContent = r.ok ? t('pw_updated') : (d.error || t('pw_failed'));
     if (r.ok) { document.getElementById('pw-current').value = ''; document.getElementById('pw-new').value = ''; }
-  } catch { msgEl.textContent = 'サーバーエラー'; }
+  } catch { msgEl.textContent = t('server_error'); }
   setTimeout(() => msgEl.textContent = '', 3500);
 }
 
@@ -2188,14 +2602,14 @@ async function loadNotifications() {
 function renderNotifications(list) {
   const el = document.getElementById('notif-list');
   if (!list.length) {
-    el.innerHTML = '<p style="font-size:11px;color:var(--muted);">登録なし</p>';
+    el.innerHTML = `<p style="font-size:11px;color:var(--muted);">${t('notif_none')}</p>`;
     return;
   }
   el.innerHTML = list.map(n => `
     <div class="notif-item ${n.enabled ? '' : 'notif-disabled'}">
       <span class="notif-badge ${n.type}">${n.type.toUpperCase()}</span>
       <span class="notif-label">${escHtml(n.label || n.target)}</span>
-      <button class="notif-del" title="削除" onclick="deleteNotif(${n.id})">×</button>
+      <button class="notif-del" title="${t('notif_del_title')}" onclick="deleteNotif(${n.id})">×</button>
     </div>`).join('');
 }
 
@@ -2231,13 +2645,13 @@ async function startOAuthConnect(type) {
 
   qrEl.style.display   = 'none';
   linkEl.style.display = 'none';
-  statusEl.textContent = '接続URLを生成中…';
+  statusEl.textContent = t('generating_url');
 
   try {
     const r = await fetch(`${API}/auth/${type}/start`, { headers: authHeaders() });
     const d = await r.json();
     if (!r.ok) {
-      statusEl.textContent = '⚠️ ' + (d.error || 'サーバーで設定が必要です');
+      statusEl.textContent = '⚠️ ' + (d.error || t('server_config_req'));
       return;
     }
 
@@ -2247,27 +2661,27 @@ async function startOAuthConnect(type) {
     linkEl.style.display = 'inline-block';
 
     if (type === 'telegram') {
-      descEl.textContent = 'QRコードをスキャンしてBotを開き、STARTを押すと自動で連携されます。';
-      linkEl.textContent = 'Telegram で開く →';
+      descEl.textContent = t('telegram_desc');
+      linkEl.textContent = t('telegram_btn');
       linkEl.style.background = '#2AABEE';
     } else if (type === 'line') {
-      descEl.textContent = 'QRコードをスキャンするか、ボタンを押してLINEで認証してください。';
-      linkEl.textContent = 'LINE で連携する →';
+      descEl.textContent = t('line_desc');
+      linkEl.textContent = t('line_btn');
       linkEl.style.background = '#06c755';
     } else {
-      descEl.textContent = 'QRコードをスキャンするか、ボタンを押してSlackチャンネルを選択してください。';
-      linkEl.textContent = 'Slack に追加する →';
+      descEl.textContent = t('slack_desc');
+      linkEl.textContent = t('slack_btn');
       linkEl.style.background = '#4a154b';
     }
     linkEl.href = url;
-    statusEl.textContent = '認証完了を待っています…';
+    statusEl.textContent = t('waiting_auth');
 
     const before  = Date.now();
     const tgCode  = d.code;
     _oauthPollTimer = setInterval(async () => {
       if (Date.now() - before > 120_000) {
         clearInterval(_oauthPollTimer);
-        statusEl.textContent = 'タイムアウトしました。もう一度お試しください。';
+        statusEl.textContent = t('timeout_msg');
         return;
       }
       try {
@@ -2285,7 +2699,7 @@ async function startOAuthConnect(type) {
         }
         if (found) {
           clearInterval(_oauthPollTimer);
-          statusEl.innerHTML = '✅ 連携完了！';
+          statusEl.innerHTML = t('connected');
           setTimeout(() => {
             document.getElementById('add-notif-modal').classList.remove('open');
             loadNotifications();
@@ -2293,7 +2707,7 @@ async function startOAuthConnect(type) {
         }
       } catch {}
     }, 2000);
-  } catch { statusEl.textContent = 'サーバーエラー'; }
+  } catch { statusEl.textContent = t('server_error'); }
 }
 
 function openAddNotif() {
@@ -2321,7 +2735,7 @@ async function submitAddNotif() {
   const label  = document.getElementById('notif-label').value.trim();
   const errEl  = document.getElementById('notif-err');
   errEl.textContent = '';
-  if (!target) { errEl.textContent = '送信先を入力してください'; return; }
+  if (!target) { errEl.textContent = t('notif_enter_target'); return; }
   try {
     const r = await fetch(`${API}/user/notifications`, {
       method: 'POST',
@@ -2329,14 +2743,14 @@ async function submitAddNotif() {
       body: JSON.stringify({type, target, label})
     });
     const d = await r.json();
-    if (!r.ok) { errEl.textContent = d.error || '追加失敗'; return; }
+    if (!r.ok) { errEl.textContent = d.error || t('notif_add_failed'); return; }
     document.getElementById('add-notif-modal').classList.remove('open');
     loadNotifications();
-  } catch { errEl.textContent = 'サーバーエラー'; }
+  } catch { errEl.textContent = t('server_error'); }
 }
 
 async function deleteNotif(id) {
-  if (!confirm('この通知設定を削除しますか？')) return;
+  if (!confirm(t('notif_delete_confirm'))) return;
   await fetch(`${API}/user/notifications/${id}`, { method: 'DELETE', headers: authHeaders() });
   loadNotifications();
 }
@@ -2350,10 +2764,11 @@ setInterval(() => {
   if (secs <= 0) { secs = 300; loadLog(); loadListings(); }
   const m = Math.floor(secs/60), s = secs%60;
   const cd = document.getElementById('countdown');
-  if (cd) cd.textContent = `次回確認まで ${m}:${String(s).padStart(2,'0')}`;
+  if (cd) cd.textContent = t('next_refresh', m, String(s).padStart(2,'0'));
 }, 1000);
 
 // Init
+applyLang();
 loadConfig();
 initAuth();
 loadLog();

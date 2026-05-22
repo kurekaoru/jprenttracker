@@ -167,12 +167,36 @@ def db():
     """)
     con.commit()
 
-    # Migrate: add map_layers column if it doesn't exist yet
-    try:
-        con.execute("ALTER TABLE user_settings ADD COLUMN map_layers TEXT DEFAULT '{}'")
-        con.commit()
-    except Exception:
-        pass  # column already exists
+    # New activity tables (idempotent)
+    con.executescript("""
+        CREATE TABLE IF NOT EXISTS user_saved_listings (
+            user_id    INTEGER NOT NULL REFERENCES users(id),
+            listing_id TEXT    NOT NULL,
+            saved_at   TEXT    DEFAULT (datetime('now')),
+            PRIMARY KEY (user_id, listing_id)
+        );
+        CREATE TABLE IF NOT EXISTS user_listing_views (
+            user_id     INTEGER NOT NULL REFERENCES users(id),
+            listing_id  TEXT    NOT NULL,
+            last_viewed TEXT    DEFAULT (datetime('now')),
+            view_count  INTEGER DEFAULT 1,
+            PRIMARY KEY (user_id, listing_id)
+        );
+    """)
+    con.commit()
+
+    # Column migrations (idempotent)
+    for col, defn in [
+        ("map_layers",    "TEXT DEFAULT '{}'"),
+        ("lang",          "TEXT DEFAULT 'ja'"),
+        ("commute_dests", "TEXT DEFAULT '[]'"),
+        ("ai_profile",    "TEXT DEFAULT '{}'"),
+    ]:
+        try:
+            con.execute(f"ALTER TABLE user_settings ADD COLUMN {col} {defn}")
+            con.commit()
+        except Exception:
+            pass
 
     # JWT secret — stored in DB so it survives server restarts
     row = con.execute("SELECT value FROM app_config WHERE key='jwt_secret'").fetchone()
@@ -418,6 +442,14 @@ def register():
     if len(password) < 8:
         return jsonify({"error": "パスワードは8文字以上にしてください"}), 400
 
+    # Optional demographics — stored in ai_profile for future ML use
+    ai_profile = {}
+    for key in ("household", "age_range", "income_bracket"):
+        val = data.get(key, "").strip()
+        if val:
+            ai_profile[key] = val
+    lang = data.get("lang", "ja")
+
     con = db()
     try:
         con.execute(
@@ -426,6 +458,13 @@ def register():
         )
         con.commit()
         user = con.execute("SELECT id, email, display_name FROM users WHERE email=?", (email,)).fetchone()
+        con.execute("""
+            INSERT INTO user_settings (user_id, lang, ai_profile)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                lang=excluded.lang, ai_profile=excluded.ai_profile, updated_at=datetime('now')
+        """, (user["id"], lang, json.dumps(ai_profile)))
+        con.commit()
         token = create_access_token(identity=str(user["id"]))
         return jsonify({"token": token, "email": user["email"], "display_name": user["display_name"]})
     except sqlite3.IntegrityError:
@@ -560,6 +599,121 @@ def set_map_layers():
         VALUES (:uid, :ml)
         ON CONFLICT(user_id) DO UPDATE SET map_layers=excluded.map_layers, updated_at=datetime('now')
     """, {"uid": user_id, "ml": json.dumps(layers)})
+    con.commit()
+    con.close()
+    return jsonify({"status": "ok"})
+
+
+# ── User profile (lang, commute destinations, AI demographics) ────────────────
+
+@app.route("/api/user/profile", methods=["GET"])
+@jwt_required()
+def get_user_profile():
+    user_id = int(get_jwt_identity())
+    con     = db()
+    row     = con.execute(
+        "SELECT lang, commute_dests, ai_profile FROM user_settings WHERE user_id=?", (user_id,)
+    ).fetchone()
+    con.close()
+    if not row:
+        return jsonify({"lang": "ja", "commute_dests": [], "ai_profile": {}})
+    return jsonify({
+        "lang":          row["lang"] or "ja",
+        "commute_dests": json.loads(row["commute_dests"] or "[]"),
+        "ai_profile":    json.loads(row["ai_profile"]    or "{}"),
+    })
+
+
+@app.route("/api/user/profile", methods=["POST"])
+@jwt_required()
+def set_user_profile():
+    user_id = int(get_jwt_identity())
+    data    = request.get_json() or {}
+    con     = db()
+
+    updates = {}
+    if "lang" in data:
+        updates["lang"] = data["lang"] if data["lang"] in ("ja", "en") else "ja"
+    if "commute_dests" in data:
+        dests = [str(d)[:200] for d in (data["commute_dests"] or []) if str(d).strip()]
+        updates["commute_dests"] = json.dumps(dests[:10])
+    if "ai_profile" in data and isinstance(data["ai_profile"], dict):
+        allowed_keys = {"household", "age_range", "income_bracket", "notes"}
+        profile = {k: v for k, v in data["ai_profile"].items() if k in allowed_keys}
+        updates["ai_profile"] = json.dumps(profile)
+
+    if not updates:
+        con.close()
+        return jsonify({"status": "ok"})
+
+    set_clause = ", ".join(f"{k}=:{k}" for k in updates)
+    updates["uid"] = user_id
+    con.execute(f"""
+        INSERT INTO user_settings (user_id, {", ".join(k for k in updates if k != "uid")})
+        VALUES (:uid, {", ".join(f":{k}" for k in updates if k != "uid")})
+        ON CONFLICT(user_id) DO UPDATE SET {set_clause}, updated_at=datetime('now')
+    """, updates)
+    con.commit()
+    con.close()
+    return jsonify({"status": "ok"})
+
+
+# ── Saved listings ────────────────────────────────────────────────────────────
+
+@app.route("/api/user/saved", methods=["GET"])
+@jwt_required()
+def get_saved_listings():
+    user_id = int(get_jwt_identity())
+    con     = db()
+    rows    = con.execute(
+        "SELECT listing_id, saved_at FROM user_saved_listings WHERE user_id=? ORDER BY saved_at DESC",
+        (user_id,)
+    ).fetchall()
+    con.close()
+    return jsonify({"saved": [dict(r) for r in rows]})
+
+
+@app.route("/api/user/saved/<listing_id>", methods=["POST"])
+@jwt_required()
+def save_listing(listing_id):
+    user_id = int(get_jwt_identity())
+    con     = db()
+    con.execute(
+        "INSERT OR IGNORE INTO user_saved_listings (user_id, listing_id) VALUES (?,?)",
+        (user_id, listing_id)
+    )
+    con.commit()
+    con.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/user/saved/<listing_id>", methods=["DELETE"])
+@jwt_required()
+def unsave_listing(listing_id):
+    user_id = int(get_jwt_identity())
+    con     = db()
+    con.execute(
+        "DELETE FROM user_saved_listings WHERE user_id=? AND listing_id=?",
+        (user_id, listing_id)
+    )
+    con.commit()
+    con.close()
+    return jsonify({"status": "ok"})
+
+
+# ── Listing view history ──────────────────────────────────────────────────────
+
+@app.route("/api/user/view/<listing_id>", methods=["POST"])
+@jwt_required()
+def record_view(listing_id):
+    user_id = int(get_jwt_identity())
+    con     = db()
+    con.execute("""
+        INSERT INTO user_listing_views (user_id, listing_id, last_viewed, view_count)
+        VALUES (?, ?, datetime('now'), 1)
+        ON CONFLICT(user_id, listing_id) DO UPDATE SET
+            last_viewed=datetime('now'), view_count=view_count+1
+    """, (user_id, listing_id))
     con.commit()
     con.close()
     return jsonify({"status": "ok"})
