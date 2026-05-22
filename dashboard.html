@@ -469,6 +469,24 @@
   .fac-table td { padding: 4px 8px 4px 0; font-size: 11px; }
   .fac-table th { padding: 2px 8px 4px 0; }
   .fac-row:hover td { background: var(--surface2); }
+  /* Property card vertical tabs */
+  .prop-tabs { display: flex; margin-top: 12px; border-top: 1px solid var(--border); padding-top: 0; }
+  .prop-tab-bar {
+    display: flex; flex-direction: column; border-right: 1px solid var(--border);
+    flex-shrink: 0; padding-top: 6px;
+  }
+  .prop-tab-btn {
+    writing-mode: vertical-rl; transform: rotate(180deg);
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .07em;
+    text-transform: uppercase; padding: 12px 7px; transition: color .15s, background .15s;
+    border-radius: 0;
+  }
+  .prop-tab-btn:hover { color: var(--text); }
+  .prop-tab-btn.active { color: var(--accent); background: rgba(93,202,165,0.12); }
+  .prop-tab-content { flex: 1; min-width: 0; padding: 10px 0 0 12px; }
+  .prop-tab-pane { display: none; }
+  .prop-tab-pane.active { display: block; }
   .layer-row {
     display: flex; align-items: center; justify-content: space-between;
     padding: 8px 0; border-bottom: 1px solid var(--border);
@@ -1198,6 +1216,8 @@ const STRINGS = {
   // Property card
   save_listing:         { ja:'保存',                    en:'Save' },
   saved_listing:        { ja:'保存済み',                 en:'Saved' },
+  tab_route:            { ja:'経路',                    en:'Route' },
+  tab_fac:              { ja:'施設',                    en:'Nearby' },
   // Facility table
   col_type:             { ja:'種別',                    en:'Type' },
   col_dist:             { ja:'距離',                    en:'Dist.' },
@@ -1520,7 +1540,7 @@ async function showFacilities(listing) {
   clearFacilities();
   const pos = { lat: listing.lat, lng: listing.lng };
   _facilityCircle = new google.maps.Circle({
-    center: pos, radius: 1000, map,
+    center: pos, radius: 500, map,
     fillColor: '#4285F4', fillOpacity: 0.04,
     strokeColor: '#4285F4', strokeOpacity: 0.25, strokeWeight: 1.5,
     clickable: false,
@@ -2209,21 +2229,40 @@ function popupHtml(l) {
       ${station ? `<div style="margin-top:3px;">${escHtml(station)}</div>` : ''}
       <div class="pin-meta" style="margin-top:3px;">${t('first_seen_label')}: ${fmtDate(l.first_seen)}${daysStr ? ` · ${daysStr}` : ''}</div>
       ${l.url ? `<div style="margin-top:4px;"><a href="${escHtml(l.url)}" target="_blank" rel="noopener">${t('open_listing')}</a></div>` : ''}
-      <div style="margin-top:10px;">
-        <input id="popup-dest-${eid}" type="text" value="${escHtml(_commuteDest)}"
-          oninput="updateCommuteDest(this.value)"
-          placeholder="${t('dest_ph')}"
-          list="commute-dests-list"
-          autocomplete="new-password"
-          style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:6px;font-size:11px;font-family:inherit;outline:none;" />
-      </div>
-      <div style="margin-top:6px;display:flex;gap:5px;">
-        <button onclick="showRoute('${eid}','TRANSIT')" class="route-btn">${t('route_transit')}</button>
-        <button onclick="showRoute('${eid}','DRIVING')" class="route-btn">${t('route_drive')}</button>
-        <button onclick="showRoute('${eid}','WALKING')" class="route-btn">${t('route_walk')}</button>
-        <button onclick="clearDirections()" class="route-btn" style="margin-left:auto;">✕</button>
-      </div>
-      <div id="fac-section" style="margin-top:14px;border-top:1px solid var(--border);padding-top:10px;"></div>`;
+      <div class="prop-tabs">
+        <div class="prop-tab-bar">
+          <button class="prop-tab-btn active" data-tab="route" onclick="switchPropTab('route')">${t('tab_route')}</button>
+          <button class="prop-tab-btn" data-tab="fac" onclick="switchPropTab('fac')">${t('tab_fac')}</button>
+        </div>
+        <div class="prop-tab-content">
+          <div class="prop-tab-pane active" id="prop-tab-route">
+            <div>
+              <input id="popup-dest-${eid}" type="text" value="${escHtml(_commuteDest)}"
+                oninput="updateCommuteDest(this.value)"
+                placeholder="${t('dest_ph')}"
+                list="commute-dests-list"
+                autocomplete="new-password"
+                style="width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:6px;font-size:11px;font-family:inherit;outline:none;" />
+            </div>
+            <div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;">
+              <button onclick="showRoute('${eid}','TRANSIT')" class="route-btn">${t('route_transit')}</button>
+              <button onclick="showRoute('${eid}','DRIVING')" class="route-btn">${t('route_drive')}</button>
+              <button onclick="showRoute('${eid}','WALKING')" class="route-btn">${t('route_walk')}</button>
+              <button onclick="clearDirections()" class="route-btn" style="margin-left:auto;">✕</button>
+            </div>
+          </div>
+          <div class="prop-tab-pane" id="prop-tab-fac">
+            <div id="fac-section"></div>
+          </div>
+        </div>
+      </div>`;
+}
+
+function switchPropTab(tab) {
+  document.querySelectorAll('.prop-tab-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.prop-tab-pane').forEach(p =>
+    p.classList.toggle('active', p.id === 'prop-tab-' + tab));
 }
 
 function showRoute(listingId, travelMode) {
