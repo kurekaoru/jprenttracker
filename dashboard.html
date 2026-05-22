@@ -93,16 +93,18 @@
     transition: all 0.15s;
   }
   .topbar-refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .lang-toggle {
-    background: transparent;
-    border: 1px solid rgba(255,255,255,0.2);
-    color: rgba(255,255,255,0.55);
-    border-radius: 4px;
-    font-size: 10px; font-weight: 700; letter-spacing: .06em;
-    padding: 2px 7px; cursor: pointer;
-    font-family: var(--font); transition: border-color .15s, color .15s;
+  .lang-toggle-group {
+    display: flex; background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 5px; overflow: hidden;
   }
-  .lang-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  .lang-seg {
+    background: transparent; border: none; color: rgba(255,255,255,0.45);
+    font-size: 10px; font-weight: 700; letter-spacing: .06em;
+    padding: 3px 7px; cursor: pointer; font-family: var(--font);
+    transition: background .15s, color .15s;
+  }
+  .lang-seg.active { background: rgba(255,255,255,0.22); color: #fff; }
+  .lang-seg:hover:not(.active) { color: rgba(255,255,255,0.8); }
   .topbar-title {
     font-size: 13px; font-weight: 600; letter-spacing: -0.02em;
     color: rgba(255,255,255,0.85);
@@ -426,12 +428,10 @@
     background: var(--surface2); color: var(--text); transition: background 0.1s;
   }
   .route-btn:hover { background: var(--accent); color: #fff; }
-  /* Compact facility InfoWindow overrides */
+  /* Compact facility InfoWindow — hide default X, remove its reserved space */
   .gm-style .gm-style-iw-c { padding: 0 !important; border-radius: 8px !important; box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important; }
   .gm-style .gm-style-iw-d { overflow: hidden !important; }
-  .gm-style .gm-style-iw-t::after { display: none; }
-  .gm-style button.gm-ui-hover-effect { top: 2px !important; right: 2px !important; width: 22px !important; height: 22px !important; }
-  .gm-style button.gm-ui-hover-effect span { width: 14px !important; height: 14px !important; margin: 4px !important; }
+  .gm-style .gm-ui-hover-effect { display: none !important; }
   .fac-popup {
     font-family: var(--font); font-size: 12px; line-height: 1.5;
     padding: 8px 10px; min-width: 130px; max-width: 200px;
@@ -442,7 +442,13 @@
   .fac-popup-dot {
     width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
   }
-  .fac-popup-type-label { font-size: 10px; color: var(--muted); font-weight: 500; }
+  .fac-popup-type-label { font-size: 10px; color: var(--muted); font-weight: 500; flex: 1; }
+  .fac-popup-close {
+    background: none; border: none; cursor: pointer; color: var(--muted);
+    font-size: 13px; line-height: 1; padding: 0; margin-left: 2px;
+    display: flex; align-items: center; transition: color .1s;
+  }
+  .fac-popup-close:hover { color: var(--text); }
   .fac-popup-name { font-weight: 600; font-size: 12px; }
   .fac-popup-dist { font-size: 10px; color: var(--muted); margin-top: 1px; }
   .sort-table tbody tr.row-selected td { background: var(--accent-light); }
@@ -654,7 +660,10 @@
         <button class="topbar-refresh-btn" onclick="loadListings()" data-i18n="refresh">更新</button>
       </div>
       <div class="status-pill"><div class="pulse"></div><span data-i18n="monitoring">監視中</span></div>
-      <button id="lang-toggle" class="lang-toggle" onclick="toggleLang()">EN</button>
+      <div class="lang-toggle-group" id="lang-toggle-group">
+        <button class="lang-seg" id="lang-ja" onclick="setLang('ja')">JP</button>
+        <button class="lang-seg" id="lang-en" onclick="setLang('en')">EN</button>
+      </div>
       <div id="user-area">
         <button class="login-btn" onclick="openAuthModal()" data-i18n="login">ログイン</button>
       </div>
@@ -1219,14 +1228,15 @@ function applyLang() {
   document.querySelectorAll('[data-i18n-ph]').forEach(el => {
     el.placeholder = t(el.dataset.i18nPh);
   });
-  const toggle = document.getElementById('lang-toggle');
-  if (toggle) toggle.textContent = _lang === 'ja' ? 'EN' : 'JP';
+  document.getElementById('lang-ja')?.classList.toggle('active', _lang === 'ja');
+  document.getElementById('lang-en')?.classList.toggle('active', _lang === 'en');
 }
 
-function toggleLang() {
-  _lang = _lang === 'ja' ? 'en' : 'ja';
+async function setLang(lang) {
+  if (_lang === lang) return;
+  _lang = lang;
   localStorage.setItem('jkktrackr_lang', _lang);
-  if (AUTH.token) saveUserProfile({ lang: _lang });
+  if (AUTH.token) await saveUserProfile({ lang: _lang });
   location.reload();
 }
 
@@ -1454,6 +1464,7 @@ function _facPopupHtml(color, name, typeLabel, distM) {
     <div class="fac-popup-type">
       <span class="fac-popup-dot" style="background:${color}"></span>
       <span class="fac-popup-type-label">${typeLabel}</span>
+      <button class="fac-popup-close" onclick="window._closeFacPopup()">✕</button>
     </div>
     <div class="fac-popup-name">${name}</div>
     ${dist}
@@ -1818,9 +1829,10 @@ async function loadUserProfile() {
     if (!r.ok) return;
     const d = await r.json();
 
-    // Sync language — if server has a different lang, apply it and reload
+    // Sync language — server is source of truth only when there's no local preference
     const serverLang = d.lang || 'ja';
-    if (serverLang !== _lang) {
+    const hasLocalPref = !!localStorage.getItem('jkktrackr_lang');
+    if (!hasLocalPref && serverLang !== _lang) {
       _lang = serverLang;
       localStorage.setItem('jkktrackr_lang', _lang);
       location.reload();
@@ -1947,6 +1959,7 @@ function initMap() {
   directionsRenderer.setMap(map);
   _placesService = new google.maps.places.PlacesService(map);
   _facPopup = new google.maps.InfoWindow({ disableAutoPan: true, maxWidth: 220 });
+  window._closeFacPopup = () => _facPopup.close();
 
   map.addListener('idle', () => {
     if (!Object.values(_poiLayers).some(Boolean)) return;
