@@ -426,6 +426,25 @@
     background: var(--surface2); color: var(--text); transition: background 0.1s;
   }
   .route-btn:hover { background: var(--accent); color: #fff; }
+  /* Compact facility InfoWindow overrides */
+  .gm-style .gm-style-iw-c { padding: 0 !important; border-radius: 8px !important; box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important; }
+  .gm-style .gm-style-iw-d { overflow: hidden !important; }
+  .gm-style .gm-style-iw-t::after { display: none; }
+  .gm-style button.gm-ui-hover-effect { top: 2px !important; right: 2px !important; width: 22px !important; height: 22px !important; }
+  .gm-style button.gm-ui-hover-effect span { width: 14px !important; height: 14px !important; margin: 4px !important; }
+  .fac-popup {
+    font-family: var(--font); font-size: 12px; line-height: 1.5;
+    padding: 8px 10px; min-width: 130px; max-width: 200px;
+  }
+  .fac-popup-type {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 2px;
+  }
+  .fac-popup-dot {
+    width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+  }
+  .fac-popup-type-label { font-size: 10px; color: var(--muted); font-weight: 500; }
+  .fac-popup-name { font-weight: 600; font-size: 12px; }
+  .fac-popup-dist { font-size: 10px; color: var(--muted); margin-top: 1px; }
   .sort-table tbody tr.row-selected td { background: var(--accent-light); }
   .layer-row {
     display: flex; align-items: center; justify-content: space-between;
@@ -1408,12 +1427,44 @@ let _routeChip = null;
 let _RouteChipOverlayClass = null;
 let _facilityMarkers = [];
 let _facilityCircle  = null;
+let _facPopup = null;
 
+const _facilityTypeLabels = {
+  konbini:      { ja: 'コンビニ',     en: 'Convenience Store' },
+  supermarket:  { ja: 'スーパー',     en: 'Supermarket' },
+  kindergarten: { ja: '幼稚園・保育園', en: 'Kindergarten' },
+  school:       { ja: '小・中学校',   en: 'School' },
+  hospital:     { ja: '病院',         en: 'Hospital' },
+  clinic:       { ja: 'クリニック',   en: 'Clinic' },
+  doctors:      { ja: '診療所',       en: 'Doctor\'s Office' },
+  pharmacy:     { ja: '薬局',         en: 'Pharmacy' },
+  park:         { ja: '公園',         en: 'Park' },
+  station:      { ja: '駅',           en: 'Station' },
+};
+
+function facilityTypeLabel(type) {
+  const entry = _facilityTypeLabels[type];
+  if (!entry) return type;
+  return entry[_lang] || entry.ja;
+}
+
+function _facPopupHtml(color, name, typeLabel, distM) {
+  const dist = distM != null ? `<div class="fac-popup-dist">${distM}m</div>` : '';
+  return `<div class="fac-popup">
+    <div class="fac-popup-type">
+      <span class="fac-popup-dot" style="background:${color}"></span>
+      <span class="fac-popup-type-label">${typeLabel}</span>
+    </div>
+    <div class="fac-popup-name">${name}</div>
+    ${dist}
+  </div>`;
+}
 
 function clearFacilities() {
   _facilityMarkers.forEach(m => m.setMap(null));
   _facilityMarkers = [];
   if (_facilityCircle) { _facilityCircle.setMap(null); _facilityCircle = null; }
+  if (_facPopup) _facPopup.close();
 }
 
 async function showFacilities(listing) {
@@ -1430,13 +1481,19 @@ async function showFacilities(listing) {
     if (!r.ok) return;
     const { facilities } = await r.json();
     facilities.forEach(f => {
-      _facilityMarkers.push(new google.maps.Marker({
+      const marker = new google.maps.Marker({
         position: { lat: f.lat, lng: f.lng },
         map,
         icon: facilityMarkerIcon(f.type),
-        title: `${f.name} (${f.distance_m}m)`,
+        title: f.name,
         zIndex: 6,
-      }));
+      });
+      const color = (_facilityIconDefs[f.type] || {}).color || '#888888';
+      marker.addListener('click', () => {
+        _facPopup.setContent(_facPopupHtml(color, f.name, facilityTypeLabel(f.type), f.distance_m));
+        _facPopup.open({ map, anchor: marker });
+      });
+      _facilityMarkers.push(marker);
     });
     _applyZoomVisibility();
   } catch {}
@@ -1671,13 +1728,21 @@ function fetchPoiMarkers(layer) {
   _placesService.nearbySearch(req, (results, status) => {
     if (status !== google.maps.places.PlacesServiceStatus.OK &&
         status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) return;
-    _poiMarkers[layer] = (results || []).map(place => new google.maps.Marker({
-      position: place.geometry.location,
-      map,
-      icon: facilityMarkerIcon(layer),
-      title: place.name,
-      zIndex: 5,
-    }));
+    _poiMarkers[layer] = (results || []).map(place => {
+      const marker = new google.maps.Marker({
+        position: place.geometry.location,
+        map,
+        icon: facilityMarkerIcon(layer),
+        title: place.name,
+        zIndex: 5,
+      });
+      const color = (_facilityIconDefs[layer] || {}).color || '#888888';
+      marker.addListener('click', () => {
+        _facPopup.setContent(_facPopupHtml(color, place.name, facilityTypeLabel(layer), null));
+        _facPopup.open({ map, anchor: marker });
+      });
+      return marker;
+    });
     _applyZoomVisibility();
   });
 }
@@ -1881,6 +1946,7 @@ function initMap() {
   directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: true });
   directionsRenderer.setMap(map);
   _placesService = new google.maps.places.PlacesService(map);
+  _facPopup = new google.maps.InfoWindow({ disableAutoPan: true, maxWidth: 220 });
 
   map.addListener('idle', () => {
     if (!Object.values(_poiLayers).some(Boolean)) return;
