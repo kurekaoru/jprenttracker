@@ -2215,7 +2215,7 @@ function initMap() {
   map.addListener('zoom_changed', _applyZoomVisibility);
 
   _RouteChipOverlayClass = class extends google.maps.OverlayView {
-    constructor() { super(); this._div = null; this._pos = null; }
+    constructor() { super(); this._div = null; this._pos = null; this._html = ''; }
     onAdd() {
       this._div = document.createElement('div');
       Object.assign(this._div.style, {
@@ -2227,6 +2227,7 @@ function initMap() {
         transform: 'translate(-50%,-50%)', pointerEvents: 'auto',
         zIndex: '99',
       });
+      this._div.innerHTML = this._html;
       this._div.onclick = clearDirections;
       this.getPanes().floatPane.appendChild(this._div);
     }
@@ -2237,7 +2238,7 @@ function initMap() {
       this._div.style.top  = pt.y + 'px';
     }
     setPosition(pos) { this._pos = pos; if (this.getMap()) this.draw(); }
-    setContent(html) { if (this._div) this._div.innerHTML = html; }
+    setContent(html) { this._html = html; if (this._div) this._div.innerHTML = html; }
     onRemove() {
       if (this._div) { this._div.parentNode?.removeChild(this._div); this._div = null; }
     }
@@ -2396,6 +2397,7 @@ function showRoute(listingId, travelMode) {
   clearTransitPolylines();
   const isWalking = travelMode === 'WALKING';
   directionsRenderer.setOptions({
+    preserveViewport: false,
     polylineOptions: isWalking ? {
       strokeColor: '#4285F4', strokeWeight: 4, strokeOpacity: 0,
       icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 }, offset: '0', repeat: '10px' }],
@@ -2432,6 +2434,7 @@ function showFacilityRoute(facLat, facLng) {
   if (!_facListing || !directionsService || !directionsRenderer) return;
   clearTransitPolylines();
   directionsRenderer.setOptions({
+    preserveViewport: true,
     polylineOptions: {
       strokeColor: '#4285F4', strokeWeight: 4, strokeOpacity: 0,
       icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 }, offset: '0', repeat: '10px' }],
