@@ -1712,7 +1712,6 @@ window._facRowClick = function(idx) {
   const { marker, facility, color } = _facilityMarkerObjs[idx];
   _facPopup.setContent(_facPopupHtml(color, facility.name, facilityTypeLabel(facility.type), facility.distance_m));
   _facPopup.open({ map, anchor: marker });
-  map.panTo(marker.getPosition());
   showFacilityRoute(facility.lat, facility.lng);
 };
 
