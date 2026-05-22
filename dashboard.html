@@ -1071,6 +1071,8 @@ const STRINGS = {
   neighborhoods:        { ja:'丁目・町名',           en:'Neighborhoods' },
   parks:                { ja:'公園',                en:'Parks' },
   nearby_facilities:    { ja:'周辺施設',             en:'Nearby Facilities' },
+  all_on:               { ja:'全ON',                en:'All ON' },
+  all_off:              { ja:'全OFF',               en:'All OFF' },
   konbini:              { ja:'コンビニ',             en:'Convenience Stores' },
   supermarket:          { ja:'スーパー',             en:'Supermarkets' },
   kindergarten:         { ja:'幼稚園・保育園',        en:'Kindergartens' },
@@ -1604,7 +1606,12 @@ function _renderFacilitySection(facilities) {
 
   if (facilities === null) {
     wrap.innerHTML = `
-      <div class="fac-section-hdr">${t('nearby_facilities')}</div>
+      <div class="fac-section-hdr" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>${t('nearby_facilities')}</span>
+        <button onclick="window._toggleAllFacTypes()" style="font-size:9px;padding:2px 7px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--muted);cursor:pointer;font-family:var(--font);">
+          ${Object.values(_facTypeLayers).every(v => v !== false) ? t('all_off') : t('all_on')}
+        </button>
+      </div>
       <div class="fac-tog-grid">${toggleGrid}</div>
       <div style="font-size:11px;color:var(--muted);padding:6px 0;">${t('loading')}</div>`;
     return;
@@ -1639,11 +1646,21 @@ function _renderFacilitySection(facilities) {
       </tr></thead><tbody>${rows}</tbody></table></div>`;
   })() : '';
 
+  const allOnNow = Object.values(_facTypeLayers).every(v => v !== false);
   wrap.innerHTML = `
-    <div class="fac-section-hdr">${t('nearby_facilities')}</div>
+    <div class="fac-section-hdr" style="display:flex;align-items:center;justify-content:space-between;">
+      <span>${t('nearby_facilities')}</span>
+      <button onclick="window._toggleAllFacTypes()" style="font-size:9px;padding:2px 7px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--muted);cursor:pointer;font-family:var(--font);">${allOnNow ? t('all_off') : t('all_on')}</button>
+    </div>
     <div class="fac-tog-grid">${toggleGrid}</div>
     ${tableHtml}`;
 }
+
+window._toggleAllFacTypes = function() {
+  const allOn = Object.values(_facTypeLayers).every(v => v !== false);
+  const newVal = !allOn;
+  Object.keys(_facTypeLayers).forEach(k => toggleFacType(k, newVal));
+};
 
 window._facSort = function(col) {
   if (_facTableSort.col === col) _facTableSort.asc = !_facTableSort.asc;
@@ -2237,11 +2254,11 @@ function popupHtml(l) {
       ${l.url ? `<div style="margin-top:4px;"><a href="${escHtml(l.url)}" target="_blank" rel="noopener">${t('open_listing')}</a></div>` : ''}
       <div class="prop-tabs">
         <div class="prop-tab-bar">
-          <button class="prop-tab-btn active" data-tab="route" onclick="switchPropTab('route')">${t('tab_route')}</button>
-          <button class="prop-tab-btn" data-tab="fac" onclick="switchPropTab('fac')">${t('tab_fac')}</button>
+          <button class="prop-tab-btn active" data-tab="fac" onclick="switchPropTab('fac')">${t('tab_fac')}</button>
+          <button class="prop-tab-btn" data-tab="route" onclick="switchPropTab('route')">${t('tab_route')}</button>
         </div>
         <div class="prop-tab-content">
-          <div class="prop-tab-pane active" id="prop-tab-route">
+          <div class="prop-tab-pane" id="prop-tab-route">
             <div>
               <input id="popup-dest-${eid}" type="text" value="${escHtml(_commuteDest)}"
                 oninput="updateCommuteDest(this.value)"
@@ -2258,7 +2275,7 @@ function popupHtml(l) {
               <button onclick="clearDirections()" class="route-btn" style="margin-left:auto;">✕</button>
             </div>
           </div>
-          <div class="prop-tab-pane" id="prop-tab-fac">
+          <div class="prop-tab-pane active" id="prop-tab-fac">
             <div id="fac-section"></div>
           </div>
         </div>
