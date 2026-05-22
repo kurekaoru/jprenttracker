@@ -1297,8 +1297,11 @@ const WARD_EN = {
 };
 
 function wardLabel(ja) {
-  if (_lang !== 'en') return ja;
-  return WARD_EN[ja] || ja;
+  if (_lang === 'en') {
+    const en = WARD_EN[ja] || ja;
+    return en.replace(/^(Yokohama|Kawasaki|Sagamihara) /, '');
+  }
+  return ja.replace(/^(横浜市|川崎市|相模原市)/, '');
 }
 
 const LAYOUTS = ['1R','1K','1DK','1LDK','2K','2DK','2LDK','3K','3DK','3LDK','4LDK以上'];
