@@ -8,7 +8,7 @@ from flask_jwt_extended import (
     JWTManager, create_access_token, jwt_required, get_jwt_identity
 )
 from werkzeug.security import generate_password_hash, check_password_hash
-import json, math, os, secrets, sqlite3, time, threading, requests
+import json, logging, math, os, secrets, sqlite3, time, threading, requests
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 from dotenv import load_dotenv
@@ -152,6 +152,18 @@ def db():
             sent_at    TEXT DEFAULT (datetime('now')),
             PRIMARY KEY (listing_id, user_id)
         );
+        CREATE TABLE IF NOT EXISTS listing_facilities (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            listing_id  TEXT    NOT NULL,
+            type        TEXT    NOT NULL,
+            name        TEXT,
+            lat         REAL    NOT NULL,
+            lng         REAL    NOT NULL,
+            distance_m  INTEGER NOT NULL,
+            fetched_at  TEXT    DEFAULT (datetime('now')),
+            UNIQUE(listing_id, lat, lng)
+        );
+        CREATE INDEX IF NOT EXISTS idx_lf_listing ON listing_facilities(listing_id);
     """)
     con.commit()
 
@@ -237,6 +249,73 @@ def _build_geocode_query(row):
     return f"{pref}{ward}"
 
 
+OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+
+_FACILITY_TYPES = [
+    ("shop",    "convenience",     "konbini"),
+    ("shop",    "supermarket",     "supermarket"),
+    ("amenity", "kindergarten",    "kindergarten"),
+    ("amenity", "school",          "school"),
+    ("amenity", "hospital",        "hospital"),
+    ("amenity", "clinic",          "clinic"),
+    ("amenity", "doctors",         "clinic"),
+    ("amenity", "pharmacy",        "pharmacy"),
+    ("leisure", "park",            "park"),
+    ("railway", "station",         "station"),
+    ("railway", "subway_entrance", "station"),
+]
+
+def _haversine_m(lat1, lng1, lat2, lng2):
+    R = 6371000
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    a = (math.sin(math.radians(lat2 - lat1) / 2) ** 2
+         + math.cos(phi1) * math.cos(phi2)
+         * math.sin(math.radians(lng2 - lng1) / 2) ** 2)
+    return round(R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)))
+
+def _fetch_and_store_facilities(listing_id, lat, lng, con):
+    radius = 1000
+    lines  = "\n".join(
+        f'  node["{k}"="{v}"](around:{radius},{lat},{lng});'
+        for k, v, _ in _FACILITY_TYPES
+    )
+    query = f"[out:json][timeout:25];\n(\n{lines}\n);\nout body;"
+    try:
+        r = requests.post(OVERPASS_URL, data={"data": query}, timeout=35,
+                          headers={"User-Agent": "jkktrackr/1.0"})
+        r.raise_for_status()
+        elements = r.json().get("elements", [])
+    except Exception as e:
+        logging.warning(f"Overpass fetch failed for {listing_id}: {e}")
+        return
+
+    rows = {}
+    for el in elements:
+        elat, elng = el.get("lat"), el.get("lon")
+        if not elat or not elng:
+            continue
+        tags = el.get("tags", {})
+        category = next(
+            (cat for k, v, cat in _FACILITY_TYPES if tags.get(k) == v), None
+        )
+        if not category:
+            continue
+        name = (tags.get("name") or tags.get("name:ja")
+                or tags.get("name:en") or category)
+        dist = _haversine_m(lat, lng, elat, elng)
+        key  = (round(elat, 6), round(elng, 6))
+        if key not in rows:
+            rows[key] = (listing_id, category, name, elat, elng, dist)
+
+    for row in rows.values():
+        con.execute(
+            "INSERT OR IGNORE INTO listing_facilities "
+            "(listing_id, type, name, lat, lng, distance_m) VALUES (?,?,?,?,?,?)",
+            row,
+        )
+    logging.info(f"Facilities: {len(rows)} POIs stored for {listing_id}")
+
+
 def _geocode_worker():
     global _geo_running
     try:
@@ -290,6 +369,21 @@ def _geocode_worker():
                 con.commit()
                 con.close()
                 time.sleep(GEOCODE_DELAY_S)
+                continue
+
+            # Phase 3: fetch Overpass facilities for geocoded listings that have none yet
+            row = con.execute(
+                "SELECT id, lat, lng FROM listings "
+                " WHERE last_seen >= ? AND lat IS NOT NULL "
+                "   AND id NOT IN (SELECT DISTINCT listing_id FROM listing_facilities) "
+                " LIMIT 1",
+                (cutoff,),
+            ).fetchone()
+            if row:
+                _fetch_and_store_facilities(row["id"], row["lat"], row["lng"], con)
+                con.commit()
+                con.close()
+                time.sleep(1.5)
                 continue
 
             con.close()
@@ -469,6 +563,20 @@ def set_map_layers():
     con.commit()
     con.close()
     return jsonify({"status": "ok"})
+
+
+# ── Listing facilities ────────────────────────────────────────────────────────
+
+@app.route("/api/listings/<listing_id>/facilities")
+def get_listing_facilities(listing_id):
+    con  = db()
+    rows = con.execute(
+        "SELECT type, name, lat, lng, distance_m FROM listing_facilities "
+        " WHERE listing_id=? ORDER BY distance_m",
+        (listing_id,),
+    ).fetchall()
+    con.close()
+    return jsonify({"facilities": [dict(r) for r in rows]})
 
 
 # ── User notifications ────────────────────────────────────────────────────────

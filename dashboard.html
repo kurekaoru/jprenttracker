@@ -1127,6 +1127,53 @@ let _commuteDest = '';
 let _destMarker = null;
 let _routeChip = null;
 let _RouteChipOverlayClass = null;
+let _facilityMarkers = [];
+let _facilityCircle  = null;
+
+const _facilityColors = {
+  konbini:      '#7C3AED',
+  supermarket:  '#EA580C',
+  kindergarten: '#DB2777',
+  school:       '#DB2777',
+  hospital:     '#0369A1',
+  clinic:       '#0369A1',
+  doctors:      '#0369A1',
+  pharmacy:     '#059669',
+  park:         '#16A34A',
+  station:      '#C2410C',
+};
+
+function clearFacilities() {
+  _facilityMarkers.forEach(m => m.setMap(null));
+  _facilityMarkers = [];
+  if (_facilityCircle) { _facilityCircle.setMap(null); _facilityCircle = null; }
+}
+
+async function showFacilities(listing) {
+  clearFacilities();
+  const pos = { lat: listing.lat, lng: listing.lng };
+  _facilityCircle = new google.maps.Circle({
+    center: pos, radius: 1000, map,
+    fillColor: '#4285F4', fillOpacity: 0.04,
+    strokeColor: '#4285F4', strokeOpacity: 0.25, strokeWeight: 1.5,
+    clickable: false,
+  });
+  try {
+    const r = await fetch(`${API}/listings/${encodeURIComponent(listing.id)}/facilities`);
+    if (!r.ok) return;
+    const { facilities } = await r.json();
+    facilities.forEach(f => {
+      const color = _facilityColors[f.type] || '#888888';
+      _facilityMarkers.push(new google.maps.Marker({
+        position: { lat: f.lat, lng: f.lng },
+        map,
+        icon: poiMarkerIcon(color),
+        title: `${f.name} (${f.distance_m}m)`,
+        zIndex: 6,
+      }));
+    });
+  } catch {}
+}
 
 function updateCommuteDest(v) { _commuteDest = v; }
 
@@ -1578,6 +1625,11 @@ function openPropCard(l) {
 
 function closePropCard() {
   document.getElementById('right-panel').classList.remove('open');
+  clearFacilities();
+  if (map) {
+    map.panTo({ lat: 35.6762, lng: 139.6503 });
+    map.setZoom(11);
+  }
   if (_selectedId) {
     if (_markers[_selectedId]) {
       _markers[_selectedId].marker.setIcon(markerIcon(_markers[_selectedId].source, false));
@@ -1602,8 +1654,9 @@ function selectListing(id) {
   if (entry) {
     entry.marker.setIcon(markerIcon(entry.source, true));
     map.panTo(entry.marker.getPosition());
-    if (map.getZoom() < 14) map.setZoom(14);
+    map.setZoom(15);
     openPropCard(entry.listing);
+    showFacilities(entry.listing);
   }
   const row = document.querySelector(`.sort-table tbody tr[data-id="${CSS.escape(id)}"]`);
   if (row) { row.classList.add('row-selected'); row.scrollIntoView({ block: 'nearest' }); }
