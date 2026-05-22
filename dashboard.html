@@ -1174,6 +1174,7 @@ const STRINGS = {
   route_transit:        { ja:'🚃 電車',                en:'🚃 Train' },
   route_drive:          { ja:'🚗 車',                  en:'🚗 Drive' },
   route_walk:           { ja:'🚶 徒歩',                en:'🚶 Walk' },
+  route_bike:           { ja:'🚲 自転車',              en:'🚲 Bike' },
   route_error:          { ja:'経路を取得できませんでした: ', en:'Could not get route: ' },
   route_error_hint:     { ja:'\n\n目的地を確認してください（例: 新宿駅、渋谷区役所）', en:'\n\nCheck the destination (e.g. Shinjuku Sta., Shibuya City Hall)' },
   // Walk string
@@ -2248,6 +2249,7 @@ function popupHtml(l) {
               <button onclick="showRoute('${eid}','TRANSIT')" class="route-btn">${t('route_transit')}</button>
               <button onclick="showRoute('${eid}','DRIVING')" class="route-btn">${t('route_drive')}</button>
               <button onclick="showRoute('${eid}','WALKING')" class="route-btn">${t('route_walk')}</button>
+              <button onclick="showRoute('${eid}','BICYCLING')" class="route-btn">${t('route_bike')}</button>
               <button onclick="clearDirections()" class="route-btn" style="margin-left:auto;">✕</button>
             </div>
           </div>
