@@ -198,6 +198,17 @@ def db():
         except Exception:
             pass
 
+    # Migration: clear facility cache if subway_entrance noise is present
+    bad = con.execute(
+        "SELECT COUNT(*) FROM listing_facilities WHERE type='station' "
+        "AND (name GLOB '[0-9]*' OR name GLOB '[0-9]' "
+        "     OR name LIKE '%exit%' OR name LIKE '%entrance%' OR name='station')"
+    ).fetchone()[0]
+    if bad > 0:
+        con.execute("DELETE FROM listing_facilities")
+        con.commit()
+        logging.info(f"DB migration: cleared facility cache ({bad} bad station entries)")
+
     # JWT secret — stored in DB so it survives server restarts
     row = con.execute("SELECT value FROM app_config WHERE key='jwt_secret'").fetchone()
     if row:
@@ -286,7 +297,6 @@ _FACILITY_TYPES = [
     ("amenity", "pharmacy",        "pharmacy"),
     ("leisure", "park",            "park"),
     ("railway", "station",         "station"),
-    ("railway", "subway_entrance", "station"),
 ]
 
 def _haversine_m(lat1, lng1, lat2, lng2):
@@ -330,6 +340,20 @@ def _fetch_and_store_facilities(listing_id, lat, lng, con):
         key  = (round(elat, 6), round(elng, 6))
         if key not in rows:
             rows[key] = (listing_id, category, name, elat, elng, dist)
+
+    # Deduplicate stations by name: keep only the nearest node per station name
+    station_by_name: dict = {}
+    deduped = {}
+    for key, row in rows.items():
+        if row[1] == 'station':
+            sname = row[2]
+            if sname not in station_by_name or row[5] < station_by_name[sname][1][5]:
+                station_by_name[sname] = (key, row)
+        else:
+            deduped[key] = row
+    for key, row in station_by_name.values():
+        deduped[key] = row
+    rows = deduped
 
     for row in rows.values():
         con.execute(
