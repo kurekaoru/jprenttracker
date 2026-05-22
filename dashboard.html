@@ -475,9 +475,12 @@
     display: flex; flex-direction: column; border-right: 1px solid var(--border);
     flex-shrink: 0; padding-top: 6px;
   }
-  .acct-tab-btn { flex:1; background:none; border:none; border-bottom:2px solid transparent; color:var(--muted); font-size:11px; font-weight:600; letter-spacing:.04em; padding:6px 0 8px; cursor:pointer; font-family:var(--font); transition:color .15s,border-color .15s; }
+  .acct-tabs { display:flex; border-top:1px solid var(--border); margin-top:0; }
+  .acct-tab-bar { display:flex; flex-direction:column; border-right:1px solid var(--border); flex-shrink:0; padding-top:6px; }
+  .acct-tab-btn { writing-mode:vertical-rl; background:none; border:none; cursor:pointer; color:var(--muted); font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; padding:12px 7px; transition:color .15s,background .15s; font-family:var(--font); }
   .acct-tab-btn:hover { color:var(--text); }
-  .acct-tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .acct-tab-btn.active { color:var(--accent); background:rgba(93,202,165,0.12); }
+  .acct-tab-content { flex:1; min-width:0; padding:10px 0 0 12px; }
   .acct-tab-pane { display:none; }
   .acct-tab-pane.active { display:block; }
   .prop-tab-btn {
@@ -771,37 +774,42 @@
 
       <!-- Account page (with Alerts tab) -->
       <div class="panel-page" id="panel-account">
-        <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:12px;">
-          <button class="acct-tab-btn active" data-tab="acct-profile" onclick="switchAccountTab('acct-profile')" data-i18n="tab_account">アカウント</button>
-          <button class="acct-tab-btn" data-tab="acct-notif" onclick="switchAccountTab('acct-notif')" data-i18n="tab_alerts">通知</button>
-        </div>
+        <div class="acct-tabs">
+          <div class="acct-tab-bar">
+            <button class="acct-tab-btn active" data-tab="acct-profile" onclick="switchAccountTab('acct-profile')" data-i18n="tab_account">アカウント</button>
+            <button class="acct-tab-btn" data-tab="acct-notif" onclick="switchAccountTab('acct-notif')" data-i18n="tab_alerts">通知</button>
+          </div>
+          <div class="acct-tab-content">
 
-        <!-- Profile tab -->
-        <div class="acct-tab-pane active" id="acct-profile">
-          <div id="account-guest">
-            <p style="font-size:12px;color:var(--muted);margin-bottom:12px;" data-i18n="account_guest_msg">ログインして設定を保存・通知を受け取りましょう。</p>
-            <button class="save-btn" onclick="openAuthModal()" data-i18n="login_register">ログイン / 新規登録</button>
-          </div>
-          <div id="account-user" style="display:none;">
-            <p style="font-size:11px;color:var(--muted);margin-bottom:14px;" id="account-email"></p>
-            <p class="section-label" data-i18n="change_password">パスワード変更</p>
-            <input type="password" id="pw-current" data-i18n-ph="current_pw" placeholder="現在のパスワード" style="margin-bottom:6px;">
-            <input type="password" id="pw-new" data-i18n-ph="new_pw" placeholder="新しいパスワード（8文字以上）" style="margin-bottom:6px;">
-            <button class="save-btn" onclick="doChangePassword()" data-i18n="update">変更する</button>
-            <div class="saved-msg" id="pw-msg"></div>
-            <button class="save-btn" style="background:var(--danger);margin-top:16px;" onclick="doLogout()" data-i18n="logout">ログアウト</button>
-          </div>
-        </div>
+            <!-- Profile tab -->
+            <div class="acct-tab-pane active" id="acct-profile">
+              <div id="account-guest">
+                <p style="font-size:12px;color:var(--muted);margin-bottom:12px;" data-i18n="account_guest_msg">ログインして設定を保存・通知を受け取りましょう。</p>
+                <button class="save-btn" onclick="openAuthModal()" data-i18n="login_register">ログイン / 新規登録</button>
+              </div>
+              <div id="account-user" style="display:none;">
+                <p style="font-size:11px;color:var(--muted);margin-bottom:14px;" id="account-email"></p>
+                <p class="section-label" data-i18n="change_password">パスワード変更</p>
+                <input type="password" id="pw-current" data-i18n-ph="current_pw" placeholder="現在のパスワード" style="margin-bottom:6px;">
+                <input type="password" id="pw-new" data-i18n-ph="new_pw" placeholder="新しいパスワード（8文字以上）" style="margin-bottom:6px;">
+                <button class="save-btn" onclick="doChangePassword()" data-i18n="update">変更する</button>
+                <div class="saved-msg" id="pw-msg"></div>
+                <button class="save-btn" style="background:var(--danger);margin-top:16px;" onclick="doLogout()" data-i18n="logout">ログアウト</button>
+              </div>
+            </div>
 
-        <!-- Alerts tab -->
-        <div class="acct-tab-pane" id="acct-notif">
-          <div id="notif-auth-prompt">
-            <p style="font-size:12px;color:var(--muted);margin-bottom:12px;" data-i18n="notif_login_required">通知設定はログイン後に利用できます。</p>
-            <button class="save-btn" onclick="openAuthModal()" data-i18n="login">ログイン</button>
-          </div>
-          <div id="notif-section" style="display:none;">
-            <div id="notif-list"><p style="font-size:11px;color:var(--muted);" data-i18n="notif_none">登録なし</p></div>
-            <button class="add-notif-btn" onclick="openAddNotif()" data-i18n="add_notif">＋ 通知先を追加</button>
+            <!-- Alerts tab -->
+            <div class="acct-tab-pane" id="acct-notif">
+              <div id="notif-auth-prompt">
+                <p style="font-size:12px;color:var(--muted);margin-bottom:12px;" data-i18n="notif_login_required">通知設定はログイン後に利用できます。</p>
+                <button class="save-btn" onclick="openAuthModal()" data-i18n="login">ログイン</button>
+              </div>
+              <div id="notif-section" style="display:none;">
+                <div id="notif-list"><p style="font-size:11px;color:var(--muted);" data-i18n="notif_none">登録なし</p></div>
+                <button class="add-notif-btn" onclick="openAddNotif()" data-i18n="add_notif">＋ 通知先を追加</button>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
