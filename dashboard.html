@@ -429,29 +429,29 @@
   }
   .route-btn:hover { background: var(--accent); color: #fff; }
   /* Compact facility InfoWindow — hide default X and its header row */
-  .gm-style .gm-style-iw-c { padding: 0 !important; border-radius: 8px !important; box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important; opacity: 0.5; }
+  .gm-style .gm-style-iw-c { padding: 0 !important; border-radius: 8px !important; box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important; }
   .gm-style .gm-style-iw-d { overflow: hidden !important; }
   .gm-style .gm-ui-hover-effect { display: none !important; }
   .gm-style .gm-style-iw-ch { display: none !important; }
   .fac-popup {
-    font-family: var(--font); font-size: 12px; line-height: 1.5;
-    padding: 8px 10px; min-width: 130px; max-width: 200px;
+    font-family: var(--font); font-size: 10px; line-height: 1.5;
+    padding: 6px 8px; min-width: 104px; max-width: 160px;
   }
   .fac-popup-type {
-    display: flex; align-items: center; gap: 6px; margin-bottom: 2px;
+    display: flex; align-items: center; gap: 5px; margin-bottom: 2px;
   }
   .fac-popup-dot {
-    width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
   }
-  .fac-popup-type-label { font-size: 10px; color: var(--muted); font-weight: 500; flex: 1; }
+  .fac-popup-type-label { font-size: 8px; color: var(--muted); font-weight: 500; flex: 1; }
   .fac-popup-close {
     background: none; border: none; cursor: pointer; color: var(--muted);
-    font-size: 13px; line-height: 1; padding: 0; margin-left: 2px;
+    font-size: 10px; line-height: 1; padding: 0; margin-left: 2px;
     display: flex; align-items: center; transition: color .1s;
   }
   .fac-popup-close:hover { color: var(--text); }
-  .fac-popup-name { font-weight: 600; font-size: 12px; }
-  .fac-popup-dist { font-size: 10px; color: var(--muted); margin-top: 1px; }
+  .fac-popup-name { font-weight: 600; font-size: 10px; }
+  .fac-popup-dist { font-size: 8px; color: var(--muted); margin-top: 1px; }
   .sort-table tbody tr.row-selected td { background: var(--accent-light); }
   .fac-section-hdr {
     font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
@@ -2220,12 +2220,12 @@ function initMap() {
       this._div = document.createElement('div');
       Object.assign(this._div.style, {
         position: 'absolute', background: '#4285F4', color: '#fff',
-        borderRadius: '14px', padding: '5px 13px', fontSize: '12px',
+        borderRadius: '11px', padding: '4px 10px', fontSize: '10px',
         fontWeight: '600', fontFamily: 'DM Sans,system-ui,sans-serif',
         whiteSpace: 'nowrap', cursor: 'pointer',
         boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
         transform: 'translate(-50%,-50%)', pointerEvents: 'auto',
-        opacity: '0.5', zIndex: '99',
+        zIndex: '99',
       });
       this._div.innerHTML = this._html;
       this._div.onclick = clearDirections;
