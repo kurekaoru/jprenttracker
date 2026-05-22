@@ -1250,12 +1250,49 @@ function applyLang() {
   document.getElementById('lang-en')?.classList.toggle('active', _lang === 'en');
 }
 
+function applyLang() {
+  // Static elements with data-i18n / data-i18n-ph attributes
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const v = t(el.dataset.i18n);
+    if (typeof v === 'string') el.textContent = v;
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+    const v = t(el.dataset.i18nPh);
+    if (typeof v === 'string') el.placeholder = v;
+  });
+
+  // Lang toggle active state
+  document.getElementById('lang-ja')?.classList.toggle('active', _lang === 'ja');
+  document.getElementById('lang-en')?.classList.toggle('active', _lang === 'en');
+
+  // Re-render dynamic sections that embed t() strings
+  buildChips();
+  renderAvailableTable();
+  renderDisappearedTable();
+
+  // Re-render open property card
+  if (_selectedId && _markers[_selectedId]) {
+    const panel = document.getElementById('right-panel');
+    if (panel?.classList.contains('open')) {
+      document.getElementById('property-card-body').innerHTML =
+        popupHtml(_markers[_selectedId].listing);
+      document.getElementById('right-panel-title').textContent =
+        wardLabel(_markers[_selectedId].listing.ward);
+    }
+  }
+
+  // Re-render facility section if loaded
+  if (_facilityMarkerObjs.length) {
+    _renderFacilitySection(_facilityMarkerObjs.map(o => o.facility));
+  }
+}
+
 async function setLang(lang) {
   if (_lang === lang) return;
   _lang = lang;
   localStorage.setItem('jkktrackr_lang', _lang);
   if (AUTH.token) await saveUserProfile({ lang: _lang });
-  location.reload();
+  applyLang();
 }
 
 const KU = [
@@ -2038,8 +2075,7 @@ async function loadUserProfile() {
     if (!hasLocalPref && serverLang !== _lang) {
       _lang = serverLang;
       localStorage.setItem('jkktrackr_lang', _lang);
-      location.reload();
-      return;
+      applyLang();
     }
 
     // Commute destinations
