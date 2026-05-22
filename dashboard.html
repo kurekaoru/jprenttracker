@@ -1076,7 +1076,7 @@ const STRINGS = {
   konbini:              { ja:'コンビニ',             en:'Convenience Stores' },
   supermarket:          { ja:'スーパー',             en:'Supermarkets' },
   kindergarten:         { ja:'幼稚園・保育園',        en:'Kindergartens' },
-  clinic:               { ja:'クリニック・病院',       en:'Clinics' },
+  clinic:               { ja:'クリニック・診療所',     en:'Clinics & GPs' },
   // About panel
   setup_instructions:   { ja:'セットアップ手順',      en:'Setup Instructions' },
   setup_terminal:       { ja:'（別ターミナル）',       en:' (separate terminal)' },
@@ -1588,8 +1588,8 @@ function _renderFacilitySection(facilities) {
     ['konbini', t('konbini')], ['supermarket', t('supermarket')],
     ['kindergarten', t('kindergarten')], ['school', t('school_label')],
     ['hospital', t('hospital_label')], ['clinic', t('clinic')],
-    ['doctors', t('doctors_label')], ['pharmacy', t('pharmacy_label')],
-    ['park', t('park_label')], ['station', t('station_label')],
+    ['pharmacy', t('pharmacy_label')], ['park', t('park_label')],
+    ['station', t('station_label')],
   ];
   const toggleGrid = allTypes.map(([k, label]) => `
     <div class="fac-tog-row">
@@ -1736,7 +1736,7 @@ const _mapLayers = { transit: true, roadLabels: true, neighborhoods: true, parks
 const _poiLayers  = { konbini: true, supermarket: true, kindergarten: true, clinic: true };
 const _facTypeLayers = {
   konbini: true, supermarket: true, kindergarten: true, school: true,
-  hospital: true, clinic: true, doctors: true, pharmacy: true, park: true, station: true,
+  hospital: true, clinic: true, pharmacy: true, park: true, station: true,
 };
 const _poiMarkers = { konbini: [], supermarket: [], kindergarten: [], clinic: [] };
 const POI_ZOOM_THRESHOLD = 13;
