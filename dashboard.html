@@ -149,7 +149,7 @@
   }
   .right-panel {
     position: fixed; right: 52px; top: 40px;
-    width: 280px; height: calc(100vh - 40px);
+    width: 420px; height: calc(100vh - 40px);
     overflow-y: auto; z-index: 15;
     transform: translateX(calc(100% + 52px));
     transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
@@ -1565,7 +1565,12 @@ function _renderFacilitySection(facilities) {
       <div style="font-size:11px;color:var(--muted);padding:6px 0;">${t('loading')}</div>`;
     return;
   }
-  if (!facilities.length) {
+  // Filter out types whose POI toggle is off
+  const visible = facilities.filter(f =>
+    !Object.prototype.hasOwnProperty.call(_poiLayers, f.type) || _poiLayers[f.type]
+  );
+
+  if (!visible.length) {
     wrap.innerHTML = `
       <div class="fac-section-hdr">${t('nearby_facilities')}</div>
       <div style="margin-bottom:8px;">${poiRows}</div>`;
@@ -1573,7 +1578,7 @@ function _renderFacilitySection(facilities) {
   }
 
   // Sort
-  const sorted = [...facilities].sort((a, b) => {
+  const sorted = [...visible].sort((a, b) => {
     const va = a[_facTableSort.col] ?? '';
     const vb = b[_facTableSort.col] ?? '';
     return _facTableSort.asc ? (va < vb ? -1 : va > vb ? 1 : 0)
@@ -1881,6 +1886,8 @@ function togglePoiLayer(layer, on) {
   clearPoiMarkers(layer);
   if (on) fetchPoiMarkers(layer);
   saveLayerPrefs();
+  if (_facilityMarkerObjs.length)
+    _renderFacilitySection(_facilityMarkerObjs.map(o => o.facility));
 }
 
 function saveLayerPrefs() {
