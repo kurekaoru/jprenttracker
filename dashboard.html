@@ -1496,6 +1496,7 @@ let _facilityMarkers = [];
 let _facilityMarkerObjs = []; // [{marker, facility}] for table click highlight
 let _facilityCircle  = null;
 let _facPopup = null;
+let _facListing = null; // listing currently showing facilities
 
 const _facilityTypeLabels = {
   konbini:      { ja: 'コンビニ',     en: 'Convenience Store' },
@@ -1538,6 +1539,7 @@ function clearFacilities() {
 }
 
 async function showFacilities(listing) {
+  _facListing = listing;
   clearFacilities();
   const pos = { lat: listing.lat, lng: listing.lng };
   _facilityCircle = new google.maps.Circle({
@@ -1563,6 +1565,7 @@ async function showFacilities(listing) {
       marker.addListener('click', () => {
         _facPopup.setContent(_facPopupHtml(color, f.name, facilityTypeLabel(f.type), f.distance_m));
         _facPopup.open({ map, anchor: marker });
+        showFacilityRoute(f.lat, f.lng);
       });
       _facilityMarkers.push(marker);
       _facilityMarkerObjs.push({ marker, facility: f, color });
@@ -1655,6 +1658,7 @@ window._facRowClick = function(idx) {
   _facPopup.setContent(_facPopupHtml(color, facility.name, facilityTypeLabel(facility.type), facility.distance_m));
   _facPopup.open({ map, anchor: marker });
   map.panTo(marker.getPosition());
+  showFacilityRoute(facility.lat, facility.lng);
 };
 
 function updateCommuteDest(v) { _commuteDest = v; }
@@ -2141,7 +2145,7 @@ function initMap() {
   directionsRenderer.setMap(map);
   _placesService = new google.maps.places.PlacesService(map);
   _facPopup = new google.maps.InfoWindow({ disableAutoPan: true, maxWidth: 220 });
-  window._closeFacPopup = () => _facPopup.close();
+  window._closeFacPopup = () => { _facPopup.close(); clearDirections(); };
 
   map.addListener('idle', () => {
     if (!Object.values(_poiLayers).some(Boolean)) return;
@@ -2369,6 +2373,30 @@ function clearDirections() {
   clearTransitPolylines();
   hideRouteInfo();
   Object.values(_markers).forEach(e => e.marker.setVisible(true));
+}
+
+function showFacilityRoute(facLat, facLng) {
+  if (!_facListing || !directionsService || !directionsRenderer) return;
+  clearTransitPolylines();
+  directionsRenderer.setOptions({
+    polylineOptions: {
+      strokeColor: '#4285F4', strokeWeight: 4, strokeOpacity: 0,
+      icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4 }, offset: '0', repeat: '10px' }],
+    },
+  });
+  directionsService.route({
+    origin:      { lat: _facListing.lat, lng: _facListing.lng },
+    destination: { lat: facLat, lng: facLng },
+    travelMode:  google.maps.TravelMode.WALKING,
+    region:      'JP',
+  }, (result, status) => {
+    if (status !== 'OK') return;
+    directionsRenderer.setDirections(result);
+    const leg  = result.routes[0].legs[0];
+    const path = result.routes[0].overview_path;
+    const mid  = path && path.length ? path[Math.floor(path.length / 2)] : null;
+    showRouteInfo(leg.distance?.text, leg.duration?.text, mid, leg.end_location);
+  });
 }
 
 function openPropCard(l) {
