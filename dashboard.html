@@ -2738,7 +2738,7 @@ function selectListing(id) {
     showFacilities(entry.listing);
   } else {
     // Listing is filtered off the map — still pan if we have coordinates
-    const listing = _allListings?.find(l => l.id === id);
+    const listing = _allListings?.find(l => l.id === id && !l.disappeared_at);
     if (listing) {
       if (map && listing.lat && listing.lng) {
         map.panTo({ lat: listing.lat, lng: listing.lng });
@@ -3093,7 +3093,7 @@ function chatUseSuggestion(btn) {
 }
 
 function _chatListingCard(lid) {
-  const l = _allListings?.find(x => x.id === lid);
+  const l = _allListings?.find(x => x.id === lid && !x.disappeared_at);
   if (!l) return '';
   const img = l.thumbnail_url
     ? `<img src="${escHtml(l.thumbnail_url)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=chat-listing-card-no-img>🏠</div>'">`
