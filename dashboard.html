@@ -147,6 +147,8 @@
     background: var(--rail-bg);
     border-left: 1px solid rgba(255,255,255,0.07);
     z-index: 20;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 6px 0;
   }
   .right-panel {
     position: fixed; right: 52px; top: 52px;
@@ -541,6 +543,18 @@
     .side-panel { left: 40px; }
   }
 
+  /* ── Copilot rail button (right rail) ── */
+  .rail-btn--copilot { color: #4ade80 !important; }
+  .rail-btn--copilot:hover { background: rgba(74,222,128,0.12) !important; color: #6ee89a !important; }
+  .rail-btn--copilot.active { background: rgba(74,222,128,0.2) !important; color: #86efac !important; }
+  .rail-tip--left {
+    left: auto !important; right: calc(100% + 8px) !important;
+  }
+  .rail-tip--left::after {
+    left: auto !important; right: -4px !important; border-width: 4px 0 4px 4px !important;
+    border-color: transparent transparent transparent rgba(0,0,0,0.85) !important;
+  }
+
   /* ── Copilot panel ── */
   .copilot-search-row { display:flex; gap:6px; margin-bottom:10px; }
   .copilot-input {
@@ -781,10 +795,6 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
       <span class="rail-tip" data-i18n="setup">セットアップ</span>
     </button>
-    <button class="rail-btn" id="rail-copilot" onclick="openPanel('copilot')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M5 3l.6 1.9L7.5 5.5l-1.9.6L5 8l-.6-1.9L2.5 5.5l1.9-.6z"/><path d="M19 15l.6 1.9 1.9.6-1.9.6-.6 1.9-.6-1.9-1.9-.6 1.9-.6z"/></svg>
-      <span class="rail-tip" data-i18n="copilot">AI検索</span>
-    </button>
   </aside>
 
   <!-- ── Slide-out panel ── -->
@@ -966,7 +976,12 @@
   </main>
 
   <!-- ── Right icon rail ── -->
-  <aside class="right-rail"></aside>
+  <aside class="right-rail">
+    <button class="rail-btn rail-btn--copilot" id="rail-copilot" onclick="openPanel('copilot')" style="margin-top:auto;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M5 3l.6 1.9L7.5 5.5l-1.9.6L5 8l-.6-1.9L2.5 5.5l1.9-.6z"/><path d="M19 15l.6 1.9 1.9.6-1.9.6-.6 1.9-.6-1.9-1.9-.6 1.9-.6z"/></svg>
+      <span class="rail-tip rail-tip--left" data-i18n="copilot">AI検索</span>
+    </button>
+  </aside>
 
 </div>
 
