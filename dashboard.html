@@ -57,7 +57,7 @@
   .topbar {
     display: grid;
     grid-template-columns: 52px 1fr 52px;
-    height: 40px;
+    height: 52px;
     position: sticky;
     top: 0;
     z-index: 16;
@@ -65,6 +65,7 @@
   .topbar-rail {
     background: var(--rail-bg);
     display: flex; align-items: center; justify-content: center;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
   }
   .topbar-main {
     background: var(--rail-bg);
@@ -139,17 +140,17 @@
   .layout {
     display: grid;
     grid-template-columns: 52px 1fr 52px;
-    height: calc(100vh - 40px);
+    height: calc(100vh - 52px);
     overflow: hidden;
   }
   .right-rail {
     background: var(--rail-bg);
-    border-left: 1px solid rgba(255,255,255,0.05);
+    border-left: 1px solid rgba(255,255,255,0.07);
     z-index: 20;
   }
   .right-panel {
-    position: fixed; right: 52px; top: 40px;
-    width: 420px; height: calc(100vh - 40px);
+    position: fixed; right: 52px; top: 52px;
+    width: 420px; height: calc(100vh - 52px);
     overflow-y: auto; z-index: 15;
     transform: translateX(calc(100% + 52px));
     transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
@@ -165,6 +166,7 @@
   .right-panel.open { transform: translateX(0); }
   .icon-rail {
     background: var(--rail-bg);
+    border-right: 1px solid rgba(255,255,255,0.07);
     display: flex; flex-direction: column; align-items: center;
     padding: 10px 0; gap: 2px; z-index: 20;
   }
@@ -185,8 +187,8 @@
   }
   .rail-btn:hover .rail-tip { opacity: 1; }
   .side-panel {
-    position: fixed; left: 52px; top: 40px;
-    width: 312px; height: calc(100vh - 40px);
+    position: fixed; left: 52px; top: 52px;
+    width: 312px; height: calc(100vh - 52px);
     overflow-y: auto; z-index: 15;
     transform: translateX(-100%);
     transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
@@ -885,6 +887,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-23 10:35 JST</p>
       </div>
 
     </div>
@@ -1649,12 +1652,12 @@ function _renderFacilitySection(facilities) {
     ['station', t('station_label')],
   ];
   const toggleGrid = allTypes.map(([k, label]) => `
-    <div class="fac-tog-row">
+    <div class="fac-tog-row" style="cursor:pointer;" onclick="document.getElementById('fac-tog-${k}').click()">
       <span class="layer-label" style="gap:5px;min-width:0;overflow:hidden;">
         ${facilityIconHtml(k, 14)}
         <span style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${label}</span>
       </span>
-      <label class="tog" style="flex-shrink:0;">
+      <label class="tog" style="flex-shrink:0;" onclick="event.stopPropagation()">
         <input type="checkbox" id="fac-tog-${k}" ${_facTypeLayers[k] !== false ? 'checked' : ''}
           onchange="toggleFacType('${k}',this.checked)">
         <span class="tog-slider"></span>
@@ -1988,6 +1991,8 @@ function fetchPoiMarkers(layer) {
       marker.addListener('click', () => {
         _facPopup.setContent(_facPopupHtml(color, place.name, facilityTypeLabel(layer), null));
         _facPopup.open({ map, anchor: marker });
+        const pos = place.geometry.location;
+        showFacilityRoute(pos.lat(), pos.lng());
       });
       return marker;
     });
@@ -2483,7 +2488,19 @@ function showFacilityRoute(facLat, facLng) {
     travelMode:  google.maps.TravelMode.WALKING,
     region:      'JP',
   }, (result, status) => {
-    if (status !== 'OK') return;
+    if (status !== 'OK') {
+      const pl = new google.maps.Polyline({
+        path: [
+          { lat: _facListing.lat, lng: _facListing.lng },
+          { lat: facLat, lng: facLng },
+        ],
+        strokeWeight: 2, strokeOpacity: 0,
+        icons: [{ icon: { path: google.maps.SymbolPath.CIRCLE, fillColor: '#4285F4', fillOpacity: 1, strokeWeight: 0, scale: 3.5 }, offset: '0', repeat: '20px' }],
+        map,
+      });
+      _transitPolylines.push(pl);
+      return;
+    }
     _renderWalkingPolylines(result);
     const leg  = result.routes[0].legs[0];
     const steps = leg.steps;
