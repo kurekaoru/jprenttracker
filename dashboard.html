@@ -56,8 +56,8 @@
 
   .topbar {
     display: grid;
-    grid-template-columns: 52px 1fr 52px;
-    height: 52px;
+    grid-template-columns: 38px 1fr 38px;
+    height: 38px;
     position: sticky;
     top: 0;
     z-index: 16;
@@ -139,8 +139,8 @@
 
   .layout {
     display: grid;
-    grid-template-columns: 52px 1fr 52px;
-    height: calc(100vh - 52px);
+    grid-template-columns: 38px 1fr 38px;
+    height: calc(100vh - 38px);
     overflow: hidden;
   }
   .right-rail {
@@ -151,8 +151,8 @@
     padding: 6px 0;
   }
   .right-panel {
-    position: fixed; right: -420px; top: 52px;
-    width: 420px; height: calc(100vh - 52px);
+    position: fixed; right: -420px; top: 38px;
+    width: 420px; height: calc(100vh - 38px);
     overflow-y: auto; z-index: 15;
     transition: right 0.22s cubic-bezier(0.4,0,0.2,1);
     box-shadow: -4px 0 32px rgba(0,0,0,0.35);
@@ -164,11 +164,11 @@
     background: #2d2d30; color: rgba(255,255,255,0.87);
     border-left: 1px solid rgba(255,255,255,0.06);
   }
-  .right-panel.open           { right: 52px; }
-  .right-panel.open.chat-open { right: 412px; }
+  .right-panel.open           { right: 38px; }
+  .right-panel.open.chat-open { right: 398px; }
   .chat-panel {
-    position: fixed; right: -360px; top: 52px;
-    width: 360px; height: calc(100vh - 52px);
+    position: fixed; right: -360px; top: 38px;
+    width: 360px; height: calc(100vh - 38px);
     z-index: 16; display: flex; flex-direction: column;
     transition: right 0.22s cubic-bezier(0.4,0,0.2,1);
     box-shadow: -4px 0 32px rgba(0,0,0,0.35);
@@ -179,15 +179,15 @@
     background: #2d2d30; color: rgba(255,255,255,0.87);
     border-left: 1px solid rgba(255,255,255,0.06);
   }
-  .chat-panel.open { right: 52px; }
+  .chat-panel.open { right: 38px; }
   .icon-rail {
     background: var(--rail-bg);
     border-right: 1px solid rgba(255,255,255,0.07);
     display: flex; flex-direction: column; align-items: center;
-    padding: 10px 0; gap: 2px; z-index: 20;
+    padding: 6px 0; gap: 2px; z-index: 20;
   }
   .rail-btn {
-    width: 38px; height: 38px; border: none; border-radius: 10px;
+    width: 30px; height: 30px; border: none; border-radius: 8px;
     background: transparent; color: rgba(255,255,255,0.38);
     cursor: pointer; display: flex; align-items: center; justify-content: center;
     transition: all 0.15s; position: relative;
@@ -203,8 +203,8 @@
   }
   .rail-btn:hover .rail-tip { opacity: 1; }
   .side-panel {
-    position: fixed; left: 52px; top: 52px;
-    width: 312px; height: calc(100vh - 52px);
+    position: fixed; left: 38px; top: 38px;
+    width: 312px; height: calc(100vh - 38px);
     overflow-y: auto; z-index: 15;
     transform: translateX(-100%);
     transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
@@ -554,7 +554,7 @@
   @media (max-width: 680px) {
     .layout { grid-template-columns: 40px 1fr; }
     .rail-btn { width: 32px; height: 32px; }
-    .side-panel { left: 40px; }
+    .side-panel { left: 38px; }
   }
 
   /* ── Chat panel interior ── */
@@ -1056,7 +1056,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 01:17 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 01:23 JST</p>
       </div>
 
 
