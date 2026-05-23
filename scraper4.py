@@ -15,9 +15,10 @@ Setup:
     python scraper.py
 """
 
-import json, time, os, re, hashlib, requests, sqlite3
+import json, time, os, re, hashlib, requests, sqlite3, threading
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 import logging
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 from dotenv import load_dotenv
@@ -105,6 +106,16 @@ def init_db():
         "  PRIMARY KEY (listing_id, user_id)"
         ");"
     )
+    con.executescript(
+        "CREATE TABLE IF NOT EXISTS listing_images ("
+        "  id          INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  listing_id  TEXT    NOT NULL,"
+        "  url         TEXT    NOT NULL,"
+        "  local_path  TEXT,"
+        "  downloaded_at TEXT,"
+        "  UNIQUE(listing_id, url)"
+        ");"
+    )
     cols = {row[1] for row in con.execute("PRAGMA table_info(listings)")}
     for col, defn in [
         ("source",          "TEXT DEFAULT 'jkk'"),
@@ -116,6 +127,7 @@ def init_db():
         ("walk_min",        "INTEGER"),
         ("walk_m",          "INTEGER"),
         ("nearest_station", "TEXT"),
+        ("thumbnail_url",   "TEXT"),
     ]:
         if col not in cols:
             con.execute(f"ALTER TABLE listings ADD COLUMN {col} {defn}")
@@ -129,7 +141,9 @@ def upsert_listing(con, lid, listing, notified=False):
     now = datetime.now().isoformat()
     source = listing.get("source", "jkk")
     address = listing.get("address") or listing.get("ward", "")
-    if get_listing_row(con, lid):
+    thumb = listing.get("thumbnail_url")
+    is_new = not get_listing_row(con, lid)
+    if not is_new:
         con.execute(
             "UPDATE listings SET last_seen=?, rent=?, source=?, address=?, disappeared_at=NULL,"
             " notified=MAX(notified,?) WHERE id=?",
@@ -137,17 +151,116 @@ def upsert_listing(con, lid, listing, notified=False):
         )
     else:
         con.execute(
-            "INSERT INTO listings (id,name,ward,layout,rent,size_m2,url,first_seen,last_seen,notified,source,address) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO listings (id,name,ward,layout,rent,size_m2,url,first_seen,last_seen,notified,source,address,thumbnail_url) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (lid, listing["name"], listing["ward"], listing["layout"],
              listing["rent"], listing["size_m2"], listing["url"], now, now,
-             int(notified), source, address)
+             int(notified), source, address, thumb)
         )
+        if thumb:
+            con.execute(
+                "INSERT OR IGNORE INTO listing_images (listing_id, url) VALUES (?,?)",
+                (lid, thumb)
+            )
     con.execute(
         "INSERT INTO snapshots (listing_id,rent,seen_at) VALUES (?,?,?)",
         (lid, listing["rent"], now)
     )
     con.commit()
+    return is_new
+
+IMG_DIR = "images"
+_IMG_HEADERS = {"User-Agent": "jkktrackr/1.0 (image-collector)"}
+
+def download_pending_images(con, limit=50):
+    """Download images that have been queued but not yet saved to disk."""
+    rows = con.execute(
+        "SELECT id, listing_id, url FROM listing_images "
+        "WHERE local_path IS NULL ORDER BY id LIMIT ?", (limit,)
+    ).fetchall()
+    if not rows:
+        return
+    log.info(f"Downloading {len(rows)} queued image(s)...")
+    for row_id, lid, url in rows:
+        img_dir = os.path.join(IMG_DIR, lid)
+        os.makedirs(img_dir, exist_ok=True)
+        try:
+            r = requests.get(url, timeout=15, headers=_IMG_HEADERS)
+            ct = r.headers.get("content-type", "")
+            if r.status_code != 200 or not ct.startswith("image"):
+                log.debug(f"Skip non-image response for {url} ({r.status_code} {ct})")
+                continue
+            ext = url.rsplit(".", 1)[-1].split("?")[0].lower()
+            if ext not in ("jpg", "jpeg", "png", "webp", "gif"):
+                ext = "jpg"
+            fpath = os.path.join(img_dir, f"{row_id}.{ext}")
+            with open(fpath, "wb") as f:
+                f.write(r.content)
+            con.execute(
+                "UPDATE listing_images SET local_path=?, downloaded_at=? WHERE id=?",
+                (fpath, datetime.now().isoformat(), row_id)
+            )
+            con.commit()
+            log.debug(f"Saved {fpath}")
+        except Exception as e:
+            log.warning(f"Image download failed ({url}): {e}")
+
+_DETAIL_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept-Language": "ja-JP,ja;q=0.9",
+}
+
+def _fetch_detail_image_url(listing_url):
+    """Extract main photo URL from a listing detail page."""
+    if not listing_url or listing_url.startswith("javascript"):
+        return None
+    try:
+        r = requests.get(listing_url, timeout=15, headers=_DETAIL_HEADERS)
+        if r.status_code != 200:
+            return None
+        soup = BeautifulSoup(r.content, "html.parser")
+        og = soup.find("meta", property="og:image")
+        if og and og.get("content"):
+            return og["content"]
+        for sel in [".gaikan img", ".bukken-photo img", ".main-photo img", "#mainPhoto img",
+                    ".property-image img", ".room-image img"]:
+            img = soup.select_one(sel)
+            if img and img.get("src"):
+                return urljoin(listing_url, img["src"])
+        skip = {"logo", "icon", "btn", "arrow", "spacer", "blank", ".gif", ".svg"}
+        for img in soup.find_all("img", src=True):
+            src = img["src"].lower()
+            if not any(x in src for x in skip):
+                return urljoin(listing_url, img["src"])
+    except Exception as e:
+        log.debug(f"Detail image fetch failed ({listing_url}): {e}")
+    return None
+
+
+def _scrape_images_for_new_listings(new_lids):
+    if not new_lids:
+        return
+    con = sqlite3.connect(DB_FILE)
+    rows = con.execute(
+        f"SELECT id, url FROM listings WHERE id IN ({','.join('?'*len(new_lids))})",
+        new_lids
+    ).fetchall()
+    ok = 0
+    for lid, url in rows:
+        img_url = _fetch_detail_image_url(url)
+        if img_url:
+            con.execute("UPDATE listings SET thumbnail_url=? WHERE id=?", (img_url, lid))
+            con.execute(
+                "INSERT OR IGNORE INTO listing_images (listing_id, url) VALUES (?,?)",
+                (lid, img_url)
+            )
+            con.commit()
+            ok += 1
+        time.sleep(0.5)
+    if ok:
+        log.info(f"Detail images scraped for {ok}/{len(rows)} new listing(s).")
+    con.close()
+
 
 def wait_stable(page, timeout=30_000):
     try:
@@ -361,6 +474,8 @@ def extract_fields(tds, text, base_url):
     name   = tds[1].get_text(strip=True)
     ward   = tds[2].get_text(strip=True)
     layout = tds[5].get_text(strip=True).translate(FWTABLE)
+    layout = re.sub(r"S$", "", layout)          # strip service-room suffix: 2DKS→2DK
+    if re.match(r"^[4-9]", layout): layout = "4LDK以上"  # 4K/4DK/4LDK→4LDK以上
     size_text = tds[6].get_text(strip=True)
     rent_text = tds[7].get_text(strip=True)
 
@@ -394,10 +509,20 @@ def extract_fields(tds, text, base_url):
             url = href if href.startswith("http") else (JKK_BASE + href if href.startswith("/") else base_url)
             break
 
+    # Thumbnail from image column (tds[0])
+    thumbnail_url = None
+    img = tds[0].find("img")
+    if img and img.get("src"):
+        src = img["src"]
+        if src.startswith("http"):
+            thumbnail_url = src
+        elif src.startswith("/"):
+            thumbnail_url = JKK_BASE + src
+
     return {
         "name": name, "address": ward, "ward": ward,
         "rent": rent_raw, "layout": layout, "size_m2": size_m2, "url": url,
-        "source": "jkk",
+        "source": "jkk", "thumbnail_url": thumbnail_url,
     }
 
 
@@ -600,7 +725,7 @@ def send_telegram(listing, target):
 
 def get_user_targets(con):
     """Return all enabled notification targets with their per-user filter settings."""
-    rows = con.execute("""
+    cur = con.execute("""
         SELECT un.id AS notif_id, un.user_id, un.type, un.target,
                COALESCE(us.min_rent,     0)    AS min_rent,
                COALESCE(us.max_rent,     0)    AS max_rent,
@@ -611,10 +736,12 @@ def get_user_targets(con):
           FROM user_notifications un
           LEFT JOIN user_settings us ON us.user_id = un.user_id
          WHERE un.enabled = 1
-    """).fetchall()
+    """)
+    cols = [desc[0] for desc in cur.description]
+    rows = cur.fetchall()
     result = []
     for r in rows:
-        d = dict(r)
+        d = dict(zip(cols, r))
         d["layouts"] = json.loads(d.get("layouts") or "[]")
         d["wards"]   = json.loads(d.get("wards")   or "[]")
         result.append(d)
@@ -694,20 +821,23 @@ def run():
             log.warning("UR fetch did not complete — skipping UR disappearance detection this cycle.")
 
         new_count = {"jkk": 0, "ur": 0}
+        new_lids = []
         for listing in listings:
             lid = listing_id(listing)
             row = get_listing_row(con, lid)
             already_notified = bool(row[0]) if row else False
             notified = False
 
-            if not already_notified and matches_criteria(listing, config):
+            if not already_notified:
                 rent_display = f"¥{listing['rent']:,}" if listing["rent"] else "不明"
                 src = listing.get("source", "jkk").upper()
                 log.info(f"NEW match [{src}] → {listing['name']} | {listing['ward']} | {rent_display}")
                 notified = send_notifications(con, listing, lid, config)
                 new_count[listing.get("source", "jkk")] = new_count.get(listing.get("source", "jkk"), 0) + 1
 
-            upsert_listing(con, lid, listing, notified=notified)
+            is_new = upsert_listing(con, lid, listing, notified=notified)
+            if is_new:
+                new_lids.append(lid)
 
         # Mark disappeared only for sources whose fetch completed successfully.
         # If JKK timed out but UR succeeded (or vice versa), we must not wipe
@@ -729,6 +859,13 @@ def run():
         total = con.execute("SELECT COUNT(*) FROM listings").fetchone()[0]
         log.info(f"Cycle done — {new_count['jkk']} new JKK | {new_count['ur']} new UR | "
                  f"{total} total in DB. Next check in {POLL_INTERVAL // 60}m.")
+        download_pending_images(con)
+        if new_lids:
+            threading.Thread(
+                target=_scrape_images_for_new_listings,
+                args=(new_lids,),
+                daemon=True,
+            ).start()
         time.sleep(POLL_INTERVAL)
 
 

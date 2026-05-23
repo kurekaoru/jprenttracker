@@ -62,6 +62,24 @@ UR_REGIONS = [
     }),
 ]
 
+# Build a pattern to extract the primary municipality from a UR address string.
+# Some danchi straddle ward/city boundaries; the UR API assigns them to whichever
+# search code (skcs) surfaced them, which can mismatch the actual address.
+# We match the first known municipality that appears in the address and use that.
+_ALL_WARDS = sorted(
+    (ward for _, _, codes in UR_REGIONS for ward in codes),
+    key=len, reverse=True,  # longest first so e.g. 世田谷区 beats 田区
+)
+_WARD_RE = re.compile("|".join(re.escape(w) for w in _ALL_WARDS))
+
+def _ward_from_address(address, fallback):
+    if address:
+        m = _WARD_RE.search(address)
+        if m:
+            return m.group(0)
+    return fallback
+
+
 _HEADERS = {
     "Origin": "https://www.ur-net.go.jp",
     "Referer": "https://www.ur-net.go.jp/",
@@ -142,6 +160,14 @@ def _fetch_rooms_for_danchi(skcs, tdfk, block, danchi_obj):
 _RENT_RE = re.compile(r"([\d,]+)")
 _NUM_RE  = re.compile(r"([\d.]+)")
 
+def _normalize_layout(raw):
+    """Normalize UR layout strings to match the dashboard LAYOUTS list."""
+    s = (raw or "").strip()
+    s = re.sub(r"S$", "", s)          # drop service-room suffix: 2DKS→2DK, 2LDKS→2LDK
+    if re.match(r"^[4-9]", s):        # 4LDK, 4K, 4DK, etc. → 4LDK以上
+        s = "4LDK以上"
+    return s or raw
+
 
 def _parse_room(room, danchi, ward_name):
     rent_m = _RENT_RE.search(room.get("rent") or "")
@@ -161,15 +187,28 @@ def _parse_room(room, danchi, ward_name):
     link = room.get("roomLinkPc") or ""
     url = (UR_WEB_BASE + link) if link.startswith("/") else (link or UR_WEB_BASE)
 
+    # Try common field names for danchi/room image in the UR API response
+    thumbnail_url = None
+    for key in ("imgPath", "imgList", "img", "imgUrl", "imageUrl", "danchiImg", "photo"):
+        val = danchi.get(key) or room.get(key)
+        if val:
+            if isinstance(val, list):
+                val = val[0]
+            if isinstance(val, str) and val:
+                thumbnail_url = (UR_WEB_BASE + val) if val.startswith("/") else val
+                break
+
+    address = (danchi.get("place") or "").strip()
     return {
-        "name":    name or "(無名)",
-        "address": (danchi.get("place") or "").strip(),
-        "ward":    ward_name,
-        "rent":    rent,
-        "layout":  (room.get("type") or "").strip(),
-        "size_m2": size_m2,
-        "url":     url,
-        "source":  "ur",
+        "name":          name or "(無名)",
+        "address":       address,
+        "ward":          _ward_from_address(address, ward_name),
+        "rent":          rent,
+        "layout":        _normalize_layout(room.get("type") or ""),
+        "size_m2":       size_m2,
+        "url":           url,
+        "source":        "ur",
+        "thumbnail_url": thumbnail_url,
     }
 
 
