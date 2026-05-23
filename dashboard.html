@@ -1035,7 +1035,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 00:45 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 00:50 JST</p>
       </div>
 
 
@@ -3217,6 +3217,10 @@ function _chatCommuteClient(action) {
         所要時間 (${modeLabel}): <strong>${leg.duration.text}</strong> / ${leg.distance.text}
         ${steps.length ? '<br>' + steps.map(escHtml).join('<br>') : ''}${note}
       </div>`;
+      if (map && directionsRenderer) {
+        directionsRenderer.setDirections(result);
+        map.fitBounds(result.routes[0].bounds);
+      }
     } else if (mode === google.maps.TravelMode.TRANSIT) {
       svc.route({ origin, destination: action.destination, travelMode: google.maps.TravelMode.DRIVING }, (r, s) => showResult(google.maps.TravelMode.DRIVING, r, s));
       return;
