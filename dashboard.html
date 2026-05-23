@@ -3165,6 +3165,7 @@ async function chatSend() {
     _chatSessionId = data.session_id;
     localStorage.setItem('chatSessionId', _chatSessionId);
     _chatAppendMsg('assistant', data.response, data.listing_ids || []);
+    (data.actions || []).forEach(chatExecuteAction);
   } catch (e) {
     _chatRemoveTyping();
     _chatAppendMsg('assistant', `エラー: ${e.message}`, []);
@@ -3172,6 +3173,16 @@ async function chatSend() {
     _chatBusy = false;
     document.getElementById('chat-send-btn').disabled = false;
     document.getElementById('chat-input')?.focus();
+  }
+}
+
+function chatExecuteAction(action) {
+  if (action.type === 'center_map') {
+    if (!map || action.lat == null || action.lng == null) return;
+    map.panTo({ lat: action.lat, lng: action.lng });
+    map.setZoom(action.zoom || 15);
+  } else if (action.type === 'select_listing') {
+    if (action.listing_id) selectListing(action.listing_id);
   }
 }
 
