@@ -1223,6 +1223,7 @@ Rules:
 - Use select_listing only for ONE specific named property ("open that one", "select it"). Never call it in a loop.
 - Use set_map_filter when the user wants to show/hide multiple listings by criteria ("show listings above 50m²", "filter to 1LDK", "only JKK"). This updates the map markers and table instantly.
 - Do not use emojis. Keep responses concise and factual.
+- Use find_nearby_place when the user asks about any facility near a property (hospital, school, gym, etc.). Never say "I can't find nearby X" or redirect to Google Maps — always call the tool first. If results come back, call get_commute_time with the nearest place name as destination to give an actual travel time.
 - If a tool returns no results, say so plainly and offer to try different search parameters.
 """
 
@@ -1307,6 +1308,25 @@ _CHAT_TOOLS = [
                 "max_walk": {"type": "integer", "description": "Max walk min to nearest station (0 = no limit)"},
                 "source":   {"type": "string",  "enum": ["jkk","ur","both"], "description": "Filter by property source"},
             },
+        },
+    },
+    {
+        "name": "find_nearby_place",
+        "description": (
+            "Find the nearest places of a given type near a listing using Google Maps Places API. "
+            "Use this when the user asks about any nearby facility (hospital, school, gym, library, etc.) "
+            "that isn't already in the pre-loaded facility data shown on the property card. "
+            "Returns name, address, and distance. After finding the closest place, call get_commute_time "
+            "to get the actual cycling/walking time using the place name as destination."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "listing_id": {"type": "string", "description": "Listing ID to search near"},
+                "place_type": {"type": "string", "description": "Google Maps place type, e.g. hospital, school, kindergarten, supermarket, gym, library, police, post_office"},
+                "radius_m":   {"type": "integer", "description": "Search radius in metres, default 3000, max 10000"},
+            },
+            "required": ["listing_id", "place_type"],
         },
     },
 ]
@@ -1494,6 +1514,52 @@ def _call_claude(history, con, open_listing=None):
                         action[key] = inp[key]
                 all_actions.append(action)
                 result = {"ok": True, "filter": action}
+            elif block.name == "find_nearby_place":
+                inp        = block.input
+                lid        = inp.get("listing_id", "")
+                place_type = inp.get("place_type", "")
+                radius     = min(int(inp.get("radius_m", 3000)), 10000)
+                row = con.execute(
+                    "SELECT lat, lng FROM listings WHERE id=?", (lid,)
+                ).fetchone()
+                if not row or not row["lat"]:
+                    result = {"error": "listing not geocoded"}
+                elif not GOOGLE_MAPS_SERVER_KEY:
+                    result = {"error": "Google Maps API key not configured"}
+                else:
+                    try:
+                        r = requests.get(
+                            "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
+                            params={"location": f"{row['lat']},{row['lng']}",
+                                    "radius": radius, "type": place_type,
+                                    "language": "ja", "key": GOOGLE_MAPS_SERVER_KEY},
+                            timeout=10,
+                        ).json()
+                        if r.get("status") in ("OK", "ZERO_RESULTS"):
+                            def _haversine(lat1, lng1, lat2, lng2):
+                                dlat = (lat2 - lat1) * math.pi / 180
+                                dlng = (lng2 - lng1) * math.pi / 180
+                                a = (math.sin(dlat/2)**2
+                                     + math.cos(lat1*math.pi/180) * math.cos(lat2*math.pi/180)
+                                     * math.sin(dlng/2)**2)
+                                return round(6371000 * 2 * math.asin(math.sqrt(a)))
+                            places = []
+                            for p in (r.get("results") or [])[:5]:
+                                loc = p["geometry"]["location"]
+                                places.append({
+                                    "name":       p["name"],
+                                    "address":    p.get("vicinity", ""),
+                                    "lat":        loc["lat"], "lng": loc["lng"],
+                                    "distance_m": _haversine(row["lat"], row["lng"],
+                                                             loc["lat"], loc["lng"]),
+                                })
+                            places.sort(key=lambda x: x["distance_m"])
+                            result = {"places": places} if places else {
+                                "message": f"No {place_type} found within {radius}m"}
+                        else:
+                            result = {"error": f"Places API: {r.get('status')}"}
+                    except Exception as e:
+                        result = {"error": str(e)}
             else:
                 result = {"error": "unknown tool"}
             tool_results.append({
