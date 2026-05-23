@@ -151,11 +151,10 @@
     padding: 6px 0;
   }
   .right-panel {
-    position: fixed; right: 52px; top: 52px;
+    position: fixed; right: -420px; top: 52px;
     width: 420px; height: calc(100vh - 52px);
     overflow-y: auto; z-index: 15;
-    transform: translateX(calc(100% + 52px));
-    transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
+    transition: right 0.22s cubic-bezier(0.4,0,0.2,1);
     box-shadow: -4px 0 32px rgba(0,0,0,0.35);
     --surface:  #2d2d30; --surface2: #383840;
     --border:   rgba(255,255,255,0.08);
@@ -165,13 +164,13 @@
     background: #2d2d30; color: rgba(255,255,255,0.87);
     border-left: 1px solid rgba(255,255,255,0.06);
   }
-  .right-panel.open { transform: translateX(0); }
+  .right-panel.open           { right: 52px; }
+  .right-panel.open.chat-open { right: 412px; }
   .chat-panel {
-    position: fixed; right: 52px; top: 52px;
+    position: fixed; right: -360px; top: 52px;
     width: 360px; height: calc(100vh - 52px);
     z-index: 16; display: flex; flex-direction: column;
-    transform: translateX(calc(100% + 52px));
-    transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
+    transition: right 0.22s cubic-bezier(0.4,0,0.2,1);
     box-shadow: -4px 0 32px rgba(0,0,0,0.35);
     --surface:  #2d2d30; --surface2: #383840;
     --border:   rgba(255,255,255,0.08);
@@ -180,7 +179,7 @@
     background: #2d2d30; color: rgba(255,255,255,0.87);
     border-left: 1px solid rgba(255,255,255,0.06);
   }
-  .chat-panel.open { transform: translateX(0); }
+  .chat-panel.open { right: 52px; }
   .icon-rail {
     background: var(--rail-bg);
     border-right: 1px solid rgba(255,255,255,0.07);
@@ -1035,7 +1034,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 00:57 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 01:03 JST</p>
       </div>
 
 
@@ -1064,7 +1063,7 @@
 <div class="right-panel" id="right-panel">
   <div class="panel-header">
     <span class="panel-title" id="right-panel-title" data-i18n="property_info">物件情報</span>
-    <button class="panel-close-btn" onclick="closePropCard()">×</button>
+    <button class="panel-close-btn" onclick="closePropCard()">»</button>
   </div>
   <div class="panel-body">
     <div id="property-card-body" class="pin-popup"></div>
@@ -1075,7 +1074,7 @@
 <div class="chat-panel" id="chat-panel">
   <div class="panel-header">
     <span class="panel-title" style="color:#4ade80;">✦ AI 検索</span>
-    <button class="panel-close-btn" onclick="closeChatPanel()">×</button>
+    <button class="panel-close-btn" onclick="closeChatPanel()">»</button>
   </div>
   <div id="panel-copilot">
     <div class="chat-thread" id="chat-thread">
@@ -3061,6 +3060,7 @@ let _chatOpen = false;
 function openChatPanel() {
   _chatOpen = true;
   document.getElementById('chat-panel').classList.add('open');
+  document.getElementById('right-panel').classList.add('chat-open');
   document.getElementById('rail-copilot').classList.add('active');
   if (_chatSessionId) chatLoadHistory();
   setTimeout(() => { document.getElementById('chat-input')?.focus(); if (map) google.maps.event.trigger(map,'resize'); }, 250);
@@ -3069,6 +3069,7 @@ function openChatPanel() {
 function closeChatPanel() {
   _chatOpen = false;
   document.getElementById('chat-panel').classList.remove('open');
+  document.getElementById('right-panel').classList.remove('chat-open');
   document.getElementById('rail-copilot').classList.remove('active');
   setTimeout(() => { if (map) google.maps.event.trigger(map,'resize'); }, 230);
 }
