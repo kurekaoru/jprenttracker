@@ -1035,7 +1035,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 00:09 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 00:45 JST</p>
       </div>
 
 
@@ -3188,6 +3188,51 @@ async function chatSend() {
   }
 }
 
+function _chatCommuteClient(action) {
+  const thread = document.getElementById('chat-thread');
+  const card = document.createElement('div');
+  card.className = 'chat-msg chat-msg--assistant';
+  card.innerHTML = '<div class="chat-bubble chat-bubble--assistant" style="color:var(--muted)">経路を検索中...</div>';
+  thread.appendChild(card);
+  thread.scrollTop = thread.scrollHeight;
+
+  const svc = new google.maps.DirectionsService();
+  const origin = new google.maps.LatLng(action.lat, action.lng);
+
+  function showResult(mode, result, status) {
+    if (status === 'OK') {
+      const leg = result.routes[0].legs[0];
+      const steps = leg.steps
+        .filter(s => s.travel_mode === 'TRANSIT')
+        .map(s => {
+          const td = s.transit;
+          const line = td.line.short_name || td.line.name || '';
+          return `• ${line}: ${td.departure_stop.name} → ${td.arrival_stop.name} (${s.duration.text})`;
+        });
+      const modeLabel = mode === google.maps.TravelMode.TRANSIT ? '電車' : '車';
+      const note = mode === google.maps.TravelMode.DRIVING
+        ? '<br><span style="font-size:11px;color:var(--muted)">※ 電車経路が取得できなかったため車での所要時間を表示</span>' : '';
+      card.innerHTML = `<div class="chat-bubble chat-bubble--assistant">
+        <strong>${escHtml(action.listing_name)}</strong> → <strong>${escHtml(action.destination)}</strong><br>
+        所要時間 (${modeLabel}): <strong>${leg.duration.text}</strong> / ${leg.distance.text}
+        ${steps.length ? '<br>' + steps.map(escHtml).join('<br>') : ''}${note}
+      </div>`;
+    } else if (mode === google.maps.TravelMode.TRANSIT) {
+      svc.route({ origin, destination: action.destination, travelMode: google.maps.TravelMode.DRIVING }, (r, s) => showResult(google.maps.TravelMode.DRIVING, r, s));
+      return;
+    } else {
+      card.innerHTML = '<div class="chat-bubble chat-bubble--assistant">経路の取得に失敗しました。</div>';
+    }
+    thread.scrollTop = thread.scrollHeight;
+  }
+
+  svc.route({
+    origin, destination: action.destination,
+    travelMode: google.maps.TravelMode.TRANSIT,
+    transitOptions: { departureTime: new Date() },
+  }, (r, s) => showResult(google.maps.TravelMode.TRANSIT, r, s));
+}
+
 function chatExecuteAction(action) {
   if (action.type === 'center_map') {
     if (!map || action.lat == null || action.lng == null) return;
@@ -3195,6 +3240,8 @@ function chatExecuteAction(action) {
     map.setZoom(action.zoom || 15);
   } else if (action.type === 'select_listing') {
     if (action.listing_id) selectListing(action.listing_id);
+  } else if (action.type === 'get_commute_client') {
+    _chatCommuteClient(action);
   } else if (action.type === 'set_map_filter') {
     if (action.min_rent != null) document.getElementById('min-rent').value = action.min_rent || '';
     if (action.max_rent != null) document.getElementById('max-rent').value = action.max_rent || '';
