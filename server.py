@@ -13,6 +13,11 @@ from datetime import datetime, timedelta
 from urllib.parse import urlencode
 from dotenv import load_dotenv
 
+try:
+    import anthropic as _anthropic
+except ImportError:
+    _anthropic = None
+
 load_dotenv()
 
 CONFIG_FILE = "config.json"
@@ -110,9 +115,27 @@ def db():
         ("walk_min",        "INTEGER"),
         ("walk_m",          "INTEGER"),
         ("nearest_station", "TEXT"),
+        ("thumbnail_url",   "TEXT"),
     ]:
         if col not in cols:
             con.execute(f"ALTER TABLE listings ADD COLUMN {col} {defn}")
+
+    con.executescript("""
+        CREATE TABLE IF NOT EXISTS listing_images (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            listing_id   TEXT    NOT NULL,
+            url          TEXT    NOT NULL,
+            local_path   TEXT,
+            downloaded_at TEXT,
+            UNIQUE(listing_id, url)
+        );
+        CREATE TABLE IF NOT EXISTS listing_embeddings (
+            listing_id  TEXT PRIMARY KEY,
+            embedding   BLOB NOT NULL,
+            model       TEXT,
+            created_at  TEXT DEFAULT (datetime('now'))
+        );
+    """)
 
     # User / auth tables
     con.executescript("""
@@ -168,6 +191,25 @@ def db():
     con.commit()
 
     # New activity tables (idempotent)
+    con.executescript("""
+        CREATE TABLE IF NOT EXISTS chat_sessions (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER REFERENCES users(id),
+            title      TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id  INTEGER REFERENCES chat_sessions(id) ON DELETE CASCADE,
+            role        TEXT NOT NULL,
+            content     TEXT NOT NULL,
+            listing_ids TEXT DEFAULT '[]',
+            created_at  TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_chat_msg_session ON chat_messages(session_id);
+    """)
+    con.commit()
+
     con.executescript("""
         CREATE TABLE IF NOT EXISTS user_saved_listings (
             user_id    INTEGER NOT NULL REFERENCES users(id),
@@ -1085,7 +1127,7 @@ def get_listings():
         "SELECT id,name,ward,layout,rent,size_m2,url,first_seen,last_seen,"
         "       COALESCE(source,'jkk') AS source,"
         "       COALESCE(address, ward) AS address, lat, lng, geocoded_at,"
-        "       disappeared_at, walk_min, walk_m, nearest_station "
+        "       disappeared_at, walk_min, walk_m, nearest_station, thumbnail_url "
         "  FROM listings "
         " WHERE last_seen >= ? "
         " ORDER BY last_seen DESC",
@@ -1163,6 +1205,476 @@ def proxy_directions():
         return jsonify(r.json())
     except Exception as e:
         return jsonify({"status": "UNKNOWN_ERROR", "error_message": str(e)}), 502
+
+
+# ── Claude chat ────────────────────────────────────────────────────────────────
+
+CHAT_SYSTEM = """You are a helpful real estate assistant for a Tokyo/Kanagawa housing monitor that tracks JKK (東京都公社住宅) and UR (都市再生機構) rental vacancies.
+Today's date: {date}
+Always respond in the same language the user writes in (Japanese or English).
+Use tools to fetch real live data — never guess or invent listing IDs, names, or details.
+
+Rules:
+- Always call search_listings first to find properties and obtain valid listing IDs. Never call get_listing_details with a guessed or remembered ID — only use IDs returned by search_listings in the same conversation.
+- When you call search_listings, the UI automatically renders clickable property cards below your message. Do not mention photos, thumbnails, or image availability — just describe the listings in text and let the cards do the rest.
+- Use get_commute_time for ANY question about travel time, commute, or how long to reach a place. Never estimate — always call the tool and report the actual API result including the step-by-step route.
+- Use center_map whenever the user asks to see a location or property on the map ("show me", "where is", "center on", "zoom to"). You can call it with a listing_id (coordinates are looked up automatically) or with lat/lng.
+- Use select_listing only for ONE specific named property ("open that one", "select it"). Never call it in a loop.
+- Use set_map_filter when the user wants to show/hide multiple listings by criteria ("show listings above 50m²", "filter to 1LDK", "only JKK"). This updates the map markers and table instantly.
+- Do not use emojis. Keep responses concise and factual.
+- If a tool returns no results, say so plainly and offer to try different search parameters.
+"""
+
+_CHAT_TOOLS = [
+    {
+        "name": "search_listings",
+        "description": "Search currently available rental properties. Returns up to 20 matches with id, name, ward, rent, layout, size_m2, url, source, nearest_station, walk_min, thumbnail_url.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ward":     {"type": "string",  "description": "Ward/city (partial OK), e.g. 新宿区 or 新宿"},
+                "layout":   {"type": "string",  "description": "Floor plan exact, e.g. 1LDK, 2DK"},
+                "min_rent": {"type": "integer", "description": "Min monthly rent JPY"},
+                "max_rent": {"type": "integer", "description": "Max monthly rent JPY"},
+                "min_size": {"type": "number",  "description": "Min floor area m²"},
+                "max_size": {"type": "number",  "description": "Max floor area m²"},
+                "source":   {"type": "string",  "enum": ["jkk","ur"], "description": "jkk=公社 ur=UR"},
+                "max_walk": {"type": "integer", "description": "Max walk min to nearest station"},
+                "limit":    {"type": "integer", "description": "Max results, default 10"},
+            },
+        },
+    },
+    {
+        "name": "get_statistics",
+        "description": "Summary stats: total available, counts by source/ward, rent range, layout breakdown.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "get_listing_details",
+        "description": "Full details for one listing including nearby facilities.",
+        "input_schema": {
+            "type": "object",
+            "required": ["listing_id"],
+            "properties": {"listing_id": {"type": "string"}},
+        },
+    },
+    {
+        "name": "center_map",
+        "description": "Pan and zoom the map to a listing or coordinates. Use when user says 'show on map', 'center on', 'zoom to', or 'where is'. Prefer listing_id — coordinates are resolved automatically.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "listing_id": {"type": "string",  "description": "Listing ID whose coordinates to center on"},
+                "lat":        {"type": "number",  "description": "Latitude (use only when no listing_id)"},
+                "lng":        {"type": "number",  "description": "Longitude (use only when no listing_id)"},
+                "zoom":       {"type": "integer", "description": "Zoom level 10-18, default 15"},
+            },
+        },
+    },
+    {
+        "name": "select_listing",
+        "description": "Select and highlight ONE specific listing on the map and open its detail card. Use only for a single named property. For 'show all X' or multi-listing filtering, use set_map_filter instead.",
+        "input_schema": {
+            "type": "object",
+            "required": ["listing_id"],
+            "properties": {"listing_id": {"type": "string"}},
+        },
+    },
+    {
+        "name": "get_commute_time",
+        "description": "Get actual transit commute time from a listing to a destination using Google Maps Directions API. Use this for ANY question about travel time, commute, or 'how long to get to X'. Never estimate — always call this tool.",
+        "input_schema": {
+            "type": "object",
+            "required": ["listing_id", "destination"],
+            "properties": {
+                "listing_id":  {"type": "string", "description": "Listing ID to commute from"},
+                "destination": {"type": "string", "description": "Destination station or address in Japanese, e.g. '目黒駅', '新宿駅'"},
+                "mode":        {"type": "string", "enum": ["transit","walking","driving"], "description": "Travel mode, default transit"},
+            },
+        },
+    },
+    {
+        "name": "set_map_filter",
+        "description": "Apply filters to show/hide markers on the map. Use when the user says 'show only', 'filter to', 'select all X', 'listings above/below Y', etc. All fields are optional; omit any you don't want to change.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "min_size": {"type": "number",  "description": "Min floor area m² (0 = clear)"},
+                "max_size": {"type": "number",  "description": "Max floor area m² (0 = no limit)"},
+                "min_rent": {"type": "integer", "description": "Min monthly rent JPY (0 = clear)"},
+                "max_rent": {"type": "integer", "description": "Max monthly rent JPY (0 = no limit)"},
+                "max_walk": {"type": "integer", "description": "Max walk min to nearest station (0 = no limit)"},
+                "source":   {"type": "string",  "enum": ["jkk","ur","both"], "description": "Filter by property source"},
+            },
+        },
+    },
+]
+
+def _chat_search(params, con):
+    cutoff = (datetime.now() - timedelta(minutes=90)).isoformat()
+    conds, args = ["disappeared_at IS NULL", "last_seen >= ?"], [cutoff]
+    if params.get("ward"):
+        conds.append("ward LIKE ?"); args.append(f"%{params['ward']}%")
+    if params.get("layout"):
+        conds.append("layout = ?"); args.append(params["layout"])
+    if params.get("min_rent"):
+        conds.append("rent >= ?"); args.append(params["min_rent"])
+    if params.get("max_rent"):
+        conds.append("rent <= ?"); args.append(params["max_rent"])
+    if params.get("min_size"):
+        conds.append("size_m2 >= ?"); args.append(params["min_size"])
+    if params.get("max_size"):
+        conds.append("size_m2 <= ?"); args.append(params["max_size"])
+    if params.get("source"):
+        conds.append("source = ?"); args.append(params["source"])
+    if params.get("max_walk"):
+        conds.append("walk_min IS NOT NULL AND walk_min <= ?"); args.append(params["max_walk"])
+    limit = min(int(params.get("limit", 10)), 20)
+    rows = con.execute(
+        f"SELECT id,name,ward,rent,layout,size_m2,url,source,nearest_station,walk_min,thumbnail_url "
+        f"FROM listings WHERE {' AND '.join(conds)} ORDER BY rent ASC LIMIT ?",
+        args + [limit]
+    ).fetchall()
+    return {"count": len(rows), "listings": [dict(r) for r in rows]}
+
+def _chat_stats(con):
+    total = con.execute("SELECT COUNT(*) FROM listings WHERE disappeared_at IS NULL").fetchone()[0]
+    by_src = {r["source"]: r["n"] for r in con.execute(
+        "SELECT source, COUNT(*) n FROM listings WHERE disappeared_at IS NULL GROUP BY source"
+    ).fetchall()}
+    rent = con.execute(
+        "SELECT MIN(rent) mn, MAX(rent) mx, CAST(AVG(rent) AS INTEGER) avg "
+        "FROM listings WHERE disappeared_at IS NULL"
+    ).fetchone()
+    wards = con.execute(
+        "SELECT ward, COUNT(*) n FROM listings WHERE disappeared_at IS NULL "
+        "GROUP BY ward ORDER BY n DESC LIMIT 10"
+    ).fetchall()
+    layouts = con.execute(
+        "SELECT layout, COUNT(*) n FROM listings WHERE disappeared_at IS NULL "
+        "AND layout IS NOT NULL GROUP BY layout ORDER BY n DESC"
+    ).fetchall()
+    return {
+        "total": total, "by_source": dict(by_src),
+        "rent": dict(rent), "top_wards": [dict(r) for r in wards],
+        "layouts": [dict(r) for r in layouts],
+    }
+
+def _chat_details(params, con):
+    row = con.execute(
+        "SELECT * FROM listings WHERE id=? AND disappeared_at IS NULL",
+        (params.get("listing_id",""),)
+    ).fetchone()
+    if not row:
+        return {"error": "listing not found or no longer available"}
+    facs = con.execute(
+        "SELECT type,name,distance_m FROM listing_facilities WHERE listing_id=? ORDER BY distance_m LIMIT 12",
+        (params["listing_id"],)
+    ).fetchall()
+    return {**dict(row), "facilities": [dict(f) for f in facs]}
+
+def _call_claude(history, con):
+    if not _anthropic:
+        return {"text": "anthropic パッケージが未インストールです: pip install anthropic", "listing_ids": [], "actions": []}
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return {"text": "ANTHROPIC_API_KEY が .env に設定されていません。", "listing_ids": [], "actions": []}
+
+    client = _anthropic.Anthropic(api_key=api_key)
+    messages = [{"role": m["role"], "content": m["content"]} for m in history]
+    all_ids = []
+    all_actions = []
+
+    for _ in range(10):
+        resp = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1024,
+            system=CHAT_SYSTEM.format(date=datetime.now().strftime("%Y-%m-%d")),
+            tools=_CHAT_TOOLS,
+            messages=messages,
+        )
+        if resp.stop_reason != "tool_use":
+            text = "".join(b.text for b in resp.content if hasattr(b, "text"))
+            return {"text": text, "listing_ids": all_ids, "actions": all_actions}
+
+        tool_results = []
+        for block in resp.content:
+            if block.type != "tool_use":
+                continue
+            if block.name == "search_listings":
+                result = _chat_search(block.input, con)
+                all_ids.extend(r["id"] for r in result.get("listings", []))
+            elif block.name == "get_statistics":
+                result = _chat_stats(con)
+            elif block.name == "get_listing_details":
+                result = _chat_details(block.input, con)
+                if "id" in result:
+                    all_ids.append(result["id"])
+            elif block.name == "get_commute_time":
+                inp = block.input
+                lid  = inp.get("listing_id", "")
+                dest = inp.get("destination", "")
+                mode = inp.get("mode", "transit")
+                row  = con.execute(
+                    "SELECT lat, lng, nearest_station FROM listings WHERE id=?", (lid,)
+                ).fetchone()
+                if not row or not row["lat"]:
+                    result = {"error": "listing not geocoded"}
+                elif not GOOGLE_MAPS_SERVER_KEY:
+                    result = {"error": "Google Maps server key not configured"}
+                else:
+                    try:
+                        def _directions(m):
+                            p = {"origin": f"{row['lat']},{row['lng']}", "destination": dest,
+                                 "mode": m, "language": "ja", "region": "JP",
+                                 "key": GOOGLE_MAPS_SERVER_KEY}
+                            if m == "transit":
+                                p["departure_time"] = "now"
+                            return requests.get(
+                                "https://maps.googleapis.com/maps/api/directions/json",
+                                params=p, timeout=10,
+                            ).json()
+
+                        modes_to_try = [mode] if mode != "transit" else ["transit", "driving"]
+                        data = None
+                        actual_mode = mode
+                        for m in modes_to_try:
+                            data = _directions(m)
+                            if data.get("status") == "OK":
+                                actual_mode = m
+                                break
+
+                        if data and data.get("status") == "OK" and data.get("routes"):
+                            leg = data["routes"][0]["legs"][0]
+                            steps = []
+                            for s in leg.get("steps", [])[:8]:
+                                td = s.get("transit_details", {})
+                                line = td.get("line", {})
+                                dep  = td.get("departure_stop", {}).get("name", "")
+                                arr  = td.get("arrival_stop", {}).get("name", "")
+                                name = line.get("short_name") or line.get("name", "")
+                                if name and dep and arr:
+                                    steps.append(f"{name}: {dep}→{arr} ({s['duration']['text']})")
+                                else:
+                                    import html as _html
+                                    steps.append(f"{_html.unescape(s.get('html_instructions',''))} ({s['duration']['text']})")
+                            result = {
+                                "duration":         leg["duration"]["text"],
+                                "duration_minutes": round(leg["duration"]["value"] / 60),
+                                "distance":         leg["distance"]["text"],
+                                "mode_used":        actual_mode,
+                                "note":             "transit data unavailable — showing driving time" if actual_mode == "driving" and mode == "transit" else None,
+                                "origin_address":   leg["start_address"],
+                                "destination_address": leg["end_address"],
+                                "steps":            steps,
+                            }
+                        else:
+                            result = {"error": f"No route found ({data.get('status', 'UNKNOWN') if data else 'no response'})"}
+                    except Exception as e:
+                        result = {"error": str(e)}
+            elif block.name == "center_map":
+                inp = block.input
+                lat, lng = inp.get("lat"), inp.get("lng")
+                if not lat and inp.get("listing_id"):
+                    row = con.execute(
+                        "SELECT lat, lng FROM listings WHERE id=?", (inp["listing_id"],)
+                    ).fetchone()
+                    if row:
+                        lat, lng = row["lat"], row["lng"]
+                if lat and lng:
+                    all_actions.append({
+                        "type": "center_map", "lat": lat, "lng": lng,
+                        "zoom": int(inp.get("zoom") or 15),
+                    })
+                    result = {"ok": True, "lat": lat, "lng": lng}
+                else:
+                    result = {"error": "coordinates not found"}
+            elif block.name == "select_listing":
+                lid = block.input.get("listing_id", "")
+                all_actions.append({"type": "select_listing", "listing_id": lid})
+                result = {"ok": True}
+            elif block.name == "set_map_filter":
+                inp = block.input
+                action = {"type": "set_map_filter"}
+                for key in ("min_size", "max_size", "min_rent", "max_rent", "max_walk", "source"):
+                    if key in inp:
+                        action[key] = inp[key]
+                all_actions.append(action)
+                result = {"ok": True, "filter": action}
+            else:
+                result = {"error": "unknown tool"}
+            tool_results.append({
+                "type": "tool_result", "tool_use_id": block.id,
+                "content": json.dumps(result, ensure_ascii=False),
+            })
+        messages.append({"role": "assistant", "content": resp.content})
+        messages.append({"role": "user", "content": tool_results})
+
+    return {"text": "応答の生成に失敗しました。もう一度お試しください。", "listing_ids": [], "actions": all_actions}
+
+
+@app.route("/api/chat", methods=["POST"])
+@jwt_required(optional=True)
+def chat_send():
+    body       = request.get_json(silent=True) or {}
+    message    = (body.get("message") or "").strip()
+    session_id = body.get("session_id")
+    if not message:
+        return jsonify({"error": "message required"}), 400
+
+    user_id = get_jwt_identity()
+    con = db()
+
+    if not session_id:
+        con.execute("INSERT INTO chat_sessions (user_id) VALUES (?)", (user_id,))
+        con.commit()
+        session_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+    rows = con.execute(
+        "SELECT role, content FROM chat_messages WHERE session_id=? ORDER BY created_at",
+        (session_id,)
+    ).fetchall()
+    history = [{"role": r["role"], "content": r["content"]} for r in rows]
+    history.append({"role": "user", "content": message})
+
+    con.execute(
+        "INSERT INTO chat_messages (session_id, role, content) VALUES (?,?,?)",
+        (session_id, "user", message)
+    )
+    con.commit()
+
+    result = _call_claude(history, con)
+
+    con.execute(
+        "INSERT INTO chat_messages (session_id, role, content, listing_ids) VALUES (?,?,?,?)",
+        (session_id, "assistant", result["text"], json.dumps(result["listing_ids"]))
+    )
+    con.commit()
+    con.close()
+
+    return jsonify({"session_id": session_id, "response": result["text"],
+                    "listing_ids": result["listing_ids"],
+                    "actions": result.get("actions", [])})
+
+
+@app.route("/api/chat/history")
+@jwt_required(optional=True)
+def chat_history():
+    session_id = request.args.get("session_id")
+    if not session_id:
+        return jsonify({"messages": []})
+    con = db()
+    rows = con.execute(
+        "SELECT role, content, listing_ids, created_at FROM chat_messages "
+        "WHERE session_id=? ORDER BY created_at",
+        (session_id,)
+    ).fetchall()
+    con.close()
+    return jsonify({"messages": [dict(r) for r in rows]})
+
+
+@app.route("/api/chat/sessions")
+@jwt_required(optional=True)
+def chat_sessions_list():
+    user_id = get_jwt_identity()
+    if not user_id:
+        return jsonify({"sessions": []})
+    con = db()
+    rows = con.execute(
+        "SELECT id, title, created_at FROM chat_sessions "
+        "WHERE user_id=? ORDER BY created_at DESC LIMIT 20",
+        (user_id,)
+    ).fetchall()
+    con.close()
+    return jsonify({"sessions": [dict(r) for r in rows]})
+
+
+@app.route("/api/search/status")
+def search_status():
+    con = db()
+    total   = con.execute("SELECT COUNT(*) FROM listings WHERE disappeared_at IS NULL").fetchone()[0]
+    indexed = con.execute("SELECT COUNT(*) FROM listing_embeddings").fetchone()[0]
+    con.close()
+    return jsonify({"total_listings": total, "indexed": indexed})
+
+
+@app.route("/api/search/text")
+def search_text():
+    q     = request.args.get("q", "").strip()
+    limit = min(int(request.args.get("limit", 30)), 50)
+    if not q:
+        return jsonify({"results": []})
+    terms = q.split()
+    conditions, params = [], []
+    for term in terms:
+        like = f"%{term}%"
+        conditions.append("(name LIKE ? OR ward LIKE ? OR address LIKE ? OR layout LIKE ?)")
+        params.extend([like, like, like, like])
+    where = " AND ".join(conditions)
+    con = db()
+    rows = con.execute(
+        f"SELECT * FROM listings WHERE disappeared_at IS NULL AND {where} "
+        f"ORDER BY last_seen DESC LIMIT ?",
+        params + [limit]
+    ).fetchall()
+    results = [dict(r) for r in rows]
+    con.close()
+    return jsonify({"results": results})
+
+
+@app.route("/api/search/visual", methods=["POST"])
+def search_visual():
+    """
+    Vector similarity search over CLIP-embedded listings.
+
+    Body JSON:
+        { "vec": [f32, f32, ...],   // 512-dim CLIP vector from embedder.py
+          "limit": 20 }             // optional, max 50
+
+    The Mac-side embedder.py generates the query vector; this endpoint
+    just does cosine similarity over stored embeddings (no ML on server).
+    """
+    import struct
+    try:
+        import numpy as np
+    except ImportError:
+        return jsonify({"error": "numpy not installed on server"}), 501
+
+    body  = request.get_json(silent=True) or {}
+    vec   = body.get("vec")
+    limit = min(int(body.get("limit", 20)), 50)
+
+    if not vec or len(vec) != 512:
+        return jsonify({"error": "vec must be a 512-element float array"}), 400
+
+    q_vec = np.array(vec, dtype=np.float32)
+    q_vec /= (np.linalg.norm(q_vec) + 1e-9)
+
+    con = db()
+    emb_rows = con.execute(
+        "SELECT listing_id, embedding FROM listing_embeddings"
+    ).fetchall()
+
+    if not emb_rows:
+        con.close()
+        return jsonify({"results": [], "total_indexed": 0})
+
+    ids   = [r["listing_id"] for r in emb_rows]
+    vecs  = np.stack([
+        np.frombuffer(bytes(r["embedding"]), dtype=np.float32) for r in emb_rows
+    ])
+    scores = (vecs @ q_vec).tolist()
+
+    ranked = sorted(zip(ids, scores), key=lambda x: -x[1])[:limit]
+
+    results = []
+    for lid, score in ranked:
+        row = con.execute("SELECT * FROM listings WHERE id=?", (lid,)).fetchone()
+        if row:
+            results.append({"score": round(score, 4), **dict(row)})
+
+    con.close()
+    return jsonify({"results": results, "total_indexed": len(emb_rows)})
 
 
 if __name__ == "__main__":
