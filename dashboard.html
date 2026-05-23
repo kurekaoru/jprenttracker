@@ -543,6 +543,87 @@
     .side-panel { left: 40px; }
   }
 
+  /* ── Chat panel ── */
+  .side-panel.chat-mode { overflow-y: hidden; }
+  #panel-copilot {
+    display: none;
+    flex-direction: column;
+    height: calc(100vh - 52px - 44px);
+    margin: -1rem;
+  }
+  #panel-copilot.active { display: flex; }
+  .chat-thread {
+    flex: 1; overflow-y: auto; padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 10px;
+    scroll-behavior: smooth;
+  }
+  .chat-msg { display: flex; flex-direction: column; gap: 4px; }
+  .chat-msg--user { align-items: flex-end; }
+  .chat-msg--assistant { align-items: flex-start; }
+  .chat-bubble {
+    max-width: 88%; padding: 9px 13px; border-radius: 14px;
+    font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word;
+  }
+  .chat-bubble--user {
+    background: rgba(74,222,128,0.18); border: 1px solid rgba(74,222,128,0.28);
+    border-bottom-right-radius: 4px;
+  }
+  .chat-bubble--assistant {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+  }
+  .chat-listings {
+    display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 2px;
+    scrollbar-width: thin;
+  }
+  .chat-listing-card {
+    flex-shrink: 0; width: 150px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 8px;
+    overflow: hidden; cursor: pointer; transition: border-color 0.15s;
+  }
+  .chat-listing-card:hover { border-color: rgba(74,222,128,0.5); }
+  .chat-listing-card img { width: 100%; height: 80px; object-fit: cover; display: block; background: var(--surface2); }
+  .chat-listing-card-no-img { width: 100%; height: 80px; background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 22px; }
+  .chat-listing-info { padding: 7px 8px; }
+  .chat-listing-name { font-size: 11px; font-weight: 600; line-height: 1.3; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-listing-meta { font-size: 10px; color: var(--muted); }
+  .chat-typing { display: flex; gap: 4px; align-items: center; padding: 10px 14px; }
+  .chat-typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: typingDot 1.2s infinite; }
+  .chat-typing span:nth-child(2) { animation-delay: 0.2s; }
+  .chat-typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes typingDot { 0%,60%,100%{opacity:.3} 30%{opacity:1} }
+  .chat-input-area {
+    border-top: 1px solid var(--border); padding: 10px 12px;
+    display: flex; gap: 8px; align-items: flex-end; background: var(--surface);
+  }
+  .chat-input {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px 12px; color: var(--text); font-size: 12.5px;
+    resize: none; outline: none; max-height: 100px; line-height: 1.45; font-family: inherit;
+  }
+  .chat-input:focus { border-color: rgba(74,222,128,0.4); }
+  .chat-input::placeholder { color: var(--muted); }
+  .chat-send-btn {
+    background: rgba(74,222,128,0.2); border: 1px solid rgba(74,222,128,0.35);
+    border-radius: 9px; width: 34px; height: 34px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: #4ade80; flex-shrink: 0; transition: background 0.15s;
+  }
+  .chat-send-btn:hover { background: rgba(74,222,128,0.35); }
+  .chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .chat-empty {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 10px; color: var(--muted); text-align: center; padding: 24px;
+  }
+  .chat-empty svg { opacity: 0.3; }
+  .chat-empty p { font-size: 12px; line-height: 1.6; margin: 0; }
+  .chat-suggestions { display: flex; flex-direction: column; gap: 6px; width: 100%; margin-top: 6px; }
+  .chat-suggestion {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 7px 11px; font-size: 11px; color: var(--text); cursor: pointer; text-align: left;
+  }
+  .chat-suggestion:hover { border-color: rgba(74,222,128,0.4); color: #4ade80; }
+
   /* ── Copilot rail button (right rail) ── */
   .rail-btn--copilot { color: #4ade80 !important; }
   .rail-btn--copilot:hover { background: rgba(74,222,128,0.12) !important; color: #6ee89a !important; }
@@ -944,23 +1025,26 @@
         <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-23 10:35 JST</p>
       </div>
 
-      <!-- ── Copilot panel ── -->
+      <!-- ── Copilot chat panel ── -->
       <div class="panel-page" id="panel-copilot">
-        <div class="copilot-search-row">
-          <input class="copilot-input" id="copilot-input" type="text"
-                 placeholder="明るいリビング、駅近、広いキッチン…"
-                 onkeydown="if(event.key==='Enter')copilotSearch()">
-          <button class="copilot-go" onclick="copilotSearch()">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:3px;"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>検索
-          </button>
+        <div class="chat-thread" id="chat-thread">
+          <div class="chat-empty" id="chat-empty">
+            <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M5 3l.6 1.9L7.5 5.5l-1.9.6L5 8l-.6-1.9L2.5 5.5l1.9-.6z"/><path d="M19 15l.6 1.9 1.9.6-1.9.6-.6 1.9-.6-1.9-1.9-.6 1.9-.6z"/></svg>
+            <p>物件について何でも聞いてください。<br>条件を自然な言葉で入力できます。</p>
+            <div class="chat-suggestions">
+              <button class="chat-suggestion" onclick="chatUseSuggestion(this)">新宿区で10万円以下の1LDKは？</button>
+              <button class="chat-suggestion" onclick="chatUseSuggestion(this)">駅から徒歩5分以内の空室を探して</button>
+              <button class="chat-suggestion" onclick="chatUseSuggestion(this)">今の空室状況を教えて</button>
+            </div>
+          </div>
         </div>
-        <div class="copilot-status" id="copilot-status"></div>
-        <div id="copilot-results"></div>
-        <div class="copilot-ai-note" id="copilot-ai-note" style="display:none;">
-          <strong style="color:var(--text);">✦ AI ビジュアル検索</strong><br>
-          物件画像のインデックス化が完了すると、画像の雰囲気・内装などで検索できます。<br><br>
-          インデックス化するには Mac 上で:<br>
-          <code>python embedder.py embed</code>
+        <div class="chat-input-area">
+          <textarea class="chat-input" id="chat-input" rows="1"
+            placeholder="物件を探す、条件を相談する…"
+            onkeydown="chatKeydown(event)" oninput="chatAutoResize(this)"></textarea>
+          <button class="chat-send-btn" id="chat-send-btn" onclick="chatSend()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
         </div>
       </div>
 
@@ -2924,9 +3008,10 @@ function openPanel(name) {
   });
   panel.style.width = name === 'listings' ? '864px' : name === 'copilot' ? '320px' : '260px';
   document.getElementById('panel-title').textContent = _panelTitles[name] ? t(_panelTitles[name]) : '';
+  panel.classList.toggle('chat-mode', name === 'copilot');
   panel.classList.add('open');
   backdrop.classList.add('open');
-  if (name === 'copilot') loadCopilotStatus();
+  if (name === 'copilot') chatPanelOpened();
   setTimeout(() => { if (map) google.maps.event.trigger(map, 'resize'); }, 230);
 }
 
@@ -2938,52 +3023,123 @@ function closePanel() {
   setTimeout(() => { if (map) google.maps.event.trigger(map, 'resize'); }, 230);
 }
 
-// ── Copilot search ──────────────────────────────────────────────────────────
+// ── Copilot chat ─────────────────────────────────────────────────────────────
 
-async function loadCopilotStatus() {
+let _chatSessionId = localStorage.getItem('chatSessionId') || null;
+let _chatBusy = false;
+
+function chatPanelOpened() {
+  if (_chatSessionId) chatLoadHistory();
+  setTimeout(() => document.getElementById('chat-input')?.focus(), 250);
+}
+
+function chatAutoResize(ta) {
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 100) + 'px';
+}
+
+function chatKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatSend(); }
+}
+
+function chatUseSuggestion(btn) {
+  const input = document.getElementById('chat-input');
+  input.value = btn.textContent.trim();
+  chatAutoResize(input);
+  chatSend();
+}
+
+function _chatListingCard(lid) {
+  const l = _listings?.find(x => x.id === lid);
+  if (!l) return '';
+  const img = l.thumbnail_url
+    ? `<img src="${escHtml(l.thumbnail_url)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=chat-listing-card-no-img>🏠</div>'">`
+    : `<div class="chat-listing-card-no-img">🏠</div>`;
+  const rent = l.rent ? `¥${Number(l.rent).toLocaleString()}` : '—';
+  return `<div class="chat-listing-card" onclick="selectListing('${escHtml(lid)}')">
+    ${img}
+    <div class="chat-listing-info">
+      <div class="chat-listing-name">${escHtml(l.name)}</div>
+      <div class="chat-listing-meta">${escHtml([l.ward, rent, l.layout].filter(Boolean).join(' · '))}</div>
+    </div>
+  </div>`;
+}
+
+function _chatAppendMsg(role, text, listingIds) {
+  const thread = document.getElementById('chat-thread');
+  document.getElementById('chat-empty')?.remove();
+
+  const ids = Array.isArray(listingIds) ? listingIds : [];
+  const cards = ids.map(_chatListingCard).filter(Boolean).join('');
+  const cardsHtml = cards ? `<div class="chat-listings">${cards}</div>` : '';
+
+  const div = document.createElement('div');
+  div.className = `chat-msg chat-msg--${role}`;
+  div.innerHTML = `<div class="chat-bubble chat-bubble--${role}">${escHtml(text)}</div>${role==='assistant' ? cardsHtml : ''}`;
+  thread.appendChild(div);
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function _chatShowTyping() {
+  const thread = document.getElementById('chat-thread');
+  const el = document.createElement('div');
+  el.className = 'chat-msg chat-msg--assistant';
+  el.id = 'chat-typing';
+  el.innerHTML = `<div class="chat-bubble chat-bubble--assistant chat-typing"><span></span><span></span><span></span></div>`;
+  thread.appendChild(el);
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function _chatRemoveTyping() {
+  document.getElementById('chat-typing')?.remove();
+}
+
+async function chatLoadHistory() {
+  if (!_chatSessionId) return;
   try {
-    const r = await fetch(`${API}/search/status`, { headers: authHeaders() });
+    const r = await fetch(`${API}/chat/history?session_id=${_chatSessionId}`, { headers: authHeaders() });
     if (!r.ok) return;
-    const { total_listings, indexed } = await r.json();
-    const el = document.getElementById('copilot-status');
-    const note = document.getElementById('copilot-ai-note');
-    if (el) el.textContent = lang === 'ja'
-      ? `${total_listings} 件の物件 · ${indexed} 件が AI インデックス済み`
-      : `${total_listings} listings · ${indexed} AI-indexed`;
-    if (note) note.style.display = indexed < total_listings ? '' : 'none';
+    const { messages } = await r.json();
+    if (!messages.length) return;
+    document.getElementById('chat-empty')?.remove();
+    messages.forEach(m => _chatAppendMsg(m.role, m.content, JSON.parse(m.listing_ids || '[]')));
   } catch (_) {}
 }
 
-async function copilotSearch() {
-  const q = (document.getElementById('copilot-input')?.value || '').trim();
-  if (!q) return;
-  const resultsEl = document.getElementById('copilot-results');
-  resultsEl.innerHTML = `<div style="color:var(--muted);font-size:12px;padding:12px 0;">${lang==='ja'?'検索中…':'Searching…'}</div>`;
+async function chatSend() {
+  if (_chatBusy) return;
+  const input = document.getElementById('chat-input');
+  const msg = (input?.value || '').trim();
+  if (!msg) return;
+
+  input.value = '';
+  chatAutoResize(input);
+  _chatBusy = true;
+  document.getElementById('chat-send-btn').disabled = true;
+
+  _chatAppendMsg('user', msg, []);
+  _chatShowTyping();
 
   try {
-    const r = await fetch(`${API}/search/text?q=${encodeURIComponent(q)}&limit=30`, { headers: authHeaders() });
-    if (!r.ok) throw new Error(r.status);
-    const { results } = await r.json();
-    if (!results.length) {
-      resultsEl.innerHTML = `<div style="color:var(--muted);font-size:12px;padding:12px 0;">${lang==='ja'?'該当なし':'No results'}</div>`;
-      return;
-    }
-    resultsEl.innerHTML = results.map(l => {
-      const thumb = l.thumbnail_url
-        ? `<img class="copilot-thumb" src="${escHtml(l.thumbnail_url)}" loading="lazy" onerror="this.style.display='none'">`
-        : `<div class="copilot-thumb-placeholder">🏠</div>`;
-      const rent = l.rent ? `¥${Number(l.rent).toLocaleString()}` : '—';
-      const meta = [l.ward, rent, l.layout].filter(Boolean).join(' · ');
-      return `<div class="copilot-result" onclick="selectListing('${escHtml(l.id)}');closePanel();">
-        ${thumb}
-        <div style="min-width:0;">
-          <div class="copilot-result-name">${escHtml(l.name)}</div>
-          <div class="copilot-result-meta">${escHtml(meta)}</div>
-        </div>
-      </div>`;
-    }).join('');
+    const r = await fetch(`${API}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ message: msg, session_id: _chatSessionId }),
+    });
+    const data = await r.json();
+    _chatRemoveTyping();
+    if (!r.ok) throw new Error(data.error || r.status);
+
+    _chatSessionId = data.session_id;
+    localStorage.setItem('chatSessionId', _chatSessionId);
+    _chatAppendMsg('assistant', data.response, data.listing_ids || []);
   } catch (e) {
-    resultsEl.innerHTML = `<div style="color:#f87;font-size:12px;padding:8px 0;">Error: ${e.message}</div>`;
+    _chatRemoveTyping();
+    _chatAppendMsg('assistant', `エラー: ${e.message}`, []);
+  } finally {
+    _chatBusy = false;
+    document.getElementById('chat-send-btn').disabled = false;
+    document.getElementById('chat-input')?.focus();
   }
 }
 
