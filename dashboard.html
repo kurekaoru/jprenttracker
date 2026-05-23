@@ -1056,7 +1056,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 01:09 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 01:13 JST</p>
       </div>
 
 
@@ -3378,6 +3378,19 @@ function chatExecuteAction(action) {
     else if (action.source === 'both') filterSources = new Set(['jkk','ur']);
     buildChips();
     applyMapFilters();
+  } else if (action.type === 'show_driving_route') {
+    if (!map || !directionsService) return;
+    clearTransitPolylines();
+    directionsService.route({
+      origin: new google.maps.LatLng(action.lat, action.lng),
+      destination: action.destination,
+      travelMode: google.maps.TravelMode[action.mode] || google.maps.TravelMode.DRIVING,
+    }, (result, status) => {
+      if (status === 'OK' && directionsRenderer) {
+        directionsRenderer.setDirections(result);
+        map.fitBounds(result.routes[0].bounds);
+      }
+    });
   }
 }
 

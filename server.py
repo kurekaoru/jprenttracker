@@ -1213,11 +1213,12 @@ CHAT_SYSTEM = """You are a helpful real estate assistant for a Tokyo/Kanagawa ho
 Today's date: {date}
 Always respond in the same language the user writes in (Japanese or English).
 Use tools to fetch real live data — never guess or invent listing IDs, names, or details.
-
+{open_listing_context}
 Rules:
 - Always call search_listings first to find properties and obtain valid listing IDs. Never call get_listing_details with a guessed or remembered ID — only use IDs returned by search_listings in the same conversation.
+- Exception: if a property card is currently open (shown above as "Currently open property card"), you already know its listing_id — use it directly for get_commute_time or get_listing_details without calling search_listings first.
 - When you call search_listings, the UI automatically renders clickable property cards below your message. Do not mention photos, thumbnails, or image availability — just describe the listings in text and let the cards do the rest.
-- Use get_commute_time for ANY question about travel time, commute, or how long to reach a place. Never estimate — always call the tool and report the actual API result including the step-by-step route.
+- Use get_commute_time for ANY question about travel time, commute, or how long to reach a place. Never estimate — always call the tool. For transit mode, when the tool returns status "calculating", tell the user the route is being calculated and will appear below — do not guess the time.
 - Use center_map whenever the user asks to see a location or property on the map ("show me", "where is", "center on", "zoom to"). You can call it with a listing_id (coordinates are looked up automatically) or with lat/lng.
 - Use select_listing only for ONE specific named property ("open that one", "select it"). Never call it in a loop.
 - Use set_map_filter when the user wants to show/hide multiple listings by criteria ("show listings above 50m²", "filter to 1LDK", "only JKK"). This updates the map markers and table instantly.
@@ -1373,7 +1374,7 @@ def _chat_details(params, con):
     ).fetchall()
     return {**dict(row), "facilities": [dict(f) for f in facs]}
 
-def _call_claude(history, con):
+def _call_claude(history, con, open_listing=None):
     if not _anthropic:
         return {"text": "anthropic パッケージが未インストールです: pip install anthropic", "listing_ids": [], "actions": []}
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -1385,11 +1386,20 @@ def _call_claude(history, con):
     all_ids = []
     all_actions = []
 
+    if open_listing:
+        open_ctx = (
+            f"Currently open property card: {open_listing['name']} "
+            f"({open_listing['ward']}, {open_listing['layout']}, "
+            f"¥{open_listing['rent']:,}/月, {open_listing['size_m2']}m²) — listing_id: {open_listing['id']}\n"
+        )
+    else:
+        open_ctx = ""
+
     for _ in range(10):
         resp = client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=1024,
-            system=CHAT_SYSTEM.format(date=datetime.now().strftime("%Y-%m-%d")),
+            system=CHAT_SYSTEM.format(date=datetime.now().strftime("%Y-%m-%d"), open_listing_context=open_ctx),
             tools=_CHAT_TOOLS,
             messages=messages,
         )
@@ -1411,67 +1421,50 @@ def _call_claude(history, con):
                 if "id" in result:
                     all_ids.append(result["id"])
             elif block.name == "get_commute_time":
-                inp = block.input
+                inp  = block.input
                 lid  = inp.get("listing_id", "")
                 dest = inp.get("destination", "")
                 mode = inp.get("mode", "transit")
                 row  = con.execute(
-                    "SELECT lat, lng, nearest_station FROM listings WHERE id=?", (lid,)
+                    "SELECT lat, lng, name, nearest_station FROM listings WHERE id=?", (lid,)
                 ).fetchone()
                 if not row or not row["lat"]:
                     result = {"error": "listing not geocoded"}
-                elif not GOOGLE_MAPS_SERVER_KEY:
-                    result = {"error": "Google Maps server key not configured"}
-                else:
+                elif mode != "transit":
+                    # Driving / walking: resolve server-side
                     try:
-                        def _directions(m):
-                            p = {"origin": f"{row['lat']},{row['lng']}", "destination": dest,
-                                 "mode": m, "language": "ja", "region": "JP",
-                                 "key": GOOGLE_MAPS_SERVER_KEY}
-                            if m == "transit":
-                                p["departure_time"] = "now"
-                            return requests.get(
-                                "https://maps.googleapis.com/maps/api/directions/json",
-                                params=p, timeout=10,
-                            ).json()
-
-                        modes_to_try = [mode] if mode != "transit" else ["transit", "driving"]
-                        data = None
-                        actual_mode = mode
-                        for m in modes_to_try:
-                            data = _directions(m)
-                            if data.get("status") == "OK":
-                                actual_mode = m
-                                break
-
-                        if data and data.get("status") == "OK" and data.get("routes"):
-                            leg = data["routes"][0]["legs"][0]
-                            steps = []
-                            for s in leg.get("steps", [])[:8]:
-                                td = s.get("transit_details", {})
-                                line = td.get("line", {})
-                                dep  = td.get("departure_stop", {}).get("name", "")
-                                arr  = td.get("arrival_stop", {}).get("name", "")
-                                name = line.get("short_name") or line.get("name", "")
-                                if name and dep and arr:
-                                    steps.append(f"{name}: {dep}→{arr} ({s['duration']['text']})")
-                                else:
-                                    import html as _html
-                                    steps.append(f"{_html.unescape(s.get('html_instructions',''))} ({s['duration']['text']})")
-                            result = {
-                                "duration":         leg["duration"]["text"],
-                                "duration_minutes": round(leg["duration"]["value"] / 60),
-                                "distance":         leg["distance"]["text"],
-                                "mode_used":        actual_mode,
-                                "note":             "transit data unavailable — showing driving time" if actual_mode == "driving" and mode == "transit" else None,
-                                "origin_address":   leg["start_address"],
-                                "destination_address": leg["end_address"],
-                                "steps":            steps,
-                            }
+                        gm = requests.get(
+                            "https://maps.googleapis.com/maps/api/directions/json",
+                            params={"origin": f"{row['lat']},{row['lng']}", "destination": dest,
+                                    "mode": mode, "language": "ja", "region": "JP",
+                                    "key": GOOGLE_MAPS_SERVER_KEY},
+                            timeout=10,
+                        ).json()
+                        if gm.get("status") == "OK":
+                            leg = gm["routes"][0]["legs"][0]
+                            result = {"duration": leg["duration"]["text"],
+                                      "duration_minutes": round(leg["duration"]["value"] / 60),
+                                      "distance": leg["distance"]["text"], "mode_used": mode}
+                            all_actions.append({
+                                "type":        "show_driving_route",
+                                "lat":         row["lat"], "lng": row["lng"],
+                                "destination": dest,
+                                "mode":        mode.upper(),
+                            })
                         else:
-                            result = {"error": f"No route found ({data.get('status', 'UNKNOWN') if data else 'no response'})"}
+                            result = {"error": f"No route ({gm.get('status')})"}
                     except Exception as e:
                         result = {"error": str(e)}
+                else:
+                    # Transit: Japan transit data unavailable server-side — delegate to client Maps JS API
+                    all_actions.append({
+                        "type":         "get_commute_client",
+                        "lat":          row["lat"],
+                        "lng":          row["lng"],
+                        "destination":  dest,
+                        "listing_name": row["name"],
+                    })
+                    result = {"status": "calculating", "message": "Transit route is being fetched by the map — result will appear in chat momentarily."}
             elif block.name == "center_map":
                 inp = block.input
                 lat, lng = inp.get("lat"), inp.get("lng")
@@ -1543,7 +1536,17 @@ def chat_send():
     )
     con.commit()
 
-    result = _call_claude(history, con)
+    open_listing_id = body.get("open_listing_id")
+    open_listing = None
+    if open_listing_id:
+        row = con.execute(
+            "SELECT id, name, ward, layout, rent, size_m2 FROM listings WHERE id=? AND disappeared_at IS NULL",
+            (open_listing_id,)
+        ).fetchone()
+        if row:
+            open_listing = dict(row)
+
+    result = _call_claude(history, con, open_listing=open_listing)
 
     con.execute(
         "INSERT INTO chat_messages (session_id, role, content, listing_ids) VALUES (?,?,?,?)",
