@@ -1058,7 +1058,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 01:36 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 02:06 JST</p>
       </div>
 
 
@@ -1074,8 +1074,8 @@
   </main>
 
   <!-- ── Right icon rail ── -->
-  <aside class="right-rail">
-    <button class="rail-btn rail-btn--copilot" id="rail-copilot" onclick="toggleChatPanel()" style="margin-top:auto;">
+  <aside class="right-rail" onclick="toggleChatPanel()" style="cursor:pointer;">
+    <button class="rail-btn rail-btn--copilot" id="rail-copilot" style="margin-top:auto;pointer-events:none;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M5 3l.6 1.9L7.5 5.5l-1.9.6L5 8l-.6-1.9L2.5 5.5l1.9-.6z"/><path d="M19 15l.6 1.9 1.9.6-1.9.6-.6 1.9-.6-1.9-1.9-.6 1.9-.6z"/></svg>
       <span class="rail-tip rail-tip--left" data-i18n="copilot">AI検索</span>
     </button>
