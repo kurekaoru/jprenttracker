@@ -1058,7 +1058,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 01:27 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 01:36 JST</p>
       </div>
 
 
@@ -1949,21 +1949,44 @@ window._facRowClick = function(idx) {
 
 function updateCommuteDest(v) { _commuteDest = v; }
 
-function _destPinSvg() {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="36" viewBox="0 0 26 36">
-    <path d="M13 1C7.48 1 3 5.48 3 11c0 8.25 10 24 10 24S23 19.25 23 11C23 5.48 18.52 1 13 1z"
-      fill="#4285F4" stroke="white" stroke-width="1.5"/>
-    <circle cx="13" cy="11" r="5" fill="white"/>
+function _destPinSvg(name) {
+  if (!name) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="36" viewBox="0 0 26 36">
+      <path d="M13 1C7.48 1 3 5.48 3 11c0 8.25 10 24 10 24S23 19.25 23 11C23 5.48 18.52 1 13 1z"
+        fill="#4285F4" stroke="white" stroke-width="1.5"/>
+      <circle cx="13" cy="11" r="5" fill="white"/>
+    </svg>`;
+    return { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+      scaledSize: new google.maps.Size(26, 36), anchor: new google.maps.Point(13, 36) };
+  }
+  // Combined label-above-pin SVG
+  const label = name.length > 22 ? name.slice(0, 22) + '…' : name;
+  const charW = label.split('').reduce((s, c) => s + (c.charCodeAt(0) > 127 ? 13 : 7), 0);
+  const bubW = Math.max(50, charW + 16);
+  const bubH = 20, pinW = 26, pinH = 36, gap = 3;
+  const totalW = Math.max(bubW, pinW);
+  const totalH = bubH + gap + pinH;
+  const cx = totalW / 2;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${totalH}">
+    <rect x="${cx - bubW/2}" y="0" width="${bubW}" height="${bubH}" rx="5" fill="#4285F4"/>
+    <text x="${cx}" y="14" font-family="DM Sans,sans-serif" font-size="11" font-weight="600"
+      fill="white" text-anchor="middle">${escHtml(label)}</text>
+    <g transform="translate(${cx - pinW/2},${bubH + gap})">
+      <path d="M13 1C7.48 1 3 5.48 3 11c0 8.25 10 24 10 24S23 19.25 23 11C23 5.48 18.52 1 13 1z"
+        fill="#4285F4" stroke="white" stroke-width="1.5"/>
+      <circle cx="13" cy="11" r="5" fill="white"/>
+    </g>
   </svg>`;
   return { url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-    scaledSize: new google.maps.Size(26, 36), anchor: new google.maps.Point(13, 36) };
+    scaledSize: new google.maps.Size(totalW, totalH),
+    anchor: new google.maps.Point(cx, totalH) };
 }
 
-function showRouteInfo(distText, durText, midLatLng, destLatLng) {
+function showRouteInfo(distText, durText, midLatLng, destLatLng, destName) {
   if (_destMarker) _destMarker.setMap(null);
   if (destLatLng) {
     _destMarker = new google.maps.Marker({
-      position: destLatLng, map, icon: _destPinSvg(), zIndex: 20,
+      position: destLatLng, map, icon: _destPinSvg(destName || null), zIndex: 20,
     });
   }
   if (!midLatLng) return;
@@ -3330,6 +3353,13 @@ function _chatCommuteClient(action) {
           });
           _transitPolylines.push(pl);
         });
+        // Destination pin + route chip
+        const endLoc = leg.end_location;
+        const destLatLng = endLoc ? new google.maps.LatLng(endLoc.lat, endLoc.lng) : null;
+        const allPts2 = steps.flatMap(s => decodePolyline(s.polyline.points));
+        const midPt = allPts2[Math.floor(allPts2.length / 2)];
+        const midLatLng = midPt ? new google.maps.LatLng(midPt.lat, midPt.lng) : destLatLng;
+        showRouteInfo(leg.distance?.text, leg.duration?.text, midLatLng, destLatLng, action.destination);
         map.fitBounds(bounds);
       }
 
@@ -3403,6 +3433,10 @@ function chatExecuteAction(action) {
       } else {
         directionsRenderer.setDirections(result);
       }
+      const leg = result.routes[0].legs[0];
+      const path = result.routes[0].overview_path;
+      const midLatLng = path?.length ? path[Math.floor(path.length / 2)] : null;
+      showRouteInfo(leg.distance?.text, leg.duration?.text, midLatLng, leg.end_location, action.destination);
       map.fitBounds(result.routes[0].bounds);
     });
   }
