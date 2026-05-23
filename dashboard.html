@@ -2768,6 +2768,7 @@ function applyMapFilters() {
   _selectedId = null;
 
   _allListings.forEach(l => {
+    if (l.disappeared_at) return;
     if (!filterSources.has(l.source)) return;
     if (!selectedWards.has(l.ward)) return;
     if (!selectedLayouts.has(l.layout)) return;
