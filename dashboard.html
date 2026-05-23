@@ -541,6 +541,46 @@
     .side-panel { left: 40px; }
   }
 
+  /* ── Copilot panel ── */
+  .copilot-search-row { display:flex; gap:6px; margin-bottom:10px; }
+  .copilot-input {
+    flex:1; background:var(--surface2); border:1px solid var(--border);
+    border-radius:6px; padding:7px 10px; color:var(--text); font-size:12px;
+    outline:none;
+  }
+  .copilot-input:focus { border-color:rgba(255,255,255,0.3); }
+  .copilot-input::placeholder { color:var(--muted); }
+  .copilot-go {
+    background:var(--surface2); border:1px solid var(--border);
+    border-radius:6px; padding:7px 11px; color:var(--text); font-size:12px;
+    cursor:pointer; white-space:nowrap;
+  }
+  .copilot-go:hover { background:rgba(255,255,255,0.1); }
+  .copilot-status { font-size:10px; color:var(--muted); margin-bottom:10px; line-height:1.5; }
+  .copilot-result {
+    display:flex; gap:8px; align-items:flex-start;
+    padding:8px 0; border-bottom:1px solid var(--border); cursor:pointer;
+  }
+  .copilot-result:last-child { border-bottom:none; }
+  .copilot-result:hover { opacity:0.8; }
+  .copilot-thumb {
+    width:56px; height:42px; object-fit:cover; border-radius:4px;
+    flex-shrink:0; background:var(--surface2);
+  }
+  .copilot-thumb-placeholder {
+    width:56px; height:42px; border-radius:4px; flex-shrink:0;
+    background:var(--surface2); display:flex; align-items:center;
+    justify-content:center; font-size:16px;
+  }
+  .copilot-result-name { font-size:12px; font-weight:500; line-height:1.3; margin-bottom:2px; }
+  .copilot-result-meta { font-size:11px; color:var(--muted); }
+  .copilot-ai-note {
+    margin-top:14px; padding:10px 12px; background:var(--surface2);
+    border-radius:6px; border:1px solid var(--border); font-size:10px;
+    color:var(--muted); line-height:1.6;
+  }
+  .copilot-ai-note code { font-size:10px; background:rgba(255,255,255,0.07); padding:1px 4px; border-radius:3px; }
+
   /* ── Auth modal ── */
   .modal-overlay {
     display: none; position: fixed; inset: 0;
@@ -741,6 +781,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
       <span class="rail-tip" data-i18n="setup">セットアップ</span>
     </button>
+    <button class="rail-btn" id="rail-copilot" onclick="openPanel('copilot')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M5 3l.6 1.9L7.5 5.5l-1.9.6L5 8l-.6-1.9L2.5 5.5l1.9-.6z"/><path d="M19 15l.6 1.9 1.9.6-1.9.6-.6 1.9-.6-1.9-1.9-.6 1.9-.6z"/></svg>
+      <span class="rail-tip" data-i18n="copilot">AI検索</span>
+    </button>
   </aside>
 
   <!-- ── Slide-out panel ── -->
@@ -888,6 +932,26 @@
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
         <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-23 10:35 JST</p>
+      </div>
+
+      <!-- ── Copilot panel ── -->
+      <div class="panel-page" id="panel-copilot">
+        <div class="copilot-search-row">
+          <input class="copilot-input" id="copilot-input" type="text"
+                 placeholder="明るいリビング、駅近、広いキッチン…"
+                 onkeydown="if(event.key==='Enter')copilotSearch()">
+          <button class="copilot-go" onclick="copilotSearch()">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:3px;"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>検索
+          </button>
+        </div>
+        <div class="copilot-status" id="copilot-status"></div>
+        <div id="copilot-results"></div>
+        <div class="copilot-ai-note" id="copilot-ai-note" style="display:none;">
+          <strong style="color:var(--text);">✦ AI ビジュアル検索</strong><br>
+          物件画像のインデックス化が完了すると、画像の雰囲気・内装などで検索できます。<br><br>
+          インデックス化するには Mac 上で:<br>
+          <code>python embedder.py embed</code>
+        </div>
       </div>
 
     </div>
@@ -1220,6 +1284,8 @@ const STRINGS = {
   panel_account:        { ja:'アカウント',               en:'Account' },
   panel_layers:         { ja:'地図レイヤー',             en:'Map Layers' },
   panel_about:          { ja:'セットアップ',             en:'Setup' },
+  panel_copilot:        { ja:'AI 検索',                 en:'AI Search' },
+  copilot:              { ja:'AI検索',                  en:'AI Search' },
   // User menu
   share_qr:             { ja:'📲 QRコードで共有',        en:'📲 Share via QR' },
   // Table counts
@@ -2818,10 +2884,11 @@ function closeAuthModal() { document.getElementById('auth-modal').classList.remo
 
 // ── Icon-rail panel ───────────────────────────────────────────────────────────
 let _activePanel = null;
-const _allPanels  = ['filter','listings','account','layers','about'];
+const _allPanels  = ['filter','listings','account','layers','about','copilot'];
 const _panelTitles = {
   filter: 'panel_filter', listings: 'panel_listings',
-  account: 'panel_account', layers: 'panel_layers', about: 'panel_about'
+  account: 'panel_account', layers: 'panel_layers', about: 'panel_about',
+  copilot: 'panel_copilot',
 };
 
 function switchAccountTab(tab) {
@@ -2840,10 +2907,11 @@ function openPanel(name) {
     document.getElementById(`rail-${n}`)?.classList.toggle('active', n === name);
     document.getElementById(`panel-${n}`)?.classList.toggle('active', n === name);
   });
-  panel.style.width = name === 'listings' ? '864px' : '260px';
+  panel.style.width = name === 'listings' ? '864px' : name === 'copilot' ? '320px' : '260px';
   document.getElementById('panel-title').textContent = _panelTitles[name] ? t(_panelTitles[name]) : '';
   panel.classList.add('open');
   backdrop.classList.add('open');
+  if (name === 'copilot') loadCopilotStatus();
   setTimeout(() => { if (map) google.maps.event.trigger(map, 'resize'); }, 230);
 }
 
@@ -2853,6 +2921,55 @@ function closePanel() {
   document.getElementById('panel-backdrop').classList.remove('open');
   _allPanels.forEach(n => document.getElementById(`rail-${n}`)?.classList.remove('active'));
   setTimeout(() => { if (map) google.maps.event.trigger(map, 'resize'); }, 230);
+}
+
+// ── Copilot search ──────────────────────────────────────────────────────────
+
+async function loadCopilotStatus() {
+  try {
+    const r = await fetch(`${API}/search/status`, { headers: authHeaders() });
+    if (!r.ok) return;
+    const { total_listings, indexed } = await r.json();
+    const el = document.getElementById('copilot-status');
+    const note = document.getElementById('copilot-ai-note');
+    if (el) el.textContent = lang === 'ja'
+      ? `${total_listings} 件の物件 · ${indexed} 件が AI インデックス済み`
+      : `${total_listings} listings · ${indexed} AI-indexed`;
+    if (note) note.style.display = indexed < total_listings ? '' : 'none';
+  } catch (_) {}
+}
+
+async function copilotSearch() {
+  const q = (document.getElementById('copilot-input')?.value || '').trim();
+  if (!q) return;
+  const resultsEl = document.getElementById('copilot-results');
+  resultsEl.innerHTML = `<div style="color:var(--muted);font-size:12px;padding:12px 0;">${lang==='ja'?'検索中…':'Searching…'}</div>`;
+
+  try {
+    const r = await fetch(`${API}/search/text?q=${encodeURIComponent(q)}&limit=30`, { headers: authHeaders() });
+    if (!r.ok) throw new Error(r.status);
+    const { results } = await r.json();
+    if (!results.length) {
+      resultsEl.innerHTML = `<div style="color:var(--muted);font-size:12px;padding:12px 0;">${lang==='ja'?'該当なし':'No results'}</div>`;
+      return;
+    }
+    resultsEl.innerHTML = results.map(l => {
+      const thumb = l.thumbnail_url
+        ? `<img class="copilot-thumb" src="${escHtml(l.thumbnail_url)}" loading="lazy" onerror="this.style.display='none'">`
+        : `<div class="copilot-thumb-placeholder">🏠</div>`;
+      const rent = l.rent ? `¥${Number(l.rent).toLocaleString()}` : '—';
+      const meta = [l.ward, rent, l.layout].filter(Boolean).join(' · ');
+      return `<div class="copilot-result" onclick="selectListing('${escHtml(l.id)}');closePanel();">
+        ${thumb}
+        <div style="min-width:0;">
+          <div class="copilot-result-name">${escHtml(l.name)}</div>
+          <div class="copilot-result-meta">${escHtml(meta)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    resultsEl.innerHTML = `<div style="color:#f87;font-size:12px;padding:8px 0;">Error: ${e.message}</div>`;
+  }
 }
 
 function updateAuthPanels() {
