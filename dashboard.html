@@ -3183,6 +3183,17 @@ function chatExecuteAction(action) {
     map.setZoom(action.zoom || 15);
   } else if (action.type === 'select_listing') {
     if (action.listing_id) selectListing(action.listing_id);
+  } else if (action.type === 'set_map_filter') {
+    if (action.min_rent != null) document.getElementById('min-rent').value = action.min_rent || '';
+    if (action.max_rent != null) document.getElementById('max-rent').value = action.max_rent || '';
+    if (action.min_size != null) document.getElementById('min-size').value = action.min_size || '';
+    if (action.max_size != null) { /* max_size not a DOM input — future */ }
+    if (action.max_walk != null) document.getElementById('max-walk').value = action.max_walk || '';
+    if (action.source === 'jkk')  filterSources = new Set(['jkk']);
+    else if (action.source === 'ur')   filterSources = new Set(['ur']);
+    else if (action.source === 'both') filterSources = new Set(['jkk','ur']);
+    buildChips();
+    applyMapFilters();
   }
 }
 
