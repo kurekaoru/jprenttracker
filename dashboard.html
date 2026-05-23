@@ -753,6 +753,13 @@
   }
   .save-listing-btn.saved { color: #f59e0b; }
   .save-listing-btn:hover { transform: scale(1.2); }
+  .star-btn {
+    background: none; border: none; cursor: pointer;
+    font-size: 13px; line-height: 1; padding: 0 2px;
+    color: rgba(255,255,255,0.2); transition: color .12s, transform .1s;
+  }
+  .star-btn.saved { color: #f59e0b; }
+  .star-btn:hover { color: #f59e0b; transform: scale(1.2); }
 
   /* ── User chip ── */
   .user-chip { display: flex; align-items: center; gap: 8px; position: relative; }
@@ -876,6 +883,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
       <span class="rail-tip" data-i18n="vacancies">空室一覧</span>
     </button>
+    <button class="rail-btn" id="rail-favourites" onclick="openPanel('favourites')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      <span class="rail-tip" data-i18n="panel_favourites">お気に入り</span>
+    </button>
     <button class="rail-btn" id="rail-layers" onclick="openPanel('layers')" style="margin-top:auto;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
       <span class="rail-tip" data-i18n="map_layers">地図レイヤー</span>
@@ -894,7 +905,7 @@
   <div class="side-panel" id="side-panel">
     <div class="panel-header">
       <span class="panel-title" id="panel-title"></span>
-      <button class="panel-close-btn" onclick="closePanel()">×</button>
+      <button class="panel-close-btn" onclick="closePanel()">«</button>
     </div>
     <div class="panel-body">
 
@@ -984,6 +995,17 @@
         </div>
       </div>
 
+      <!-- Favourites page -->
+      <div class="panel-page" id="panel-favourites">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <p class="section-label" style="margin:0;" data-i18n="panel_favourites">お気に入り</p>
+          <span id="favourites-count" style="font-size:11px;color:var(--muted);"></span>
+        </div>
+        <div style="overflow-x:auto;">
+          <div id="favourites-table" style="color:var(--muted);font-size:11px;"></div>
+        </div>
+      </div>
+
       <!-- Layers page -->
       <div class="panel-page" id="panel-layers">
         <p class="section-label" data-i18n="map_layers">地図レイヤー</p>
@@ -1034,7 +1056,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 01:03 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 01:09 JST</p>
       </div>
 
 
@@ -1402,6 +1424,8 @@ const STRINGS = {
   panel_account:        { ja:'アカウント',               en:'Account' },
   panel_layers:         { ja:'地図レイヤー',             en:'Map Layers' },
   panel_about:          { ja:'セットアップ',             en:'Setup' },
+  panel_favourites:     { ja:'お気に入り',               en:'Favourites' },
+  fav_empty:            { ja:'お気に入りはまだありません。空室一覧の ☆ をクリックして追加できます。', en:'No favourites yet. Click ☆ in the Vacancies list to add one.' },
   panel_copilot:        { ja:'AI 検索',                 en:'AI Search' },
   copilot:              { ja:'AI検索',                  en:'AI Search' },
   // User menu
@@ -2336,22 +2360,23 @@ async function loadSavedListings() {
     if (!r.ok) return;
     const d = await r.json();
     _savedListings = new Set((d.saved || []).map(s => s.listing_id));
+    renderAvailableTable();
+    renderFavouritesTable();
   } catch {}
 }
 
 async function toggleSave(listingId) {
   const wasSaved = _savedListings.has(listingId);
-  if (wasSaved) {
-    _savedListings.delete(listingId);
-  } else {
-    _savedListings.add(listingId);
-  }
-  // Update button state
+  if (wasSaved) _savedListings.delete(listingId);
+  else          _savedListings.add(listingId);
+  // Update popup save button if visible
   const btn = document.getElementById(`save-btn-${escHtml(listingId)}`);
   if (btn) {
     btn.classList.toggle('saved', !wasSaved);
     btn.title = !wasSaved ? t('saved_listing') : t('save_listing');
   }
+  renderAvailableTable();
+  renderFavouritesTable();
   if (!AUTH.token) return;
   try {
     await fetch(`${API}/user/saved/${encodeURIComponent(listingId)}`, {
@@ -2820,6 +2845,79 @@ function sortListings(col) {
   renderAvailableTable();
 }
 
+let _favSortCol = 'name';
+let _favSortAsc = true;
+
+function sortFavourites(col) {
+  _favSortAsc = (_favSortCol === col) ? !_favSortAsc : (['name','ward','layout','nearest_station'].includes(col));
+  _favSortCol = col;
+  renderFavouritesTable();
+}
+
+function renderFavouritesTable() {
+  const el      = document.getElementById('favourites-table');
+  const countEl = document.getElementById('favourites-count');
+  if (!el) return;
+
+  const favs = (_allListings || []).filter(l => !l.disappeared_at && _savedListings.has(l.id));
+
+  if (!favs.length) {
+    el.innerHTML = `<div style="padding:8px;color:var(--muted);">${t('fav_empty')}</div>`;
+    if (countEl) countEl.textContent = '';
+    return;
+  }
+
+  const sorted = [...favs].sort((a, b) => {
+    let va, vb;
+    if (['name','ward','layout','nearest_station'].includes(_favSortCol)) {
+      va = (a[_favSortCol]||''); vb = (b[_favSortCol]||'');
+      return _favSortAsc ? va.localeCompare(vb,'ja') : vb.localeCompare(va,'ja');
+    }
+    if (_favSortCol === 'days') {
+      va = marketDuration(a.first_seen)?.ms ?? -1;
+      vb = marketDuration(b.first_seen)?.ms ?? -1;
+    } else if (_favSortCol === 'walk_min') {
+      va = a.walk_min ?? 9999; vb = b.walk_min ?? 9999;
+    } else {
+      va = a[_favSortCol] ?? ''; vb = b[_favSortCol] ?? '';
+    }
+    return _favSortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+  });
+
+  const ind = col => col === _favSortCol
+    ? `<span class="sort-ind">${_favSortAsc ? '▴' : '▾'}</span>`
+    : `<span class="sort-ind" style="opacity:.25">⇅</span>`;
+
+  const thead = availCols().map(c =>
+    `<th class="${c.key === _favSortCol ? 'sort-active' : ''}" onclick="sortFavourites('${c.key}')">${c.label}${ind(c.key)}</th>`
+  ).join('');
+
+  const tbody = sorted.map(l => {
+    const tag     = l.source === 'ur' ? '<span class="src-tag ur">UR</span>' : '<span class="src-tag jkk">JKK</span>';
+    const href    = l.url ? escHtml(l.url) : '#';
+    const sel     = l.id === _selectedId ? ' row-selected' : '';
+    return `<tr class="${sel}" data-id="${escHtml(l.id)}" onclick="if(event.target.tagName!='A'&&event.target.tagName!='BUTTON')selectListing('${l.id}','${l.url||''}')">
+      <td><button class="star-btn saved" onclick="event.stopPropagation();toggleSave('${l.id}')">★</button></td>
+      <td>${tag} <a href="${href}" target="_blank" rel="noopener">${escHtml(l.name)}</a></td>
+      <td>${escHtml(wardLabel(l.ward))}</td>
+      <td style="font-family:var(--mono);">¥${(l.rent||0).toLocaleString()}</td>
+      <td>${escHtml(l.layout||'—')}</td>
+      <td style="font-family:var(--mono);">${l.size_m2 ? l.size_m2+'m²' : '—'}</td>
+      <td>${l.nearest_station ? escHtml(l.nearest_station) : '—'}</td>
+      <td style="font-family:var(--mono);">${l.walk_min > 0 ? l.walk_min + t('walk_unit') : '—'}</td>
+      <td style="font-family:var(--mono);">${fmtDate(l.first_seen)}</td>
+      <td style="font-family:var(--mono);color:var(--accent);">${fmtDuration(l.first_seen)}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `<table class="sort-table">
+    <thead><tr><th style="width:20px;padding:0"></th>${thead}</tr></thead>
+    <tbody>${tbody}</tbody>
+  </table>`;
+
+  if (countEl) countEl.textContent = t('count_items', sorted.length);
+}
+
 function renderAvailableTable() {
   const el = document.getElementById('available-table');
   const countEl = document.getElementById('available-count');
@@ -2861,7 +2959,9 @@ function renderAvailableTable() {
     const station = stationStr(l.nearest_station, l.walk_min);
     const href    = l.url ? escHtml(l.url) : '#';
     const sel     = l.id === _selectedId ? ' row-selected' : '';
-    return `<tr class="${sel}" data-id="${escHtml(l.id)}" onclick="if(event.target.tagName!='A')selectListing('${l.id}','${l.url||''}')">
+    const isSaved = _savedListings.has(l.id);
+    return `<tr class="${sel}" data-id="${escHtml(l.id)}" onclick="if(event.target.tagName!='A'&&event.target.tagName!='BUTTON')selectListing('${l.id}','${l.url||''}')">
+      <td><button class="star-btn${isSaved?' saved':''}" onclick="event.stopPropagation();toggleSave('${l.id}')">${isSaved?'★':'☆'}</button></td>
       <td>${tag} <a href="${href}" target="_blank" rel="noopener">${escHtml(l.name)}</a></td>
       <td>${escHtml(wardLabel(l.ward))}</td>
       <td style="font-family:var(--mono);">¥${(l.rent||0).toLocaleString()}</td>
@@ -2875,7 +2975,7 @@ function renderAvailableTable() {
   }).join('');
 
   el.innerHTML = `<table class="sort-table">
-    <thead><tr>${thead}</tr></thead>
+    <thead><tr><th style="width:20px;padding:0"></th>${thead}</tr></thead>
     <tbody>${tbody}</tbody>
   </table>`;
 
@@ -3014,9 +3114,9 @@ function closeAuthModal() { document.getElementById('auth-modal').classList.remo
 
 // ── Icon-rail panel ───────────────────────────────────────────────────────────
 let _activePanel = null;
-const _allPanels  = ['filter','listings','account','layers','about'];
+const _allPanels  = ['filter','listings','favourites','account','layers','about'];
 const _panelTitles = {
-  filter: 'panel_filter', listings: 'panel_listings',
+  filter: 'panel_filter', listings: 'panel_listings', favourites: 'panel_favourites',
   account: 'panel_account', layers: 'panel_layers', about: 'panel_about',
 };
 
@@ -3036,10 +3136,11 @@ function openPanel(name) {
     document.getElementById(`rail-${n}`)?.classList.toggle('active', n === name);
     document.getElementById(`panel-${n}`)?.classList.toggle('active', n === name);
   });
-  panel.style.width = name === 'listings' ? '864px' : '260px';
+  panel.style.width = (name === 'listings' || name === 'favourites') ? '864px' : '260px';
   document.getElementById('panel-title').textContent = _panelTitles[name] ? t(_panelTitles[name]) : '';
   panel.classList.add('open');
   backdrop.classList.add('open');
+  if (name === 'favourites') renderFavouritesTable();
   setTimeout(() => { if (map) google.maps.event.trigger(map, 'resize'); }, 230);
 }
 
