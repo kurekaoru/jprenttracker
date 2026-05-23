@@ -1290,7 +1290,7 @@ _CHAT_TOOLS = [
             "properties": {
                 "listing_id":  {"type": "string", "description": "Listing ID to commute from"},
                 "destination": {"type": "string", "description": "Destination station or address in Japanese, e.g. '目黒駅', '新宿駅'"},
-                "mode":        {"type": "string", "enum": ["transit","walking","driving"], "description": "Travel mode, default transit"},
+                "mode":        {"type": "string", "enum": ["transit","walking","driving","bicycling"], "description": "Travel mode, default transit"},
             },
         },
     },

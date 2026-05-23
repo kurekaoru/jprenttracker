@@ -1056,7 +1056,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 01:13 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 01:17 JST</p>
       </div>
 
 
@@ -3381,15 +3381,27 @@ function chatExecuteAction(action) {
   } else if (action.type === 'show_driving_route') {
     if (!map || !directionsService) return;
     clearTransitPolylines();
+    const isWalking = action.mode === 'WALKING';
+    if (!isWalking) {
+      directionsRenderer.setOptions({
+        preserveViewport: false,
+        polylineOptions: { strokeColor: '#4285F4', strokeWeight: 5, strokeOpacity: 0.9, icons: [] },
+      });
+    }
     directionsService.route({
       origin: new google.maps.LatLng(action.lat, action.lng),
       destination: action.destination,
       travelMode: google.maps.TravelMode[action.mode] || google.maps.TravelMode.DRIVING,
+      region: 'JP',
     }, (result, status) => {
-      if (status === 'OK' && directionsRenderer) {
+      if (status !== 'OK' || !directionsRenderer) return;
+      if (isWalking) {
+        directionsRenderer.setDirections({ routes: [] });
+        _renderWalkingPolylines(result);
+      } else {
         directionsRenderer.setDirections(result);
-        map.fitBounds(result.routes[0].bounds);
       }
+      map.fitBounds(result.routes[0].bounds);
     });
   }
 }
