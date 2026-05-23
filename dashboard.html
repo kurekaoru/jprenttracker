@@ -1035,7 +1035,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 00:50 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 00:57 JST</p>
       </div>
 
 
@@ -3168,7 +3168,7 @@ async function chatSend() {
     const r = await fetch(`${API}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ message: msg, session_id: _chatSessionId }),
+      body: JSON.stringify({ message: msg, session_id: _chatSessionId, open_listing_id: _selectedId || null }),
     });
     const data = await r.json();
     _chatRemoveTyping();
@@ -3196,45 +3196,64 @@ function _chatCommuteClient(action) {
   thread.appendChild(card);
   thread.scrollTop = thread.scrollHeight;
 
-  const svc = new google.maps.DirectionsService();
-  const origin = new google.maps.LatLng(action.lat, action.lng);
+  const originStr = `${action.lat},${action.lng}`;
+  const dep = Math.floor((Date.now() + 5 * 60000) / 1000);
+  const params = new URLSearchParams({ origin: originStr, destination: action.destination, mode: 'transit', departure_time: dep });
 
-  function showResult(mode, result, status) {
-    if (status === 'OK') {
-      const leg = result.routes[0].legs[0];
-      const steps = leg.steps
+  fetch(`${API}/route?${params}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.status !== 'OK') throw new Error(data.status);
+      const leg = data.routes[0].legs[0];
+      const steps = leg.steps;
+
+      // Draw transit polylines on map
+      clearTransitPolylines();
+      if (directionsRenderer) directionsRenderer.setDirections({ routes: [] });
+      if (map) {
+        const bounds = new google.maps.LatLngBounds();
+        steps.forEach(step => {
+          const isTransit = step.travel_mode === 'TRANSIT';
+          const pts = decodePolyline(step.polyline.points);
+          pts.forEach(p => bounds.extend(p));
+          const pl = new google.maps.Polyline({
+            path: pts,
+            strokeColor:   isTransit ? (step.transit_details?.line?.color || '#34d399') : '#888888',
+            strokeWeight:  isTransit ? 5 : 3,
+            strokeOpacity: isTransit ? 0.9 : 0,
+            icons: isTransit ? [] : [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 }, offset: '0', repeat: '10px' }],
+            map,
+          });
+          _transitPolylines.push(pl);
+        });
+        map.fitBounds(bounds);
+      }
+
+      // Transit step summary
+      const transitSteps = steps
         .filter(s => s.travel_mode === 'TRANSIT')
         .map(s => {
-          const td = s.transit;
-          const line = td.line.short_name || td.line.name || '';
-          return `• ${line}: ${td.departure_stop.name} → ${td.arrival_stop.name} (${s.duration.text})`;
+          const td = s.transit_details;
+          const line = td?.line?.short_name || td?.line?.name || '';
+          return `• ${line}: ${td?.departure_stop?.name} → ${td?.arrival_stop?.name} (${s.duration.text})`;
         });
-      const modeLabel = mode === google.maps.TravelMode.TRANSIT ? '電車' : '車';
-      const note = mode === google.maps.TravelMode.DRIVING
-        ? '<br><span style="font-size:11px;color:var(--muted)">※ 電車経路が取得できなかったため車での所要時間を表示</span>' : '';
+
       card.innerHTML = `<div class="chat-bubble chat-bubble--assistant">
         <strong>${escHtml(action.listing_name)}</strong> → <strong>${escHtml(action.destination)}</strong><br>
-        所要時間 (${modeLabel}): <strong>${leg.duration.text}</strong> / ${leg.distance.text}
-        ${steps.length ? '<br>' + steps.map(escHtml).join('<br>') : ''}${note}
+        所要時間 (電車): <strong>${leg.duration.text}</strong> / ${leg.distance.text}
+        ${transitSteps.length ? '<br>' + transitSteps.map(escHtml).join('<br>') : ''}
       </div>`;
-      if (map && directionsRenderer) {
-        directionsRenderer.setDirections(result);
-        map.fitBounds(result.routes[0].bounds);
-      }
-    } else if (mode === google.maps.TravelMode.TRANSIT) {
-      svc.route({ origin, destination: action.destination, travelMode: google.maps.TravelMode.DRIVING }, (r, s) => showResult(google.maps.TravelMode.DRIVING, r, s));
-      return;
-    } else {
-      card.innerHTML = '<div class="chat-bubble chat-bubble--assistant">経路の取得に失敗しました。</div>';
-    }
-    thread.scrollTop = thread.scrollHeight;
-  }
-
-  svc.route({
-    origin, destination: action.destination,
-    travelMode: google.maps.TravelMode.TRANSIT,
-    transitOptions: { departureTime: new Date() },
-  }, (r, s) => showResult(google.maps.TravelMode.TRANSIT, r, s));
+      thread.scrollTop = thread.scrollHeight;
+    })
+    .catch(() => {
+      const gmO = encodeURIComponent(originStr);
+      const gmD = encodeURIComponent(action.destination);
+      card.innerHTML = `<div class="chat-bubble chat-bubble--assistant">
+        電車経路の取得に失敗しました。<br>
+        <a href="https://www.google.com/maps/dir/?api=1&origin=${gmO}&destination=${gmD}&travelmode=transit" target="_blank" style="color:var(--accent)">Googleマップで確認する →</a>
+      </div>`;
+      thread.scrollTop = thread.scrollHeight;
+    });
 }
 
 function chatExecuteAction(action) {
