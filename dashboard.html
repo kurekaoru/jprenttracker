@@ -2736,6 +2736,17 @@ function selectListing(id) {
     map.setZoom(15);
     openPropCard(entry.listing);
     showFacilities(entry.listing);
+  } else {
+    // Listing is filtered off the map — still pan if we have coordinates
+    const listing = _allListings?.find(l => l.id === id);
+    if (listing) {
+      if (map && listing.lat && listing.lng) {
+        map.panTo({ lat: listing.lat, lng: listing.lng });
+        map.setZoom(15);
+      }
+      openPropCard(listing);
+      showFacilities(listing);
+    }
   }
   const row = document.querySelector(`.sort-table tbody tr[data-id="${CSS.escape(id)}"]`);
   if (row) { row.classList.add('row-selected'); row.scrollIntoView({ block: 'nearest' }); }
