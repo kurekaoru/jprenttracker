@@ -166,6 +166,21 @@
     border-left: 1px solid rgba(255,255,255,0.06);
   }
   .right-panel.open { transform: translateX(0); }
+  .chat-panel {
+    position: fixed; right: 52px; top: 52px;
+    width: 360px; height: calc(100vh - 52px);
+    z-index: 16; display: flex; flex-direction: column;
+    transform: translateX(calc(100% + 52px));
+    transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
+    box-shadow: -4px 0 32px rgba(0,0,0,0.35);
+    --surface:  #2d2d30; --surface2: #383840;
+    --border:   rgba(255,255,255,0.08);
+    --text:     rgba(255,255,255,0.87);
+    --muted:    rgba(255,255,255,0.42);
+    background: #2d2d30; color: rgba(255,255,255,0.87);
+    border-left: 1px solid rgba(255,255,255,0.06);
+  }
+  .chat-panel.open { transform: translateX(0); }
   .icon-rail {
     background: var(--rail-bg);
     border-right: 1px solid rgba(255,255,255,0.07);
@@ -543,15 +558,13 @@
     .side-panel { left: 40px; }
   }
 
-  /* ── Chat panel ── */
-  .side-panel.chat-mode { overflow-y: hidden; }
+  /* ── Chat panel interior ── */
   #panel-copilot {
-    display: none;
+    display: flex;
     flex-direction: column;
-    height: calc(100vh - 52px - 44px);
-    margin: -1rem;
+    flex: 1;
+    overflow: hidden;
   }
-  #panel-copilot.active { display: flex; }
   .chat-thread {
     flex: 1; overflow-y: auto; padding: 14px 16px;
     display: flex; flex-direction: column; gap: 10px;
@@ -1025,28 +1038,6 @@
         <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-23 10:35 JST</p>
       </div>
 
-      <!-- ── Copilot chat panel ── -->
-      <div class="panel-page" id="panel-copilot">
-        <div class="chat-thread" id="chat-thread">
-          <div class="chat-empty" id="chat-empty">
-            <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M5 3l.6 1.9L7.5 5.5l-1.9.6L5 8l-.6-1.9L2.5 5.5l1.9-.6z"/><path d="M19 15l.6 1.9 1.9.6-1.9.6-.6 1.9-.6-1.9-1.9-.6 1.9-.6z"/></svg>
-            <p>物件について何でも聞いてください。<br>条件を自然な言葉で入力できます。</p>
-            <div class="chat-suggestions">
-              <button class="chat-suggestion" onclick="chatUseSuggestion(this)">新宿区で10万円以下の1LDKは？</button>
-              <button class="chat-suggestion" onclick="chatUseSuggestion(this)">駅から徒歩5分以内の空室を探して</button>
-              <button class="chat-suggestion" onclick="chatUseSuggestion(this)">今の空室状況を教えて</button>
-            </div>
-          </div>
-        </div>
-        <div class="chat-input-area">
-          <textarea class="chat-input" id="chat-input" rows="1"
-            placeholder="物件を探す、条件を相談する…"
-            onkeydown="chatKeydown(event)" oninput="chatAutoResize(this)"></textarea>
-          <button class="chat-send-btn" id="chat-send-btn" onclick="chatSend()">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-          </button>
-        </div>
-      </div>
 
     </div>
   </div>
@@ -1061,7 +1052,7 @@
 
   <!-- ── Right icon rail ── -->
   <aside class="right-rail">
-    <button class="rail-btn rail-btn--copilot" id="rail-copilot" onclick="openPanel('copilot')" style="margin-top:auto;">
+    <button class="rail-btn rail-btn--copilot" id="rail-copilot" onclick="toggleChatPanel()" style="margin-top:auto;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M5 3l.6 1.9L7.5 5.5l-1.9.6L5 8l-.6-1.9L2.5 5.5l1.9-.6z"/><path d="M19 15l.6 1.9 1.9.6-1.9.6-.6 1.9-.6-1.9-1.9-.6 1.9-.6z"/></svg>
       <span class="rail-tip rail-tip--left" data-i18n="copilot">AI検索</span>
     </button>
@@ -1077,6 +1068,35 @@
   </div>
   <div class="panel-body">
     <div id="property-card-body" class="pin-popup"></div>
+  </div>
+</div>
+
+<!-- ── AI Chat panel ── -->
+<div class="chat-panel" id="chat-panel">
+  <div class="panel-header">
+    <span class="panel-title" style="color:#4ade80;">✦ AI 検索</span>
+    <button class="panel-close-btn" onclick="closeChatPanel()">×</button>
+  </div>
+  <div id="panel-copilot">
+    <div class="chat-thread" id="chat-thread">
+      <div class="chat-empty" id="chat-empty">
+        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/><path d="M5 3l.6 1.9L7.5 5.5l-1.9.6L5 8l-.6-1.9L2.5 5.5l1.9-.6z"/><path d="M19 15l.6 1.9 1.9.6-1.9.6-.6 1.9-.6-1.9-1.9-.6 1.9-.6z"/></svg>
+        <p>物件について何でも聞いてください。<br>条件を自然な言葉で入力できます。</p>
+        <div class="chat-suggestions">
+          <button class="chat-suggestion" onclick="chatUseSuggestion(this)">新宿区で10万円以下の1LDKは？</button>
+          <button class="chat-suggestion" onclick="chatUseSuggestion(this)">駅から徒歩5分以内の空室を探して</button>
+          <button class="chat-suggestion" onclick="chatUseSuggestion(this)">今の空室状況を教えて</button>
+        </div>
+      </div>
+    </div>
+    <div class="chat-input-area">
+      <textarea class="chat-input" id="chat-input" rows="1"
+        placeholder="物件を探す、条件を相談する…"
+        onkeydown="chatKeydown(event)" oninput="chatAutoResize(this)"></textarea>
+      <button class="chat-send-btn" id="chat-send-btn" onclick="chatSend()">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -2983,11 +3003,10 @@ function closeAuthModal() { document.getElementById('auth-modal').classList.remo
 
 // ── Icon-rail panel ───────────────────────────────────────────────────────────
 let _activePanel = null;
-const _allPanels  = ['filter','listings','account','layers','about','copilot'];
+const _allPanels  = ['filter','listings','account','layers','about'];
 const _panelTitles = {
   filter: 'panel_filter', listings: 'panel_listings',
   account: 'panel_account', layers: 'panel_layers', about: 'panel_about',
-  copilot: 'panel_copilot',
 };
 
 function switchAccountTab(tab) {
@@ -3006,12 +3025,10 @@ function openPanel(name) {
     document.getElementById(`rail-${n}`)?.classList.toggle('active', n === name);
     document.getElementById(`panel-${n}`)?.classList.toggle('active', n === name);
   });
-  panel.style.width = name === 'listings' ? '864px' : name === 'copilot' ? '320px' : '260px';
+  panel.style.width = name === 'listings' ? '864px' : '260px';
   document.getElementById('panel-title').textContent = _panelTitles[name] ? t(_panelTitles[name]) : '';
-  panel.classList.toggle('chat-mode', name === 'copilot');
   panel.classList.add('open');
   backdrop.classList.add('open');
-  if (name === 'copilot') chatPanelOpened();
   setTimeout(() => { if (map) google.maps.event.trigger(map, 'resize'); }, 230);
 }
 
@@ -3027,10 +3044,25 @@ function closePanel() {
 
 let _chatSessionId = localStorage.getItem('chatSessionId') || null;
 let _chatBusy = false;
+let _chatOpen = false;
 
-function chatPanelOpened() {
+function openChatPanel() {
+  _chatOpen = true;
+  document.getElementById('chat-panel').classList.add('open');
+  document.getElementById('rail-copilot').classList.add('active');
   if (_chatSessionId) chatLoadHistory();
-  setTimeout(() => document.getElementById('chat-input')?.focus(), 250);
+  setTimeout(() => { document.getElementById('chat-input')?.focus(); if (map) google.maps.event.trigger(map,'resize'); }, 250);
+}
+
+function closeChatPanel() {
+  _chatOpen = false;
+  document.getElementById('chat-panel').classList.remove('open');
+  document.getElementById('rail-copilot').classList.remove('active');
+  setTimeout(() => { if (map) google.maps.event.trigger(map,'resize'); }, 230);
+}
+
+function toggleChatPanel() {
+  _chatOpen ? closeChatPanel() : openChatPanel();
 }
 
 function chatAutoResize(ta) {
