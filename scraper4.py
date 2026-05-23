@@ -173,15 +173,15 @@ IMG_DIR = "images"
 _IMG_HEADERS = {"User-Agent": "jkktrackr/1.0 (image-collector)"}
 
 def download_pending_images(con, limit=50):
-    """Download images that have been queued but not yet saved to disk."""
+    """Download queued images; run OCR on floor plans."""
     rows = con.execute(
-        "SELECT id, listing_id, url FROM listing_images "
+        "SELECT id, listing_id, url, image_type FROM listing_images "
         "WHERE local_path IS NULL ORDER BY id LIMIT ?", (limit,)
     ).fetchall()
     if not rows:
         return
     log.info(f"Downloading {len(rows)} queued image(s)...")
-    for row_id, lid, url in rows:
+    for row_id, lid, url, img_type in rows:
         img_dir = os.path.join(IMG_DIR, lid)
         os.makedirs(img_dir, exist_ok=True)
         try:
@@ -196,9 +196,14 @@ def download_pending_images(con, limit=50):
             fpath = os.path.join(img_dir, f"{row_id}.{ext}")
             with open(fpath, "wb") as f:
                 f.write(r.content)
+            ocr_text = None
+            if img_type == "floor_plan":
+                ocr_text = _ocr_floor_plan(fpath)
+                if ocr_text:
+                    log.info(f"OCR floor plan {fpath}: {ocr_text[:80]}")
             con.execute(
-                "UPDATE listing_images SET local_path=?, downloaded_at=? WHERE id=?",
-                (fpath, datetime.now().isoformat(), row_id)
+                "UPDATE listing_images SET local_path=?, downloaded_at=?, ocr_text=? WHERE id=?",
+                (fpath, datetime.now().isoformat(), ocr_text, row_id)
             )
             con.commit()
             log.debug(f"Saved {fpath}")
@@ -210,31 +215,95 @@ _DETAIL_HEADERS = {
     "Accept-Language": "ja-JP,ja;q=0.9",
 }
 
-def _fetch_detail_image_url(listing_url):
-    """Extract main photo URL from a listing detail page."""
+_FLOOR_PLAN_KEYWORDS = {"madori", "floorplan", "floor_plan", "floor-plan", "間取", "madorizu"}
+_SKIP_KEYWORDS       = {"logo", "icon", "btn", "arrow", "spacer", "blank", "banner", "nophoto"}
+
+def _classify_image(url, alt="", parent_text=""):
+    """Return 'floor_plan', 'exterior', or 'interior' based on URL/context clues."""
+    combined = (url + " " + alt + " " + parent_text).lower()
+    if any(k in combined for k in _FLOOR_PLAN_KEYWORDS):
+        return "floor_plan"
+    if any(k in combined for k in ("gaikan", "外観", "exterior")):
+        return "exterior"
+    return "interior"
+
+def _fetch_detail_images(listing_url):
+    """
+    Fetch all images from a listing detail page.
+    Returns list of (url, image_type) sorted: floor_plan first.
+    """
     if not listing_url or listing_url.startswith("javascript"):
-        return None
+        return []
     try:
         r = requests.get(listing_url, timeout=15, headers=_DETAIL_HEADERS)
         if r.status_code != 200:
-            return None
+            return []
         soup = BeautifulSoup(r.content, "html.parser")
+
+        seen, results = set(), []
+
+        def add(url, img_type):
+            if url and url not in seen and not any(k in url.lower() for k in _SKIP_KEYWORDS):
+                ext = url.rsplit(".", 1)[-1].split("?")[0].lower()
+                if ext in ("jpg", "jpeg", "png", "webp", "gif") or "?" in url:
+                    seen.add(url)
+                    results.append((url, img_type))
+
+        # og:image → usually exterior/main
         og = soup.find("meta", property="og:image")
         if og and og.get("content"):
-            return og["content"]
-        for sel in [".gaikan img", ".bukken-photo img", ".main-photo img", "#mainPhoto img",
-                    ".property-image img", ".room-image img"]:
-            img = soup.select_one(sel)
-            if img and img.get("src"):
-                return urljoin(listing_url, img["src"])
-        skip = {"logo", "icon", "btn", "arrow", "spacer", "blank", ".gif", ".svg"}
+            add(og["content"], "exterior")
+
+        # Walk all img tags
         for img in soup.find_all("img", src=True):
-            src = img["src"].lower()
-            if not any(x in src for x in skip):
-                return urljoin(listing_url, img["src"])
+            src = urljoin(listing_url, img["src"])
+            alt = img.get("alt", "")
+            parent = " ".join(p.get("class", []) for p in img.parents if hasattr(p, "get"))
+            add(src, _classify_image(src, alt, parent))
+
+        # Floor plans first, then others
+        results.sort(key=lambda x: 0 if x[1] == "floor_plan" else 1)
+        return results[:12]  # cap at 12 images per listing
     except Exception as e:
-        log.debug(f"Detail image fetch failed ({listing_url}): {e}")
-    return None
+        log.debug(f"Image fetch failed ({listing_url}): {e}")
+    return []
+
+
+def _ocr_floor_plan(image_path):
+    """Use Claude vision to extract room dimensions from a floor plan image."""
+    import base64
+    try:
+        from anthropic import Anthropic
+    except ImportError:
+        return None
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return None
+    try:
+        with open(image_path, "rb") as f:
+            data = base64.standard_b64encode(f.read()).decode()
+        ext  = image_path.rsplit(".", 1)[-1].lower()
+        mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg",
+                "png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
+        client = Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=400,
+            messages=[{"role": "user", "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": mime, "data": data}},
+                {"type": "text", "text": (
+                    "This is a Japanese rental apartment floor plan (間取り図). "
+                    "List every room and its size in m². Format each line as: "
+                    "Room: Xm²  (e.g. LDK: 14.5m², 洋室1: 6.0m², 洗面所: 2.5m²). "
+                    "If this image is NOT a floor plan, reply only: NOT_FLOOR_PLAN"
+                )},
+            ]}],
+        )
+        text = resp.content[0].text.strip()
+        return None if text == "NOT_FLOOR_PLAN" else text
+    except Exception as e:
+        log.warning(f"OCR failed for {image_path}: {e}")
+        return None
 
 
 def _scrape_images_for_new_listings(new_lids):
@@ -246,17 +315,22 @@ def _scrape_images_for_new_listings(new_lids):
         new_lids
     ).fetchall()
     ok = 0
-    for lid, url in rows:
-        img_url = _fetch_detail_image_url(url)
-        if img_url:
-            con.execute("UPDATE listings SET thumbnail_url=? WHERE id=?", (img_url, lid))
+    for lid, listing_url in rows:
+        images = _fetch_detail_images(listing_url)
+        if not images:
+            time.sleep(0.4)
+            continue
+        # First image → thumbnail
+        con.execute("UPDATE listings SET thumbnail_url=? WHERE id=?", (images[0][0], lid))
+        for img_url, img_type in images:
             con.execute(
-                "INSERT OR IGNORE INTO listing_images (listing_id, url) VALUES (?,?)",
-                (lid, img_url)
+                "INSERT OR IGNORE INTO listing_images (listing_id, url, image_type) VALUES (?,?,?)",
+                (lid, img_url, img_type)
             )
-            con.commit()
-            ok += 1
+        con.commit()
+        ok += 1
         time.sleep(0.5)
+    con.close()
     if ok:
         log.info(f"Detail images scraped for {ok}/{len(rows)} new listing(s).")
     con.close()

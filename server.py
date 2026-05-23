@@ -120,6 +120,12 @@ def db():
         if col not in cols:
             con.execute(f"ALTER TABLE listings ADD COLUMN {col} {defn}")
 
+    # listing_images column migrations
+    img_cols = {row[1] for row in con.execute("PRAGMA table_info(listing_images)")}
+    for col, defn in [("image_type", "TEXT"), ("ocr_text", "TEXT")]:
+        if img_cols and col not in img_cols:
+            con.execute(f"ALTER TABLE listing_images ADD COLUMN {col} {defn}")
+
     con.executescript("""
         CREATE TABLE IF NOT EXISTS listing_images (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -127,6 +133,8 @@ def db():
             url          TEXT    NOT NULL,
             local_path   TEXT,
             downloaded_at TEXT,
+            image_type   TEXT,
+            ocr_text     TEXT,
             UNIQUE(listing_id, url)
         );
         CREATE TABLE IF NOT EXISTS listing_embeddings (
@@ -1253,7 +1261,7 @@ _CHAT_TOOLS = [
     },
     {
         "name": "get_listing_details",
-        "description": "Full details for one listing including nearby facilities.",
+        "description": "Full details for one listing including nearby facilities and floor_plan_ocr (individual room dimensions extracted from floor plan images via OCR, if available).",
         "input_schema": {
             "type": "object",
             "required": ["listing_id"],
@@ -1392,7 +1400,16 @@ def _chat_details(params, con):
         "SELECT type,name,distance_m FROM listing_facilities WHERE listing_id=? ORDER BY distance_m LIMIT 12",
         (params["listing_id"],)
     ).fetchall()
-    return {**dict(row), "facilities": [dict(f) for f in facs]}
+    # Include any OCR text extracted from floor plan images
+    ocr_rows = con.execute(
+        "SELECT ocr_text FROM listing_images WHERE listing_id=? AND image_type='floor_plan' AND ocr_text IS NOT NULL",
+        (params["listing_id"],)
+    ).fetchall()
+    ocr_texts = [r["ocr_text"] for r in ocr_rows if r["ocr_text"]]
+    result = {**dict(row), "facilities": [dict(f) for f in facs]}
+    if ocr_texts:
+        result["floor_plan_ocr"] = "\n---\n".join(ocr_texts)
+    return result
 
 def _call_claude(history, con, open_listing=None):
     if not _anthropic:
