@@ -2086,6 +2086,17 @@ def search_visual():
     return jsonify({"results": results, "total_indexed": len(emb_rows)})
 
 
+@app.route("/")
+def serve_desktop():
+    import os
+    return send_file(os.path.join(os.path.dirname(__file__), "dashboard.html"))
+
+@app.route("/m")
+def serve_mobile():
+    import os
+    return send_file(os.path.join(os.path.dirname(__file__), "dashboard-mobile.html"))
+
+
 if __name__ == "__main__":
     con = db()  # init tables + JWT secret on startup
     # Kick worker if geocoded listings exist with no facilities (e.g. after migration wipe)
