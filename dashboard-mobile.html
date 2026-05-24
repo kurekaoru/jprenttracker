@@ -709,20 +709,25 @@ function applyLang() {
 }
 
 // ── Map ────────────────────────────────────────────────────────────────────
-function bootMap(){
+window.bootMap = function bootMap(){
   if (map) return;
-  map=new google.maps.Map(document.getElementById('map'),{
-    center:{lat:35.680,lng:139.750},zoom:11,
-    gestureHandling:'greedy',
-    styles:darkMapStyle(),
-    mapTypeControl:false,streetViewControl:false,
-    fullscreenControl:false,zoomControl:false,
-  });
-  loadListings();
-  initAuth();
-}
-window.bootMap = bootMap;
-if (window.__jkkMapsReady && window.google && window.google.maps) bootMap();
+  const mapEl = document.getElementById('map');
+  if (!mapEl) { console.error('JKK: #map element not found'); return; }
+  try {
+    map = new google.maps.Map(mapEl, {
+      center:{lat:35.680,lng:139.750}, zoom:11,
+      gestureHandling:'greedy',
+      styles:darkMapStyle(),
+      mapTypeControl:false, streetViewControl:false,
+      fullscreenControl:false, zoomControl:false,
+    });
+    loadListings();
+    initAuth();
+  } catch(e) { console.error('JKK: google.maps.Map init failed', e); }
+};
+
+// Race-safe: if Maps already fired before this script set window.bootMap
+if (window.__jkkMapsReady) window.bootMap();
 
 function markerIcon(source, selected, saved){
   const isUR = source==='ur';
