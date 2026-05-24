@@ -1105,7 +1105,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 21:01 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 21:07 JST</p>
       </div>
 
 
@@ -2450,6 +2450,11 @@ async function toggleSave(listingId) {
     btn.classList.toggle('saved', !wasSaved);
     btn.title = !wasSaved ? t('saved_listing') : t('save_listing');
   }
+  // Update marker dot color immediately
+  if (_markers[listingId]) {
+    const e = _markers[listingId];
+    e.marker.setIcon(markerIcon(e.source, listingId === _selectedId, !wasSaved));
+  }
   renderAvailableTable();
   renderFavouritesTable();
   if (!AUTH.token) return;
@@ -2470,17 +2475,18 @@ function recordView(listingId) {
   }).catch(() => {});
 }
 
-function markerIcon(source, selected) {
+function markerIcon(source, selected, saved) {
   const isUR   = source === 'ur';
   const fill   = selected ? (isUR ? '#1d4ed8' : '#b91c1c') : (isUR ? '#3a86ff' : '#dc2626');
   const border = selected ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.7)';
   const w = selected ? 30 : 22;
   const h = Math.round(w * 1.45);
   const cx = w / 2, cr = w * 0.28;
+  const innerFill = saved ? '#FCD34D' : 'rgba(255,255,255,0.88)';
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
     <path d="M${cx} 1 C${cx - w*0.42} 1 1 ${w*0.38} 1 ${w*0.5} C1 ${w*0.92} ${cx} ${h} ${cx} ${h} C${cx} ${h} ${w-1} ${w*0.92} ${w-1} ${w*0.5} C${w-1} ${w*0.38} ${cx + w*0.42} 1 ${cx} 1 Z"
       fill="${fill}" stroke="${border}" stroke-width="1.5"/>
-    <circle cx="${cx}" cy="${w * 0.5}" r="${cr}" fill="rgba(255,255,255,0.88)"/>
+    <circle cx="${cx}" cy="${w * 0.5}" r="${cr}" fill="${innerFill}"/>
   </svg>`;
   return {
     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
@@ -2862,7 +2868,8 @@ function closePropCard() {
   }
   if (_selectedId) {
     if (_markers[_selectedId]) {
-      _markers[_selectedId].marker.setIcon(markerIcon(_markers[_selectedId].source, false));
+      const e = _markers[_selectedId];
+      e.marker.setIcon(markerIcon(e.source, false, _savedListings.has(_selectedId)));
     }
     document.querySelectorAll('.sort-table tbody tr.row-selected')
       .forEach(r => r.classList.remove('row-selected'));
@@ -2872,7 +2879,8 @@ function closePropCard() {
 
 function selectListing(id) {
   if (_selectedId && _markers[_selectedId]) {
-    _markers[_selectedId].marker.setIcon(markerIcon(_markers[_selectedId].source, false));
+    const e = _markers[_selectedId];
+    e.marker.setIcon(markerIcon(e.source, false, _savedListings.has(_selectedId)));
   }
   document.querySelectorAll('.sort-table tbody tr.row-selected')
     .forEach(r => r.classList.remove('row-selected'));
@@ -2882,7 +2890,7 @@ function selectListing(id) {
   _selectedId = id;
   const entry = _markers[id];
   if (entry) {
-    entry.marker.setIcon(markerIcon(entry.source, true));
+    entry.marker.setIcon(markerIcon(entry.source, true, _savedListings.has(id)));
     map.panTo(entry.marker.getPosition());
     map.setZoom(15);
     openPropCard(entry.listing);
@@ -2932,7 +2940,7 @@ function applyMapFilters() {
     const marker = new google.maps.Marker({
       position: { lat: l.lat, lng: l.lng },
       map,
-      icon: markerIcon(l.source, false),
+      icon: markerIcon(l.source, false, _savedListings.has(l.id)),
       title: l.name,
     });
     marker.addListener('click', () => selectListing(l.id));
