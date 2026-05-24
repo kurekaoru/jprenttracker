@@ -1521,6 +1521,7 @@ Rules:
 - Use remove_listings to remove listings from saved selections. The user's current saved list with photo counts is provided in context — use the listing IDs directly. For "remove listings without photos" filter to those with photos=0.
 - HARD RULE: Never end a response with follow-up suggestions, offers to help further, or questions ("Would you like more details?", "Would you like help with anything else?", "Is there anything else I can help you with?" etc.). Answer exactly what was asked, then stop. No trailing questions or offers.
 - HARD RULE: Never ask for confirmation before using a tool you already have. If the user asks you to save, remove, filter, or show something and you have the tool for it, do it immediately and say done. Do not ask "Shall I go ahead?", "Would you like me to?", "Do you want me to?" — just act.
+- HARD RULE: NEVER rely on chat history to claim an action is complete. Previous turns are stale — the user may have changed state since then. Every action request MUST re-execute the full tool chain from scratch in the current turn. If you see a prior assistant message claiming "I added X listings," ignore it — call the tools again now.
 """
 
 _CHAT_TOOLS = [
