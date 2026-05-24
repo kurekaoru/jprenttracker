@@ -1097,68 +1097,68 @@
                   <input class="pinfo-input" id="pinfo-name" type="text" placeholder="表示名">
                 </div>
                 <div class="pinfo-row">
-                  <div class="pinfo-label">目的</div>
+                  <div class="pinfo-label" data-i18n="pinfo_purpose">目的</div>
                   <div class="pinfo-chips" id="pinfo-purpose">
-                    <button class="pinfo-chip" data-val="self" onclick="pinfoToggle('purpose','self',false)">自分用</button>
-                    <button class="pinfo-chip" data-val="couple" onclick="pinfoToggle('purpose','couple',false)">カップル</button>
-                    <button class="pinfo-chip" data-val="family" onclick="pinfoToggle('purpose','family',false)">家族</button>
-                    <button class="pinfo-chip" data-val="research" onclick="pinfoToggle('purpose','research',false)">調査</button>
+                    <button class="pinfo-chip" data-val="self" onclick="pinfoToggle('purpose','self',false)" data-i18n="p_self">自分用</button>
+                    <button class="pinfo-chip" data-val="couple" onclick="pinfoToggle('purpose','couple',false)" data-i18n="p_couple">カップル</button>
+                    <button class="pinfo-chip" data-val="family" onclick="pinfoToggle('purpose','family',false)" data-i18n="p_family">家族</button>
+                    <button class="pinfo-chip" data-val="research" onclick="pinfoToggle('purpose','research',false)" data-i18n="p_research">調査</button>
                   </div>
                 </div>
                 <div class="pinfo-row">
-                  <div class="pinfo-label">世帯構成</div>
+                  <div class="pinfo-label" data-i18n="pinfo_household">世帯構成</div>
                   <div class="pinfo-chips" id="pinfo-household">
-                    <button class="pinfo-chip" data-val="single" onclick="pinfoToggle('household','single',false)">一人暮らし</button>
-                    <button class="pinfo-chip" data-val="couple" onclick="pinfoToggle('household','couple',false)">二人暮らし</button>
-                    <button class="pinfo-chip" data-val="family" onclick="pinfoToggle('household','family',false)">家族（子あり）</button>
-                    <button class="pinfo-chip" data-val="other" onclick="pinfoToggle('household','other',false)">その他</button>
+                    <button class="pinfo-chip" data-val="single" onclick="pinfoToggle('household','single',false)" data-i18n="h_single">一人暮らし</button>
+                    <button class="pinfo-chip" data-val="couple" onclick="pinfoToggle('household','couple',false)" data-i18n="h_couple">二人暮らし</button>
+                    <button class="pinfo-chip" data-val="family" onclick="pinfoToggle('household','family',false)" data-i18n="h_family">家族（子あり）</button>
+                    <button class="pinfo-chip" data-val="other" onclick="pinfoToggle('household','other',false)" data-i18n="h_other">その他</button>
                   </div>
                   <div id="pinfo-children-row" style="display:none;margin-top:8px;align-items:center;gap:8px;flex-wrap:wrap;">
-                    <span style="font-size:11px;color:var(--muted);">子供の人数</span>
+                    <span style="font-size:11px;color:var(--muted);" data-i18n="pinfo_num_children">子供の人数</span>
                     <div class="pinfo-chips" id="pinfo-num_children">
-                      <button class="pinfo-chip" data-val="1" onclick="pinfoToggle('num_children','1',false)">1人</button>
-                      <button class="pinfo-chip" data-val="2" onclick="pinfoToggle('num_children','2',false)">2人</button>
-                      <button class="pinfo-chip" data-val="3" onclick="pinfoToggle('num_children','3',false)">3人</button>
-                      <button class="pinfo-chip" data-val="4" onclick="pinfoToggle('num_children','4',false)">4人以上</button>
+                      <button class="pinfo-chip" data-val="1" onclick="pinfoToggle('num_children','1',false)" data-i18n="c_1">1人</button>
+                      <button class="pinfo-chip" data-val="2" onclick="pinfoToggle('num_children','2',false)" data-i18n="c_2">2人</button>
+                      <button class="pinfo-chip" data-val="3" onclick="pinfoToggle('num_children','3',false)" data-i18n="c_3">3人</button>
+                      <button class="pinfo-chip" data-val="4" onclick="pinfoToggle('num_children','4',false)" data-i18n="c_4">4人以上</button>
                     </div>
                   </div>
                 </div>
                 <div class="pinfo-row">
-                  <div class="pinfo-label">年代</div>
+                  <div class="pinfo-label" data-i18n="pinfo_age">年代</div>
                   <div class="pinfo-chips" id="pinfo-age_range">
-                    <button class="pinfo-chip" data-val="20s" onclick="pinfoToggle('age_range','20s',false)">20代</button>
-                    <button class="pinfo-chip" data-val="30s" onclick="pinfoToggle('age_range','30s',false)">30代</button>
-                    <button class="pinfo-chip" data-val="40s" onclick="pinfoToggle('age_range','40s',false)">40代</button>
-                    <button class="pinfo-chip" data-val="50s" onclick="pinfoToggle('age_range','50s',false)">50代+</button>
+                    <button class="pinfo-chip" data-val="20s" onclick="pinfoToggle('age_range','20s',false)">20s</button>
+                    <button class="pinfo-chip" data-val="30s" onclick="pinfoToggle('age_range','30s',false)">30s</button>
+                    <button class="pinfo-chip" data-val="40s" onclick="pinfoToggle('age_range','40s',false)">40s</button>
+                    <button class="pinfo-chip" data-val="50s" onclick="pinfoToggle('age_range','50s',false)">50s+</button>
                   </div>
                 </div>
                 <div class="pinfo-row">
-                  <div class="pinfo-label">家賃予算</div>
+                  <div class="pinfo-label" data-i18n="pinfo_budget">家賃予算</div>
                   <div class="pinfo-chips" id="pinfo-budget">
-                    <button class="pinfo-chip" data-val="0-60000" onclick="pinfoToggle('budget','0-60000',false)">〜6万</button>
-                    <button class="pinfo-chip" data-val="60000-80000" onclick="pinfoToggle('budget','60000-80000',false)">6〜8万</button>
-                    <button class="pinfo-chip" data-val="80000-100000" onclick="pinfoToggle('budget','80000-100000',false)">8〜10万</button>
-                    <button class="pinfo-chip" data-val="100000-130000" onclick="pinfoToggle('budget','100000-130000',false)">10〜13万</button>
-                    <button class="pinfo-chip" data-val="130000-999999" onclick="pinfoToggle('budget','130000-999999',false)">13万〜</button>
+                    <button class="pinfo-chip" data-val="0-60000" onclick="pinfoToggle('budget','0-60000',false)" data-i18n="b_60">〜6万</button>
+                    <button class="pinfo-chip" data-val="60000-80000" onclick="pinfoToggle('budget','60000-80000',false)" data-i18n="b_80">6〜8万</button>
+                    <button class="pinfo-chip" data-val="80000-100000" onclick="pinfoToggle('budget','80000-100000',false)" data-i18n="b_100">8〜10万</button>
+                    <button class="pinfo-chip" data-val="100000-130000" onclick="pinfoToggle('budget','100000-130000',false)" data-i18n="b_130">10〜13万</button>
+                    <button class="pinfo-chip" data-val="130000-999999" onclick="pinfoToggle('budget','130000-999999',false)" data-i18n="b_130p">13万〜</button>
                   </div>
                 </div>
                 <div class="pinfo-row">
-                  <div class="pinfo-label">引越し時期</div>
+                  <div class="pinfo-label" data-i18n="pinfo_movein">引越し時期</div>
                   <div class="pinfo-chips" id="pinfo-move_in_timing">
-                    <button class="pinfo-chip" data-val="asap" onclick="pinfoToggle('move_in_timing','asap',false)">すぐにでも</button>
-                    <button class="pinfo-chip" data-val="1-3m" onclick="pinfoToggle('move_in_timing','1-3m',false)">1〜3ヶ月後</button>
-                    <button class="pinfo-chip" data-val="3-6m" onclick="pinfoToggle('move_in_timing','3-6m',false)">3〜6ヶ月後</button>
-                    <button class="pinfo-chip" data-val="undecided" onclick="pinfoToggle('move_in_timing','undecided',false)">未定</button>
+                    <button class="pinfo-chip" data-val="asap" onclick="pinfoToggle('move_in_timing','asap',false)" data-i18n="m_asap">すぐにでも</button>
+                    <button class="pinfo-chip" data-val="1-3m" onclick="pinfoToggle('move_in_timing','1-3m',false)" data-i18n="m_1_3">1〜3ヶ月後</button>
+                    <button class="pinfo-chip" data-val="3-6m" onclick="pinfoToggle('move_in_timing','3-6m',false)" data-i18n="m_3_6">3〜6ヶ月後</button>
+                    <button class="pinfo-chip" data-val="undecided" onclick="pinfoToggle('move_in_timing','undecided',false)" data-i18n="m_undecided">未定</button>
                   </div>
                 </div>
                 <div class="pinfo-row">
-                  <div class="pinfo-label">その他</div>
+                  <div class="pinfo-label" data-i18n="pinfo_other">その他</div>
                   <div class="pinfo-chips">
-                    <button class="pinfo-chip" id="pinfo-pets-btn" onclick="pinfoToggleBool('pets')">ペット可</button>
-                    <button class="pinfo-chip" id="pinfo-smoking-btn" onclick="pinfoToggleBool('smoking')">喫煙</button>
+                    <button class="pinfo-chip" id="pinfo-pets-btn" onclick="pinfoToggleBool('pets')" data-i18n="pinfo_pets">ペット可</button>
+                    <button class="pinfo-chip" id="pinfo-smoking-btn" onclick="pinfoToggleBool('smoking')" data-i18n="pinfo_smoking">喫煙</button>
                   </div>
                 </div>
-                <button class="save-btn" style="margin-top:8px;" onclick="savePinfo()">保存する</button>
+                <button class="save-btn" style="margin-top:8px;" onclick="savePinfo()" data-i18n="update">保存する</button>
                 <div class="saved-msg" id="pinfo-msg"></div>
               </div>
             </div>
@@ -1261,7 +1261,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 22:26 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 22:35 JST</p>
       </div>
 
 
@@ -1336,34 +1336,34 @@
       <!-- Card 0: Purpose -->
       <div class="onboard-slide active" id="ocard-0">
         <div class="onboard-emoji">🏠</div>
-        <div class="onboard-title">ようこそ！何のためにお探しですか？</div>
-        <div class="onboard-sub">あなたに合った提案をするために教えてください</div>
+        <div class="onboard-title" data-i18n="ob_purpose_title">ようこそ！何のためにお探しですか？</div>
+        <div class="onboard-sub" data-i18n="ob_purpose_sub">あなたに合った提案をするために教えてください</div>
         <div class="onboard-choices">
-          <button class="onboard-chip" data-field="purpose" data-val="self" onclick="onboardPick(this)">自分のため</button>
-          <button class="onboard-chip" data-field="purpose" data-val="couple" onclick="onboardPick(this)">カップル・同棲</button>
-          <button class="onboard-chip" data-field="purpose" data-val="family" onclick="onboardPick(this)">家族のため</button>
-          <button class="onboard-chip" data-field="purpose" data-val="research" onclick="onboardPick(this)">調査・その他</button>
+          <button class="onboard-chip" data-field="purpose" data-val="self" onclick="onboardPick(this)" data-i18n="p_self">自分のため</button>
+          <button class="onboard-chip" data-field="purpose" data-val="couple" onclick="onboardPick(this)" data-i18n="ob_couple">カップル・同棲</button>
+          <button class="onboard-chip" data-field="purpose" data-val="family" onclick="onboardPick(this)" data-i18n="ob_family_for">家族のため</button>
+          <button class="onboard-chip" data-field="purpose" data-val="research" onclick="onboardPick(this)" data-i18n="p_research">調査・その他</button>
         </div>
       </div>
 
       <!-- Card 1: Household -->
       <div class="onboard-slide" id="ocard-1">
         <div class="onboard-emoji">👥</div>
-        <div class="onboard-title">世帯構成を教えてください</div>
-        <div class="onboard-sub">物件の広さの参考にします</div>
+        <div class="onboard-title" data-i18n="ob_household_title">世帯構成を教えてください</div>
+        <div class="onboard-sub" data-i18n="ob_household_sub">物件の広さの参考にします</div>
         <div class="onboard-choices">
-          <button class="onboard-chip" data-field="household" data-val="single" onclick="onboardPick(this)">一人暮らし</button>
-          <button class="onboard-chip" data-field="household" data-val="couple" onclick="onboardPick(this)">二人暮らし</button>
-          <button class="onboard-chip" data-field="household" data-val="family" onclick="onboardPick(this)">家族（子あり）</button>
-          <button class="onboard-chip" data-field="household" data-val="other" onclick="onboardPick(this)">その他</button>
+          <button class="onboard-chip" data-field="household" data-val="single" onclick="onboardPick(this)" data-i18n="h_single">一人暮らし</button>
+          <button class="onboard-chip" data-field="household" data-val="couple" onclick="onboardPick(this)" data-i18n="h_couple">二人暮らし</button>
+          <button class="onboard-chip" data-field="household" data-val="family" onclick="onboardPick(this)" data-i18n="h_family">家族（子あり）</button>
+          <button class="onboard-chip" data-field="household" data-val="other" onclick="onboardPick(this)" data-i18n="h_other">その他</button>
         </div>
         <div id="onboard-children-row" style="display:none;margin-top:18px;align-items:center;gap:10px;justify-content:center;">
-          <span style="font-size:13px;color:var(--muted);">子供の人数</span>
+          <span style="font-size:13px;color:var(--muted);" data-i18n="pinfo_num_children">子供の人数</span>
           <div style="display:flex;gap:6px;">
-            <button class="onboard-chip" data-field="num_children" data-val="1" onclick="onboardPick(this)">1人</button>
-            <button class="onboard-chip" data-field="num_children" data-val="2" onclick="onboardPick(this)">2人</button>
-            <button class="onboard-chip" data-field="num_children" data-val="3" onclick="onboardPick(this)">3人</button>
-            <button class="onboard-chip" data-field="num_children" data-val="4" onclick="onboardPick(this)">4人以上</button>
+            <button class="onboard-chip" data-field="num_children" data-val="1" onclick="onboardPick(this)" data-i18n="c_1">1人</button>
+            <button class="onboard-chip" data-field="num_children" data-val="2" onclick="onboardPick(this)" data-i18n="c_2">2人</button>
+            <button class="onboard-chip" data-field="num_children" data-val="3" onclick="onboardPick(this)" data-i18n="c_3">3人</button>
+            <button class="onboard-chip" data-field="num_children" data-val="4" onclick="onboardPick(this)" data-i18n="c_4">4人以上</button>
           </div>
         </div>
       </div>
@@ -1371,43 +1371,43 @@
       <!-- Card 2: Budget -->
       <div class="onboard-slide" id="ocard-2">
         <div class="onboard-emoji">💰</div>
-        <div class="onboard-title">家賃の予算は？</div>
-        <div class="onboard-sub">おおよそで大丈夫です</div>
+        <div class="onboard-title" data-i18n="ob_budget_title">家賃の予算は？</div>
+        <div class="onboard-sub" data-i18n="ob_budget_sub">おおよそで大丈夫です</div>
         <div class="onboard-choices">
-          <button class="onboard-chip" data-field="budget" data-val="0-60000" onclick="onboardPick(this)">〜6万円</button>
-          <button class="onboard-chip" data-field="budget" data-val="60000-80000" onclick="onboardPick(this)">6〜8万円</button>
-          <button class="onboard-chip" data-field="budget" data-val="80000-100000" onclick="onboardPick(this)">8〜10万円</button>
-          <button class="onboard-chip" data-field="budget" data-val="100000-130000" onclick="onboardPick(this)">10〜13万円</button>
-          <button class="onboard-chip" data-field="budget" data-val="130000-999999" onclick="onboardPick(this)">13万円〜</button>
+          <button class="onboard-chip" data-field="budget" data-val="0-60000" onclick="onboardPick(this)" data-i18n="b_60">〜6万円</button>
+          <button class="onboard-chip" data-field="budget" data-val="60000-80000" onclick="onboardPick(this)" data-i18n="b_80">6〜8万円</button>
+          <button class="onboard-chip" data-field="budget" data-val="80000-100000" onclick="onboardPick(this)" data-i18n="b_100">8〜10万円</button>
+          <button class="onboard-chip" data-field="budget" data-val="100000-130000" onclick="onboardPick(this)" data-i18n="b_130">10〜13万円</button>
+          <button class="onboard-chip" data-field="budget" data-val="130000-999999" onclick="onboardPick(this)" data-i18n="b_130p">13万円〜</button>
         </div>
       </div>
 
       <!-- Card 3: Move-in timing -->
       <div class="onboard-slide" id="ocard-3">
         <div class="onboard-emoji">📅</div>
-        <div class="onboard-title">いつ頃引越し予定ですか？</div>
+        <div class="onboard-title" data-i18n="ob_movein_title">いつ頃引越し予定ですか？</div>
         <div class="onboard-sub"></div>
         <div class="onboard-choices">
-          <button class="onboard-chip" data-field="move_in_timing" data-val="asap" onclick="onboardPick(this)">できるだけ早く</button>
-          <button class="onboard-chip" data-field="move_in_timing" data-val="1-3m" onclick="onboardPick(this)">1〜3ヶ月後</button>
-          <button class="onboard-chip" data-field="move_in_timing" data-val="3-6m" onclick="onboardPick(this)">3〜6ヶ月後</button>
-          <button class="onboard-chip" data-field="move_in_timing" data-val="undecided" onclick="onboardPick(this)">まだ未定</button>
+          <button class="onboard-chip" data-field="move_in_timing" data-val="asap" onclick="onboardPick(this)" data-i18n="m_asap">できるだけ早く</button>
+          <button class="onboard-chip" data-field="move_in_timing" data-val="1-3m" onclick="onboardPick(this)" data-i18n="m_1_3">1〜3ヶ月後</button>
+          <button class="onboard-chip" data-field="move_in_timing" data-val="3-6m" onclick="onboardPick(this)" data-i18n="m_3_6">3〜6ヶ月後</button>
+          <button class="onboard-chip" data-field="move_in_timing" data-val="undecided" onclick="onboardPick(this)" data-i18n="m_undecided">まだ未定</button>
         </div>
       </div>
 
       <!-- Card 4: Preferred wards -->
       <div class="onboard-slide" id="ocard-4">
         <div class="onboard-emoji">🗺️</div>
-        <div class="onboard-title">希望エリアは？</div>
-        <div class="onboard-sub">複数選択できます（スキップ可）</div>
+        <div class="onboard-title" data-i18n="ob_area_title">希望エリアは？</div>
+        <div class="onboard-sub" data-i18n="ob_area_sub">複数選択できます（スキップ可）</div>
         <div class="onboard-ward-grid" id="onboard-ward-grid"></div>
       </div>
 
     </div>
     <div class="onboard-footer">
-      <button class="onboard-back" id="onboard-back-btn" onclick="onboardBack()" style="visibility:hidden;">← 戻る</button>
-      <button class="onboard-skip" onclick="onboardSkip()">スキップ</button>
-      <button class="onboard-next" id="onboard-next-btn" onclick="onboardNext()">次へ →</button>
+      <button class="onboard-back" id="onboard-back-btn" onclick="onboardBack()" style="visibility:hidden;" data-i18n="ob_back">← 戻る</button>
+      <button class="onboard-skip" onclick="onboardSkip()" data-i18n="ob_skip">スキップ</button>
+      <button class="onboard-next" id="onboard-next-btn" onclick="onboardNext()" data-i18n="ob_next">次へ →</button>
     </div>
   </div>
 </div>
@@ -1722,6 +1722,65 @@ const STRINGS = {
   tab_account:          { ja:'アカウント',              en:'Account' },
   tab_personal_info:    { ja:'個人情報',                en:'Profile' },
   tab_alerts:           { ja:'通知',                    en:'Alerts' },
+
+  // Personal info labels
+  pinfo_purpose:        { ja:'目的',                    en:'Purpose' },
+  pinfo_household:      { ja:'世帯構成',                en:'Household' },
+  pinfo_num_children:   { ja:'子供の人数',              en:'No. of children' },
+  pinfo_age:            { ja:'年代',                    en:'Age group' },
+  pinfo_budget:         { ja:'家賃予算',                en:'Budget' },
+  pinfo_movein:         { ja:'引越し時期',              en:'Move-in' },
+  pinfo_other:          { ja:'その他',                  en:'Other' },
+  pinfo_pets:           { ja:'ペット可',                en:'Pets OK' },
+  pinfo_smoking:        { ja:'喫煙',                    en:'Smoking' },
+
+  // Purpose chips
+  p_self:               { ja:'自分用',                  en:'For myself' },
+  p_couple:             { ja:'カップル',                en:'Couple' },
+  p_family:             { ja:'家族',                    en:'Family' },
+  p_research:           { ja:'調査',                    en:'Research' },
+
+  // Household chips
+  h_single:             { ja:'一人暮らし',              en:'Solo' },
+  h_couple:             { ja:'二人暮らし',              en:'Couple' },
+  h_family:             { ja:'家族（子あり）',          en:'Family (w/ kids)' },
+  h_other:              { ja:'その他',                  en:'Other' },
+
+  // Children chips
+  c_1:                  { ja:'1人',                     en:'1' },
+  c_2:                  { ja:'2人',                     en:'2' },
+  c_3:                  { ja:'3人',                     en:'3' },
+  c_4:                  { ja:'4人以上',                 en:'4+' },
+
+  // Budget chips
+  b_60:                 { ja:'〜6万',                   en:'~¥60k' },
+  b_80:                 { ja:'6〜8万',                  en:'¥60–80k' },
+  b_100:                { ja:'8〜10万',                 en:'¥80–100k' },
+  b_130:                { ja:'10〜13万',                en:'¥100–130k' },
+  b_130p:               { ja:'13万〜',                  en:'¥130k+' },
+
+  // Move-in chips
+  m_asap:               { ja:'すぐにでも',              en:'ASAP' },
+  m_1_3:                { ja:'1〜3ヶ月後',              en:'1–3 months' },
+  m_3_6:                { ja:'3〜6ヶ月後',              en:'3–6 months' },
+  m_undecided:          { ja:'未定',                    en:'Undecided' },
+
+  // Onboarding titles/subs/nav
+  ob_purpose_title:     { ja:'ようこそ！何のためにお探しですか？', en:'Welcome! What are you looking for?' },
+  ob_purpose_sub:       { ja:'あなたに合った提案をするために教えてください', en:'Help us personalise your recommendations' },
+  ob_couple:            { ja:'カップル・同棲',          en:'Couple / Partner' },
+  ob_family_for:        { ja:'家族のため',              en:'For my family' },
+  ob_household_title:   { ja:'世帯構成を教えてください', en:'Tell us about your household' },
+  ob_household_sub:     { ja:'物件の広さの参考にします', en:'Helps us suggest the right size' },
+  ob_budget_title:      { ja:'家賃の予算は？',          en:'What is your rent budget?' },
+  ob_budget_sub:        { ja:'おおよそで大丈夫です',    en:'A rough estimate is fine' },
+  ob_movein_title:      { ja:'いつ頃引越し予定ですか？', en:'When are you planning to move?' },
+  ob_area_title:        { ja:'希望エリアは？',           en:'Preferred areas?' },
+  ob_area_sub:          { ja:'複数選択できます（スキップ可）', en:'Multiple selections OK (can skip)' },
+  ob_back:              { ja:'← 戻る',                  en:'← Back' },
+  ob_skip:              { ja:'スキップ',                en:'Skip' },
+  ob_next:              { ja:'次へ →',                  en:'Next →' },
+  ob_done:              { ja:'完了 ✓',                  en:'Done ✓' },
   panel_account:        { ja:'アカウント',               en:'Account' },
   panel_layers:         { ja:'地図レイヤー',             en:'Map Layers' },
   panel_about:          { ja:'セットアップ',             en:'Setup' },
@@ -4088,7 +4147,7 @@ function _onboardRender() {
   const backBtn = document.getElementById('onboard-back-btn');
   const nextBtn = document.getElementById('onboard-next-btn');
   backBtn.style.visibility = _onboardStep > 0 ? 'visible' : 'hidden';
-  nextBtn.textContent = _onboardStep === ONBOARD_CARDS - 1 ? '完了 ✓' : '次へ →';
+  nextBtn.textContent = _onboardStep === ONBOARD_CARDS - 1 ? t('ob_done') : t('ob_next');
 }
 
 function onboardPick(btn) {
