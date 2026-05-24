@@ -1687,11 +1687,11 @@ _CHAT_TOOLS = [
     {
         "name": "find_nearby_place",
         "description": (
-            "Find the nearest places of a given type near a listing using Google Maps Places API. "
-            "Use this when the user asks about any nearby facility (hospital, school, gym, library, etc.) "
-            "that isn't already in the pre-loaded facility data shown on the property card. "
-            "Returns name, address, and distance. After finding the closest place, call get_commute_time "
-            "to get the actual cycling/walking time using the place name as destination."
+            "Find nearby places of a given type near a listing. Checks the OSM-cached facility database "
+            "first (same data shown in the property card Nearby Facilities tab) — this is fast and consistent. "
+            "Falls back to Google Maps Places API only if the cache has no results for that type. "
+            "Returns name and distance_m. After finding the closest place, call get_commute_time "
+            "to get the actual walking/cycling time using the place name as destination."
         ),
         "input_schema": {
             "type": "object",
@@ -2163,45 +2163,56 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                 ).fetchone()
                 if not row or not row["lat"]:
                     result = {"error": "listing not geocoded"}
-                elif not GOOGLE_MAPS_SERVER_KEY:
-                    result = {"error": "Google Maps API key not configured"}
                 else:
-                    try:
-                        params = {"location": f"{row['lat']},{row['lng']}",
-                                  "radius": radius, "type": place_type,
-                                  "language": "ja", "key": GOOGLE_MAPS_SERVER_KEY}
-                        if keyword:
-                            params["keyword"] = keyword
-                        r = requests.get(
-                            "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
-                            params=params,
-                            timeout=10,
-                        ).json()
-                        if r.get("status") in ("OK", "ZERO_RESULTS"):
-                            def _haversine(lat1, lng1, lat2, lng2):
-                                dlat = (lat2 - lat1) * math.pi / 180
-                                dlng = (lng2 - lng1) * math.pi / 180
-                                a = (math.sin(dlat/2)**2
-                                     + math.cos(lat1*math.pi/180) * math.cos(lat2*math.pi/180)
-                                     * math.sin(dlng/2)**2)
-                                return round(6371000 * 2 * math.asin(math.sqrt(a)))
-                            places = []
-                            for p in (r.get("results") or [])[:5]:
-                                loc = p["geometry"]["location"]
-                                places.append({
-                                    "name":       p["name"],
-                                    "address":    p.get("vicinity", ""),
-                                    "lat":        loc["lat"], "lng": loc["lng"],
-                                    "distance_m": _haversine(row["lat"], row["lng"],
-                                                             loc["lat"], loc["lng"]),
-                                })
-                            places.sort(key=lambda x: x["distance_m"])
-                            result = {"places": places} if places else {
-                                "message": f"No {place_type} found within {radius}m"}
-                        else:
-                            result = {"error": f"Places API: {r.get('status')}"}
-                    except Exception as e:
-                        result = {"error": str(e)}
+                    # Check OSM-cached facility data first (fast, free, consistent with UI)
+                    cached = con.execute(
+                        "SELECT name, distance_m FROM listing_facilities "
+                        "WHERE listing_id=? AND type=? AND distance_m<=? "
+                        "ORDER BY distance_m",
+                        (lid, place_type, radius),
+                    ).fetchall()
+                    if cached:
+                        result = {"places": [{"name": r["name"], "distance_m": r["distance_m"]} for r in cached],
+                                  "source": "cached"}
+                    elif not GOOGLE_MAPS_SERVER_KEY:
+                        result = {"message": f"No {place_type} found in cached data within {radius}m"}
+                    else:
+                        try:
+                            params = {"location": f"{row['lat']},{row['lng']}",
+                                      "radius": radius, "type": place_type,
+                                      "language": "ja", "key": GOOGLE_MAPS_SERVER_KEY}
+                            if keyword:
+                                params["keyword"] = keyword
+                            r = requests.get(
+                                "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
+                                params=params,
+                                timeout=10,
+                            ).json()
+                            if r.get("status") in ("OK", "ZERO_RESULTS"):
+                                def _haversine(lat1, lng1, lat2, lng2):
+                                    dlat = (lat2 - lat1) * math.pi / 180
+                                    dlng = (lng2 - lng1) * math.pi / 180
+                                    a = (math.sin(dlat/2)**2
+                                         + math.cos(lat1*math.pi/180) * math.cos(lat2*math.pi/180)
+                                         * math.sin(dlng/2)**2)
+                                    return round(6371000 * 2 * math.asin(math.sqrt(a)))
+                                places = []
+                                for p in (r.get("results") or [])[:10]:
+                                    loc = p["geometry"]["location"]
+                                    places.append({
+                                        "name":       p["name"],
+                                        "address":    p.get("vicinity", ""),
+                                        "lat":        loc["lat"], "lng": loc["lng"],
+                                        "distance_m": _haversine(row["lat"], row["lng"],
+                                                                 loc["lat"], loc["lng"]),
+                                    })
+                                places.sort(key=lambda x: x["distance_m"])
+                                result = {"places": places, "source": "google"} if places else {
+                                    "message": f"No {place_type} found within {radius}m"}
+                            else:
+                                result = {"error": f"Places API: {r.get('status')}"}
+                        except Exception as e:
+                            result = {"error": str(e)}
             else:
                 result = {"error": "unknown tool"}
             tool_results.append({
