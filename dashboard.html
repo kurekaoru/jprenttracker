@@ -75,7 +75,7 @@
   }
   .topbar-title { flex-shrink: 0; }
   .topbar-legend {
-    display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;
+    display: flex; align-items: center; gap: 10px; flex-shrink: 0;
     font-size: 11px; color: rgba(255,255,255,0.5);
   }
   .topbar-legend .tl-item {
@@ -98,11 +98,11 @@
   }
   .topbar-refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
   .lang-select {
-    width: 35pt; height: 22px; align-self: center; box-sizing: border-box; flex-shrink: 0;
+    width: 35pt; height: 22px; box-sizing: border-box; flex-shrink: 0;
     background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
     border-radius: 5px; color: rgba(255,255,255,0.85); font-size: 10px; font-weight: 700;
-    padding: 0 2px; cursor: pointer; font-family: var(--font); outline: none;
-    line-height: 22px;
+    padding: 0; cursor: pointer; font-family: var(--font); outline: none;
+    text-align: center; text-align-last: center; margin: 0; vertical-align: middle;
   }
   .lang-select option { background: #1e2124; color: #fff; }
   .topbar-title {
@@ -969,23 +969,22 @@
   <div class="topbar-rail"><div class="dot">J</div></div>
   <div class="topbar-main">
     <span class="topbar-title">JKK Monitor</span>
-    <div style="display:contents;">
-      <div class="topbar-legend">
-        <span class="tl-item"><span class="tl-dot" style="background:#dc2626;"></span>JKK</span>
-        <span class="tl-item"><span class="tl-dot" style="background:#3a86ff;"></span>UR</span>
-        <span class="tl-sep"></span>
-        <span id="map-summary"></span>
-        <button class="topbar-refresh-btn" onclick="loadListings()" data-i18n="refresh">更新</button>
-      </div>
-      <div class="status-pill"><div class="pulse"></div><span data-i18n="monitoring">監視中</span></div>
-      <select id="lang-select" class="lang-select" onchange="setLang(this.value)">
-        <option value="ja">🇯🇵 JP</option>
-        <option value="en">🇬🇧 EN</option>
-        <option value="uk">🇺🇦 UA</option>
-      </select>
-      <div id="user-area">
-        <button class="login-btn" onclick="openAuthModal()" data-i18n="login">ログイン</button>
-      </div>
+    <span style="flex:1;"></span>
+    <div class="topbar-legend">
+      <span class="tl-item"><span class="tl-dot" style="background:#dc2626;"></span>JKK</span>
+      <span class="tl-item"><span class="tl-dot" style="background:#3a86ff;"></span>UR</span>
+      <span class="tl-sep"></span>
+      <span id="map-summary"></span>
+      <button class="topbar-refresh-btn" onclick="loadListings()" data-i18n="refresh">更新</button>
+    </div>
+    <div class="status-pill"><div class="pulse"></div><span data-i18n="monitoring">監視中</span></div>
+    <select id="lang-select" class="lang-select" onchange="setLang(this.value)">
+      <option value="ja">🇯🇵 JP</option>
+      <option value="en">🇬🇧 EN</option>
+      <option value="uk">🇺🇦 UA</option>
+    </select>
+    <div id="user-area">
+      <button class="login-btn" onclick="openAuthModal()" data-i18n="login">ログイン</button>
     </div>
   </div>
 </div>
@@ -1261,7 +1260,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 23:26 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 23:30 JST</p>
       </div>
 
 
