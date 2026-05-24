@@ -1835,10 +1835,10 @@ def _chat_batch_commute(params, con):
                 timeout=30,
             ).json()
         except Exception as e:
-            log.warning(f"Distance Matrix batch {i} failed: {e}")
+            logging.warning(f"Distance Matrix batch {i} failed: {e}")
             continue
         if resp.get("status") != "OK":
-            log.warning(f"Distance Matrix status: {resp.get('status')}")
+            logging.warning(f"Distance Matrix status: {resp.get('status')}")
             continue
         for j, row_data in enumerate(resp.get("rows", [])):
             el = (row_data.get("elements") or [{}])[0]
