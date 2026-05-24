@@ -712,10 +712,8 @@ function initMap(){
     mapTypeControl:false,streetViewControl:false,
     fullscreenControl:false,zoomControl:false,
   });
-  applyLang();
   loadListings();
   initAuth();
-  buildFilterChips();
 }
 
 function markerIcon(source, selected, saved){
@@ -766,7 +764,6 @@ function applyMapFilters(){
         position:{lat:l.lat,lng:l.lng},map,
         icon:markerIcon(l.source,false,_savedListings.has(l.id)),
         title:l.name,
-        optimized:false,
       });
       marker.addListener('click',()=>selectListing(l.id));
       _markers[l.id]={marker,source:l.source,listing:l};
@@ -1178,6 +1175,12 @@ function escHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt
 function darkMapStyle(){
   return[{elementType:'geometry',stylers:[{color:'#1e1e22'}]},{elementType:'labels.text.stroke',stylers:[{color:'#1e1e22'}]},{elementType:'labels.text.fill',stylers:[{color:'#888'}]},{featureType:'road',elementType:'geometry',stylers:[{color:'#2c2c30'}]},{featureType:'road.arterial',elementType:'geometry',stylers:[{color:'#2c2c30'}]},{featureType:'road.highway',elementType:'geometry',stylers:[{color:'#383838'}]},{featureType:'water',elementType:'geometry',stylers:[{color:'#17263c'}]},{featureType:'poi',elementType:'geometry',stylers:[{color:'#252528'}]},{featureType:'transit.station',elementType:'labels.text.fill',stylers:[{color:'#5DCAA5'}]},{featureType:'landscape',elementType:'geometry',stylers:[{color:'#202024'}]}];
 }
+
+// ── Boot (independent of Maps) ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  applyLang();
+  buildFilterChips();
+});
 
 // ── Swipe to close prop sheet ──────────────────────────────────────────────
 (()=>{
