@@ -2205,10 +2205,10 @@ def chat_send():
         session_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
 
     rows = con.execute(
-        "SELECT role, content FROM chat_messages WHERE session_id=? ORDER BY created_at",
+        "SELECT role, content FROM chat_messages WHERE session_id=? ORDER BY created_at DESC LIMIT 15",
         (session_id,)
     ).fetchall()
-    history = [{"role": r["role"], "content": r["content"]} for r in rows]
+    history = [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
     history.append({"role": "user", "content": message})
 
     con.execute(
