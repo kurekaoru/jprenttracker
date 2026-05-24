@@ -664,6 +664,7 @@ const STRINGS = {
   nav_list:     { ja:'リスト',      en:'List',      uk:'Список' },
   nav_filter:   { ja:'フィルター',  en:'Filter',    uk:'Фільтр' },
   ai_title:     { ja:'AIアシスタント', en:'AI Assistant', uk:'AI Асистент' },
+  chat_ph:      { ja:'物件について質問する…', en:'Ask about properties…', uk:'Питання про нерухомість…' },
 };
 
 function t(k) {
@@ -749,6 +750,10 @@ function applyLang() {
   // Open listing link
   const lnk = document.getElementById('ps-link');
   if (lnk && lnk.href !== '#') lnk.textContent = t('open_listing');
+
+  // Chat input placeholder
+  const chatInp = document.getElementById('chat-input');
+  if (chatInp) chatInp.placeholder = t('chat_ph');
 
   updateAuthUI();
   buildFilterChips();
