@@ -97,8 +97,8 @@
   .lang-select {
     background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
     border-radius: 5px; color: rgba(255,255,255,0.85); font-size: 10px; font-weight: 700;
-    letter-spacing: .04em; padding: 3px 6px; cursor: pointer; font-family: var(--font);
-    outline: none; appearance: none; -webkit-appearance: none;
+    letter-spacing: .04em; padding: 2px 4px; cursor: pointer; font-family: var(--font);
+    outline: none;
   }
   .lang-select option { background: #1e2124; color: #fff; }
   .topbar-title {
@@ -977,7 +977,7 @@
       <select id="lang-select" class="lang-select" onchange="setLang(this.value)">
         <option value="ja">🇯🇵 JP</option>
         <option value="en">🇬🇧 EN</option>
-        <option value="uk">🇺🇦 UK</option>
+        <option value="uk">🇺🇦 UA</option>
       </select>
       <div id="user-area">
         <button class="login-btn" onclick="openAuthModal()" data-i18n="login">ログイン</button>
@@ -1027,9 +1027,9 @@
       <!-- Filter page -->
       <div class="panel-page" id="panel-filter">
         <div class="view-toggle">
-          <button class="view-toggle-btn active" id="vtb-all"      onclick="setViewMode('all')">All</button>
-          <button class="view-toggle-btn"         id="vtb-starred"  onclick="setViewMode('starred')">★ Saved</button>
-          <button class="view-toggle-btn"         id="vtb-filtered" onclick="setViewMode('filtered')">Filtered</button>
+          <button class="view-toggle-btn active" id="vtb-all"      onclick="setViewMode('all')"      data-i18n="view_all">All</button>
+          <button class="view-toggle-btn"         id="vtb-starred"  onclick="setViewMode('starred')"  data-i18n="view_saved">★ Saved</button>
+          <button class="view-toggle-btn"         id="vtb-filtered" onclick="setViewMode('filtered')" data-i18n="view_filtered">Filtered</button>
         </div>
         <p class="section-label" data-i18n="area">エリア（区・市）</p>
         <div class="chips" id="ward-chips"></div>
@@ -1257,7 +1257,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 23:09 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 23:15 JST</p>
       </div>
 
 
@@ -1725,6 +1725,9 @@ const STRINGS = {
   // Countdown
   next_refresh:         { ja:(m,s)=>`次回確認まで ${m}:${s}`, en:(m,s)=>`Next refresh in ${m}:${s}`, uk:(m,s)=>`Наступне оновлення через ${m}:${s}` },
   // Panel titles
+  view_all:             { ja:'すべて',                   en:'All',               uk:'Всі' },
+  view_saved:           { ja:'★ 保存済み',               en:'★ Saved',           uk:'★ Збережені' },
+  view_filtered:        { ja:'絞り込み',                 en:'Filtered',          uk:'Відфільтровані' },
   panel_filter:         { ja:'フィルター',               en:'Filter',            uk:'Фільтр' },
   panel_listings:       { ja:'空室一覧',                en:'Vacancies',         uk:'Вакансії' },
   panel_notif:          { ja:'通知設定',                en:'Alerts',            uk:'Сповіщення' },
@@ -1947,7 +1950,7 @@ const WARD_EN = {
 };
 
 function wardLabel(ja) {
-  if (_lang === 'en') {
+  if (_lang === 'en' || _lang === 'uk') {
     const en = WARD_EN[ja] || ja;
     return en.replace(/^(Yokohama|Kawasaki|Sagamihara) /, '');
   }
