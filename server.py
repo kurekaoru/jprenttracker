@@ -2245,6 +2245,12 @@ def chat_send():
         "INSERT INTO chat_messages (session_id, role, content, listing_ids) VALUES (?,?,?,?)",
         (session_id, "assistant", result["text"], json.dumps(result["listing_ids"]))
     )
+    con.execute(
+        """DELETE FROM chat_messages WHERE session_id=? AND id NOT IN (
+               SELECT id FROM chat_messages WHERE session_id=? ORDER BY created_at DESC LIMIT 100
+           )""",
+        (session_id, session_id)
+    )
     con.commit()
     con.close()
 
