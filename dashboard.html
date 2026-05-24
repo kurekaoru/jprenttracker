@@ -861,7 +861,7 @@
   .onboard-dot { height:6px; border-radius:3px; background:var(--border); transition:all .3s; flex:1; max-width:24px; }
   .onboard-dot.done { background:rgba(93,202,165,0.45); }
   .onboard-dot.active { background:var(--accent); }
-  .onboard-slides { position:relative; min-height:240px; }
+  .onboard-slides { position:relative; min-height:300px; }
   .onboard-slide { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
     text-align:center; opacity:0; pointer-events:none;
     transform:translateX(40px); transition:opacity .25s,transform .25s; }
@@ -1061,7 +1061,7 @@
         <div class="acct-tabs">
           <div class="acct-tab-bar">
             <button class="acct-tab-btn active" data-tab="acct-profile" onclick="switchAccountTab('acct-profile')" data-i18n="tab_account">アカウント</button>
-            <button class="acct-tab-btn" data-tab="acct-pinfo" onclick="switchAccountTab('acct-pinfo')">個人情報</button>
+            <button class="acct-tab-btn" data-tab="acct-pinfo" onclick="switchAccountTab('acct-pinfo')" data-i18n="tab_personal_info">個人情報</button>
             <button class="acct-tab-btn" data-tab="acct-notif" onclick="switchAccountTab('acct-notif')" data-i18n="tab_alerts">通知</button>
           </div>
           <div class="acct-tab-content">
@@ -1261,7 +1261,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 22:14 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 22:26 JST</p>
       </div>
 
 
@@ -1720,6 +1720,7 @@ const STRINGS = {
   panel_listings:       { ja:'空室一覧',                en:'Vacancies' },
   panel_notif:          { ja:'通知設定',                en:'Alerts' },
   tab_account:          { ja:'アカウント',              en:'Account' },
+  tab_personal_info:    { ja:'個人情報',                en:'Profile' },
   tab_alerts:           { ja:'通知',                    en:'Alerts' },
   panel_account:        { ja:'アカウント',               en:'Account' },
   panel_layers:         { ja:'地図レイヤー',             en:'Map Layers' },
@@ -4183,12 +4184,12 @@ function renderPinfo() {
   const childrenRow = document.getElementById('pinfo-children-row');
   if (childrenRow) childrenRow.style.display = _pinfoData.household === 'family' ? 'flex' : 'none';
 
-  // Budget
+  // Budget — stored as raw range key, converted to min/max only on save
   const budgetContainer = document.getElementById('pinfo-budget');
   if (budgetContainer) {
     const bmin = _pinfoData.budget_min || 0;
     const bmax = _pinfoData.budget_max || 0;
-    const budgetKey = bmin || bmax ? `${bmin}-${bmax}` : '';
+    const budgetKey = _pinfoData.budget || (bmin || bmax ? `${bmin}-${bmax}` : '');
     budgetContainer.querySelectorAll('.pinfo-chip').forEach(btn => {
       btn.classList.toggle('selected', btn.dataset.val === budgetKey);
     });
@@ -4222,9 +4223,16 @@ async function savePinfo() {
   const nameEl = document.getElementById('pinfo-name');
   const name   = nameEl?.value.trim() || '';
   if (name) { _pinfoData.display_name = name; AUTH.user.display_name = name; renderUserChip(); }
+  // Convert raw budget key to min/max
+  const payload = { ..._pinfoData };
+  if (payload.budget) {
+    const [mn, mx] = payload.budget.split('-').map(Number);
+    payload.budget_min = mn; payload.budget_max = mx;
+    delete payload.budget;
+  }
   const msg = document.getElementById('pinfo-msg');
   msg.textContent = '保存中…';
-  await saveUserProfile({ personal_info: _pinfoData });
+  await saveUserProfile({ personal_info: payload });
   msg.textContent = '保存しました ✓';
   setTimeout(() => { msg.textContent = ''; }, 2000);
 }
