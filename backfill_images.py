@@ -59,30 +59,34 @@ def backfill_ur(limit: int, delay: float):
 
     log.info(f"UR: backfilling {len(rows)} listing(s) with headless browser…")
 
-    # Recreate the browser every BROWSER_RECYCLE_EVERY listings.
-    # UR bot-detection blocks the session after ~2 pages from the same browser.
-    BROWSER_RECYCLE_EVERY = 3
+    # Use a fresh browser per listing to avoid UR session-based bot detection.
+    # Each browser visits the UR top page first as a warm-up before the room URL,
+    # which prevents UR from blocking cold browsers that jump straight to room pages.
+    UR_WARMUP_URL = "https://www.ur-net.go.jp/chintai/"
 
     scraped = 0
     p_ctx = sync_playwright().__enter__()
-    browser = p_ctx.chromium.launch(headless=True, args=_CHROME_ARGS)
 
     try:
         for i, row in enumerate(rows, 1):
             lid, url = row["id"], row["url"]
             log.info(f"[{i}/{len(rows)}] {lid}  {url[:80]}")
 
-            # Recycle browser to avoid UR bot-detection session blocks
-            if i > 1 and (i - 1) % BROWSER_RECYCLE_EVERY == 0:
-                log.info("  recycling browser…")
-                browser.close()
-                browser = p_ctx.chromium.launch(headless=True, args=_CHROME_ARGS)
-
-            page = browser.new_page(user_agent=_SCRAPER_UA)
+            browser = p_ctx.chromium.launch(headless=True, args=_CHROME_ARGS)
             try:
-                images = _fetch_ur_images_playwright(url, _page=page)
+                page = browser.new_page(user_agent=_SCRAPER_UA)
+                # Warm up: visit UR top page to establish session/cookies before room URL
+                try:
+                    page.goto(UR_WARMUP_URL, timeout=15_000, wait_until="commit")
+                    page.wait_for_timeout(500)
+                except Exception:
+                    pass
+                try:
+                    images = _fetch_ur_images_playwright(url, _page=page)
+                finally:
+                    page.close()
             finally:
-                page.close()
+                browser.close()
 
             if not images:
                 log.warning("  No images found")
@@ -105,7 +109,6 @@ def backfill_ur(limit: int, delay: float):
             time.sleep(delay)
 
     finally:
-        browser.close()
         p_ctx.__exit__(None, None, None)
 
     log.info(f"UR: queued images for {scraped}/{len(rows)} listing(s). Downloading…")
