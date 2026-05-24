@@ -9,7 +9,7 @@
   var l=localStorage.getItem('jkktrackr_lang')||'ja';
   document.documentElement.lang=l;
   var s=document.createElement('script');s.async=true;
-  s.src='https://maps.googleapis.com/maps/api/js?key=AIzaSyBHw3d6FU73jXiJxUJoZ4MlDGu2CmhC4i8&libraries=places&language='+l+'&callback=initMap';
+  s.src='https://maps.googleapis.com/maps/api/js?key=AIzaSyBHw3d6FU73jXiJxUJoZ4MlDGu2CmhC4i8&libraries=places,geometry&language='+l+'&callback=initMap';
   document.head.appendChild(s);
 })();
 </script>
@@ -1266,7 +1266,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 01:58 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 03:15 JST</p>
       </div>
 
 
@@ -1714,6 +1714,7 @@ const STRINGS = {
   first_seen_label:     { ja:'初回発見',               en:'First seen',        uk:'Знайдено' },
   listed_for:           { ja:'掲載中',                 en:'listed',            uk:'в списку' },
   open_listing:         { ja:'物件ページを開く →',       en:'Open listing →',    uk:'Відкрити →' },
+  street_view:          { ja:'ストリートビュー',          en:'Street View',       uk:'Street View' },
   dest_ph:              { ja:'目的地（例: 新宿駅）',     en:'Destination (e.g. Shinjuku)', uk:'Пункт призначення (напр. Shinjuku)' },
   route_transit:        { ja:'🚃 電車',                en:'🚃 Train',           uk:'🚃 Потяг' },
   route_drive:          { ja:'🚗 車',                  en:'🚗 Drive',           uk:'🚗 Авто' },
@@ -2836,7 +2837,7 @@ function initMap() {
     gestureHandling: 'greedy',
     styles: buildMapStyle(),
     mapTypeControl: false,
-    streetViewControl: false,
+    streetViewControl: true,
     fullscreenControl: false,
   });
 
@@ -2938,7 +2939,10 @@ function popupHtml(l) {
         <img src="${escHtml(l.thumbnail_url.startsWith('/') ? API.replace(/\/api\/?$/,'') + l.thumbnail_url : l.thumbnail_url)}" style="width:100%;height:140px;object-fit:cover;display:block;" onerror="this.parentElement.style.display='none'">
       </div>` : ''}
       <div class="pin-meta" style="margin-top:3px;">${t('first_seen_label')}: ${fmtDate(l.first_seen)}${daysStr ? ` · ${daysStr}` : ''}</div>
-      ${l.url ? `<div style="margin-top:4px;"><a href="${escHtml(l.url)}" target="_blank" rel="noopener">${t('open_listing')}</a></div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
+        ${l.url ? `<a href="${escHtml(l.url)}" target="_blank" rel="noopener">${t('open_listing')}</a>` : ''}
+        ${l.lat && l.lng ? `<a href="#" onclick="event.preventDefault();openStreetView(${l.lat},${l.lng})" style="color:var(--muted);">🚶 ${t('street_view')}</a>` : ''}
+      </div>
       <div class="prop-tabs">
         <div class="prop-tab-bar">
           <button class="prop-tab-btn active" data-tab="fac" onclick="switchPropTab('fac')">${t('tab_fac')}</button>
@@ -3124,6 +3128,30 @@ function showRoute(listingId, travelMode) {
       }
     } else {
       alert(t('route_error') + status + t('route_error_hint'));
+    }
+  });
+}
+
+function openStreetView(lat, lng) {
+  const sv  = map.getStreetView();
+  const svc = new google.maps.StreetViewService();
+  const tryOpen = (pos, heading) => {
+    sv.setPosition(pos);
+    sv.setPov({ heading: heading || 0, pitch: 0 });
+    sv.setVisible(true);
+  };
+  svc.getPanorama({ location: { lat, lng }, radius: 60 }, (data, status) => {
+    if (status === google.maps.StreetViewStatus.OK) {
+      tryOpen(data.location.latLng,
+        google.maps.geometry.spherical.computeHeading(data.location.latLng, { lat, lng }));
+    } else {
+      svc.getPanorama({ location: { lat, lng }, radius: 300 }, (d2, s2) => {
+        if (s2 === google.maps.StreetViewStatus.OK) {
+          tryOpen(d2.location.latLng, 0);
+        } else {
+          window.open(`https://www.google.com/maps?q=${lat},${lng}&layer=c`, '_blank');
+        }
+      });
     }
   });
 }
