@@ -41,6 +41,11 @@ SLACK_REDIRECT_URI  = os.environ.get("SLACK_REDIRECT_URI", "")
 TELEGRAM_BOT_TOKEN      = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 GOOGLE_MAPS_SERVER_KEY  = os.environ.get("GOOGLE_MAPS_SERVER_KEY", "")
 
+GOOGLE_CLIENT_ID     = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+GOOGLE_REDIRECT_URI  = os.environ.get("GOOGLE_REDIRECT_URI",
+                         "https://jkk-monitor.duckdns.org/api/auth/google/callback")
+
 DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "http://34.72.39.84:5050")
 
 TOKYO_WARDS = [
@@ -235,12 +240,20 @@ def db():
     """)
     con.commit()
 
+    # users table migrations
+    try:
+        con.execute("ALTER TABLE users ADD COLUMN google_id TEXT")
+        con.commit()
+    except Exception:
+        pass
+
     # Column migrations (idempotent)
     for col, defn in [
-        ("map_layers",    "TEXT DEFAULT '{}'"),
-        ("lang",          "TEXT DEFAULT 'ja'"),
-        ("commute_dests", "TEXT DEFAULT '[]'"),
-        ("ai_profile",    "TEXT DEFAULT '{}'"),
+        ("map_layers",     "TEXT DEFAULT '{}'"),
+        ("lang",           "TEXT DEFAULT 'ja'"),
+        ("commute_dests",  "TEXT DEFAULT '[]'"),
+        ("ai_profile",     "TEXT DEFAULT '{}'"),
+        ("personal_info",  "TEXT DEFAULT '{}'"),
     ]:
         try:
             con.execute(f"ALTER TABLE user_settings ADD COLUMN {col} {defn}")
@@ -557,7 +570,11 @@ def login():
     user = con.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
     con.close()
 
-    if not user or not check_password_hash(user["password_hash"], password):
+    if not user:
+        return jsonify({"error": "メールアドレスまたはパスワードが間違っています"}), 401
+    if not user["password_hash"]:
+        return jsonify({"error": "このアカウントはGoogleログイン専用です"}), 401
+    if not check_password_hash(user["password_hash"], password):
         return jsonify({"error": "メールアドレスまたはパスワードが間違っています"}), 401
 
     token = create_access_token(identity=str(user["id"]))
@@ -686,15 +703,18 @@ def get_user_profile():
     user_id = int(get_jwt_identity())
     con     = db()
     row     = con.execute(
-        "SELECT lang, commute_dests, ai_profile FROM user_settings WHERE user_id=?", (user_id,)
+        "SELECT lang, commute_dests, ai_profile, personal_info FROM user_settings WHERE user_id=?", (user_id,)
     ).fetchone()
+    user    = con.execute("SELECT google_id FROM users WHERE id=?", (user_id,)).fetchone()
     con.close()
     if not row:
-        return jsonify({"lang": "ja", "commute_dests": [], "ai_profile": {}})
+        return jsonify({"lang": "ja", "commute_dests": [], "ai_profile": {}, "personal_info": {}, "is_google_user": False})
     return jsonify({
         "lang":          row["lang"] or "ja",
         "commute_dests": json.loads(row["commute_dests"] or "[]"),
         "ai_profile":    json.loads(row["ai_profile"]    or "{}"),
+        "personal_info": json.loads(row["personal_info"] or "{}"),
+        "is_google_user": bool(user and user["google_id"]),
     })
 
 
@@ -715,6 +735,17 @@ def set_user_profile():
         allowed_keys = {"household", "age_range", "income_bracket", "notes"}
         profile = {k: v for k, v in data["ai_profile"].items() if k in allowed_keys}
         updates["ai_profile"] = json.dumps(profile)
+    if "personal_info" in data and isinstance(data["personal_info"], dict):
+        allowed = {"purpose","household","age_range","income_bracket","budget_min","budget_max",
+                   "preferred_wards","preferred_layouts","move_in_timing","pets","smoking",
+                   "notes","onboarding_done","display_name"}
+        info = {k: v for k, v in data["personal_info"].items() if k in allowed}
+        updates["personal_info"] = json.dumps(info)
+        # sync display_name to users table if provided
+        if "display_name" in info and str(info["display_name"]).strip():
+            user_id = int(get_jwt_identity())
+            con.execute("UPDATE users SET display_name=? WHERE id=?",
+                        (str(info["display_name"]).strip(), user_id))
 
     if not updates:
         con.close()
@@ -1033,6 +1064,110 @@ def slack_oauth_callback():
         return _error_page(str(e))
     con.close()
     return _connected_page("Slack")
+
+
+@app.route("/api/auth/google/start")
+def google_oauth_start():
+    if not GOOGLE_CLIENT_ID:
+        return _error_page("GOOGLE_CLIENT_ID が設定されていません")
+    state = secrets.token_hex(16)
+    con   = db()
+    _store_oauth_state(con, f"google_state_{state}", 0)
+    con.close()
+    url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode({
+        "client_id":     GOOGLE_CLIENT_ID,
+        "redirect_uri":  GOOGLE_REDIRECT_URI,
+        "response_type": "code",
+        "scope":         "openid email profile",
+        "state":         state,
+        "access_type":   "online",
+        "prompt":        "select_account",
+    })
+    return redirect(url)
+
+
+@app.route("/api/auth/google/callback")
+def google_oauth_callback():
+    code  = request.args.get("code")
+    state = request.args.get("state")
+    if not code or not state:
+        return _error_page("OAuth パラメータが不正です")
+    con = db()
+    stored = con.execute("SELECT value FROM app_config WHERE key=?",
+                         (f"google_state_{state}",)).fetchone()
+    if not stored:
+        con.close()
+        return _error_page("セッションが無効です（再度お試しください）")
+    con.execute("DELETE FROM app_config WHERE key=?", (f"google_state_{state}",))
+    con.commit()
+    try:
+        r = requests.post("https://oauth2.googleapis.com/token", data={
+            "code":          code,
+            "client_id":     GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "redirect_uri":  GOOGLE_REDIRECT_URI,
+            "grant_type":    "authorization_code",
+        }, timeout=10)
+        tokens       = r.json()
+        access_token = tokens.get("access_token")
+        if not access_token:
+            con.close()
+            return _error_page("トークン取得に失敗しました")
+        ui       = requests.get("https://www.googleapis.com/oauth2/v2/userinfo",
+                                headers={"Authorization": f"Bearer {access_token}"}, timeout=10)
+        userinfo     = ui.json()
+        google_id    = userinfo.get("id", "")
+        email        = userinfo.get("email", "").strip().lower()
+        display_name = userinfo.get("name", "")
+        if not google_id or not email:
+            con.close()
+            return _error_page("ユーザー情報の取得に失敗しました")
+
+        user = con.execute("SELECT * FROM users WHERE google_id=?", (google_id,)).fetchone()
+        if not user:
+            user = con.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+            if user:
+                con.execute("UPDATE users SET google_id=? WHERE id=?", (google_id, user["id"]))
+                con.commit()
+            else:
+                con.execute(
+                    "INSERT INTO users (email, password_hash, display_name, google_id) VALUES (?,?,?,?)",
+                    (email, "", display_name or email.split("@")[0], google_id)
+                )
+                con.commit()
+                user = con.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+                con.execute("INSERT OR IGNORE INTO user_settings (user_id) VALUES (?)", (user["id"],))
+                con.commit()
+
+        pinfo_row = con.execute(
+            "SELECT personal_info FROM user_settings WHERE user_id=?", (user["id"],)
+        ).fetchone()
+        pinfo = json.loads(pinfo_row["personal_info"] or "{}") if pinfo_row else {}
+        needs_onboarding = not pinfo.get("onboarding_done", False)
+
+        token = create_access_token(identity=str(user["id"]))
+        con.close()
+    except Exception as e:
+        try: con.close()
+        except Exception: pass
+        return _error_page(f"認証エラー: {e}")
+
+    return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>body{{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#0d1117;color:#e6edf3}}.box{{text-align:center}}</style>
+</head><body><div class="box">
+<div style="font-size:48px">✅</div>
+<p style="font-size:16px;font-weight:600;margin:8px 0">ログインしました</p>
+<p style="font-size:13px;color:#888">このタブを閉じています…</p>
+</div><script>
+try{{window.opener&&window.opener.postMessage({{
+  type:'google-auth',
+  token:{json.dumps(token)},
+  email:{json.dumps(email)},
+  display_name:{json.dumps(display_name or str(user["display_name"] or ""))},
+  needs_onboarding:{'true' if needs_onboarding else 'false'}
+}},'*');}}catch(e){{}}
+setTimeout(()=>window.close(),600);
+</script></body></html>"""
 
 
 @app.route("/api/auth/telegram/start")

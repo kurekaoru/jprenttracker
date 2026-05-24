@@ -836,6 +836,67 @@
   }
   .login-btn:hover { background: rgba(255,255,255,0.1); color: #fff; border-color: rgba(255,255,255,0.5); }
 
+  /* ── Google button + auth divider ── */
+  .auth-divider { display:flex; align-items:center; gap:10px; margin:14px 0; color:var(--muted); font-size:11px; }
+  .auth-divider::before,.auth-divider::after { content:''; flex:1; height:1px; background:var(--border); }
+  .google-btn {
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    width:100%; padding:11px; border:1.5px solid var(--border); border-radius:10px;
+    background:none; color:var(--text); font-size:14px; font-weight:500;
+    cursor:pointer; font-family:var(--font); transition:border-color .15s,background .15s;
+  }
+  .google-btn:hover { border-color:var(--accent); background:rgba(93,202,165,0.06); }
+  .google-btn svg { flex-shrink:0; }
+
+  /* ── Onboarding flash cards ── */
+  #onboarding-modal.open { display:flex; }
+  #onboarding-modal { display:none; position:fixed; inset:0; z-index:9000;
+    background:rgba(0,0,0,0.7); align-items:center; justify-content:center; }
+  .onboard-box {
+    background:var(--surface); border:1px solid var(--border); border-radius:20px;
+    padding:28px 28px 22px; width:min(460px,92vw); box-shadow:0 24px 60px rgba(0,0,0,.5);
+    position:relative; overflow:hidden;
+  }
+  .onboard-progress { display:flex; gap:5px; justify-content:center; margin-bottom:28px; }
+  .onboard-dot { height:6px; border-radius:3px; background:var(--border); transition:all .3s; flex:1; max-width:24px; }
+  .onboard-dot.done { background:rgba(93,202,165,0.45); }
+  .onboard-dot.active { background:var(--accent); }
+  .onboard-slides { position:relative; min-height:240px; }
+  .onboard-slide { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
+    text-align:center; opacity:0; pointer-events:none;
+    transform:translateX(40px); transition:opacity .25s,transform .25s; }
+  .onboard-slide.active { opacity:1; pointer-events:auto; transform:translateX(0); }
+  .onboard-slide.exit { opacity:0; transform:translateX(-40px); }
+  .onboard-emoji { font-size:46px; margin-bottom:10px; }
+  .onboard-title { font-size:17px; font-weight:700; color:var(--text); margin:0 0 6px; }
+  .onboard-sub { font-size:12px; color:var(--muted); margin:0 0 20px; }
+  .onboard-choices { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+  .onboard-chip {
+    padding:8px 16px; border:1.5px solid var(--border); border-radius:20px;
+    background:none; color:var(--text); font-size:13px; cursor:pointer;
+    transition:all .15s; font-family:var(--font);
+  }
+  .onboard-chip:hover { border-color:var(--accent); }
+  .onboard-chip.selected { border-color:var(--accent); background:rgba(93,202,165,0.15); color:var(--accent); font-weight:600; }
+  .onboard-ward-grid { display:flex; flex-wrap:wrap; gap:5px; justify-content:center; max-height:160px; overflow-y:auto; }
+  .onboard-range { display:flex; flex-direction:column; gap:10px; width:100%; }
+  .onboard-range-row { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .onboard-footer { display:flex; align-items:center; justify-content:space-between; margin-top:22px; }
+  .onboard-back { background:none; border:1px solid var(--border); color:var(--muted);
+    padding:9px 16px; border-radius:8px; font-size:13px; cursor:pointer; font-family:var(--font); }
+  .onboard-skip { background:none; border:none; color:var(--muted); font-size:12px; cursor:pointer; font-family:var(--font); text-decoration:underline; }
+  .onboard-next { background:var(--accent); border:none; color:#fff; padding:9px 22px;
+    border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; font-family:var(--font); }
+
+  /* ── Personal info tab ── */
+  .pinfo-row { margin-bottom:12px; }
+  .pinfo-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:5px; }
+  .pinfo-chips { display:flex; flex-wrap:wrap; gap:5px; }
+  .pinfo-chip { padding:4px 10px; border:1.5px solid var(--border); border-radius:14px; font-size:11px; cursor:pointer; transition:all .15s; background:none; color:var(--text); font-family:var(--font); }
+  .pinfo-chip.selected { border-color:var(--accent); background:rgba(93,202,165,0.15); color:var(--accent); font-weight:600; }
+  .pinfo-input { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:7px; color:var(--text); font-family:var(--font); font-size:12px; padding:7px 10px; box-sizing:border-box; }
+  .pinfo-input:focus { outline:none; border-color:var(--accent); }
+
   /* ── Notification list ── */
   .notif-item {
     display: flex; align-items: center; gap: 6px;
@@ -1000,6 +1061,7 @@
         <div class="acct-tabs">
           <div class="acct-tab-bar">
             <button class="acct-tab-btn active" data-tab="acct-profile" onclick="switchAccountTab('acct-profile')" data-i18n="tab_account">アカウント</button>
+            <button class="acct-tab-btn" data-tab="acct-pinfo" onclick="switchAccountTab('acct-pinfo')">個人情報</button>
             <button class="acct-tab-btn" data-tab="acct-notif" onclick="switchAccountTab('acct-notif')" data-i18n="tab_alerts">通知</button>
           </div>
           <div class="acct-tab-content">
@@ -1012,12 +1074,83 @@
               </div>
               <div id="account-user" style="display:none;">
                 <p style="font-size:11px;color:var(--muted);margin-bottom:14px;" id="account-email"></p>
-                <p class="section-label" data-i18n="change_password">パスワード変更</p>
-                <input type="password" id="pw-current" data-i18n-ph="current_pw" placeholder="現在のパスワード" style="margin-bottom:6px;">
-                <input type="password" id="pw-new" data-i18n-ph="new_pw" placeholder="新しいパスワード（8文字以上）" style="margin-bottom:6px;">
-                <button class="save-btn" onclick="doChangePassword()" data-i18n="update">変更する</button>
-                <div class="saved-msg" id="pw-msg"></div>
+                <div id="pw-section">
+                  <p class="section-label" data-i18n="change_password">パスワード変更</p>
+                  <input type="password" id="pw-current" data-i18n-ph="current_pw" placeholder="現在のパスワード" style="margin-bottom:6px;">
+                  <input type="password" id="pw-new" data-i18n-ph="new_pw" placeholder="新しいパスワード（8文字以上）" style="margin-bottom:6px;">
+                  <button class="save-btn" onclick="doChangePassword()" data-i18n="update">変更する</button>
+                  <div class="saved-msg" id="pw-msg"></div>
+                </div>
                 <button class="save-btn" style="background:var(--danger);margin-top:16px;" onclick="doLogout()" data-i18n="logout">ログアウト</button>
+              </div>
+            </div>
+
+            <!-- Personal info tab -->
+            <div class="acct-tab-pane" id="acct-pinfo">
+              <div id="pinfo-guest" style="display:none;">
+                <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">ログインすると個人情報を保存できます。</p>
+                <button class="save-btn" onclick="openAuthModal()">ログイン</button>
+              </div>
+              <div id="pinfo-form">
+                <div class="pinfo-row">
+                  <div class="pinfo-label">表示名</div>
+                  <input class="pinfo-input" id="pinfo-name" type="text" placeholder="表示名">
+                </div>
+                <div class="pinfo-row">
+                  <div class="pinfo-label">目的</div>
+                  <div class="pinfo-chips" id="pinfo-purpose">
+                    <button class="pinfo-chip" data-val="self" onclick="pinfoToggle('purpose','self',false)">自分用</button>
+                    <button class="pinfo-chip" data-val="couple" onclick="pinfoToggle('purpose','couple',false)">カップル</button>
+                    <button class="pinfo-chip" data-val="family" onclick="pinfoToggle('purpose','family',false)">家族</button>
+                    <button class="pinfo-chip" data-val="research" onclick="pinfoToggle('purpose','research',false)">調査</button>
+                  </div>
+                </div>
+                <div class="pinfo-row">
+                  <div class="pinfo-label">世帯構成</div>
+                  <div class="pinfo-chips" id="pinfo-household">
+                    <button class="pinfo-chip" data-val="single" onclick="pinfoToggle('household','single',false)">一人暮らし</button>
+                    <button class="pinfo-chip" data-val="couple" onclick="pinfoToggle('household','couple',false)">二人暮らし</button>
+                    <button class="pinfo-chip" data-val="family" onclick="pinfoToggle('household','family',false)">家族（子あり）</button>
+                    <button class="pinfo-chip" data-val="other" onclick="pinfoToggle('household','other',false)">その他</button>
+                  </div>
+                </div>
+                <div class="pinfo-row">
+                  <div class="pinfo-label">年代</div>
+                  <div class="pinfo-chips" id="pinfo-age_range">
+                    <button class="pinfo-chip" data-val="20s" onclick="pinfoToggle('age_range','20s',false)">20代</button>
+                    <button class="pinfo-chip" data-val="30s" onclick="pinfoToggle('age_range','30s',false)">30代</button>
+                    <button class="pinfo-chip" data-val="40s" onclick="pinfoToggle('age_range','40s',false)">40代</button>
+                    <button class="pinfo-chip" data-val="50s" onclick="pinfoToggle('age_range','50s',false)">50代+</button>
+                  </div>
+                </div>
+                <div class="pinfo-row">
+                  <div class="pinfo-label">家賃予算</div>
+                  <div class="pinfo-chips" id="pinfo-budget">
+                    <button class="pinfo-chip" data-val="0-60000" onclick="pinfoToggle('budget','0-60000',false)">〜6万</button>
+                    <button class="pinfo-chip" data-val="60000-80000" onclick="pinfoToggle('budget','60000-80000',false)">6〜8万</button>
+                    <button class="pinfo-chip" data-val="80000-100000" onclick="pinfoToggle('budget','80000-100000',false)">8〜10万</button>
+                    <button class="pinfo-chip" data-val="100000-130000" onclick="pinfoToggle('budget','100000-130000',false)">10〜13万</button>
+                    <button class="pinfo-chip" data-val="130000-999999" onclick="pinfoToggle('budget','130000-999999',false)">13万〜</button>
+                  </div>
+                </div>
+                <div class="pinfo-row">
+                  <div class="pinfo-label">引越し時期</div>
+                  <div class="pinfo-chips" id="pinfo-move_in_timing">
+                    <button class="pinfo-chip" data-val="asap" onclick="pinfoToggle('move_in_timing','asap',false)">すぐにでも</button>
+                    <button class="pinfo-chip" data-val="1-3m" onclick="pinfoToggle('move_in_timing','1-3m',false)">1〜3ヶ月後</button>
+                    <button class="pinfo-chip" data-val="3-6m" onclick="pinfoToggle('move_in_timing','3-6m',false)">3〜6ヶ月後</button>
+                    <button class="pinfo-chip" data-val="undecided" onclick="pinfoToggle('move_in_timing','undecided',false)">未定</button>
+                  </div>
+                </div>
+                <div class="pinfo-row">
+                  <div class="pinfo-label">その他</div>
+                  <div class="pinfo-chips">
+                    <button class="pinfo-chip" id="pinfo-pets-btn" onclick="pinfoToggleBool('pets')">ペット可</button>
+                    <button class="pinfo-chip" id="pinfo-smoking-btn" onclick="pinfoToggleBool('smoking')">喫煙</button>
+                  </div>
+                </div>
+                <button class="save-btn" style="margin-top:8px;" onclick="savePinfo()">保存する</button>
+                <div class="saved-msg" id="pinfo-msg"></div>
               </div>
             </div>
 
@@ -1119,7 +1252,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 21:29 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 21:57 JST</p>
       </div>
 
 
@@ -1185,6 +1318,82 @@
 </div>
 
 <!-- Auth modal -->
+<!-- Onboarding flash cards -->
+<div id="onboarding-modal">
+  <div class="onboard-box">
+    <div class="onboard-progress" id="onboard-dots"></div>
+    <div class="onboard-slides" id="onboard-slides">
+
+      <!-- Card 0: Purpose -->
+      <div class="onboard-slide active" id="ocard-0">
+        <div class="onboard-emoji">🏠</div>
+        <div class="onboard-title">ようこそ！何のためにお探しですか？</div>
+        <div class="onboard-sub">あなたに合った提案をするために教えてください</div>
+        <div class="onboard-choices">
+          <button class="onboard-chip" data-field="purpose" data-val="self" onclick="onboardPick(this)">自分のため</button>
+          <button class="onboard-chip" data-field="purpose" data-val="couple" onclick="onboardPick(this)">カップル・同棲</button>
+          <button class="onboard-chip" data-field="purpose" data-val="family" onclick="onboardPick(this)">家族のため</button>
+          <button class="onboard-chip" data-field="purpose" data-val="research" onclick="onboardPick(this)">調査・その他</button>
+        </div>
+      </div>
+
+      <!-- Card 1: Household -->
+      <div class="onboard-slide" id="ocard-1">
+        <div class="onboard-emoji">👥</div>
+        <div class="onboard-title">世帯構成を教えてください</div>
+        <div class="onboard-sub">物件の広さの参考にします</div>
+        <div class="onboard-choices">
+          <button class="onboard-chip" data-field="household" data-val="single" onclick="onboardPick(this)">一人暮らし</button>
+          <button class="onboard-chip" data-field="household" data-val="couple" onclick="onboardPick(this)">二人暮らし</button>
+          <button class="onboard-chip" data-field="household" data-val="family" onclick="onboardPick(this)">家族（子あり）</button>
+          <button class="onboard-chip" data-field="household" data-val="other" onclick="onboardPick(this)">その他</button>
+        </div>
+      </div>
+
+      <!-- Card 2: Budget -->
+      <div class="onboard-slide" id="ocard-2">
+        <div class="onboard-emoji">💰</div>
+        <div class="onboard-title">家賃の予算は？</div>
+        <div class="onboard-sub">おおよそで大丈夫です</div>
+        <div class="onboard-choices">
+          <button class="onboard-chip" data-field="budget" data-val="0-60000" onclick="onboardPick(this)">〜6万円</button>
+          <button class="onboard-chip" data-field="budget" data-val="60000-80000" onclick="onboardPick(this)">6〜8万円</button>
+          <button class="onboard-chip" data-field="budget" data-val="80000-100000" onclick="onboardPick(this)">8〜10万円</button>
+          <button class="onboard-chip" data-field="budget" data-val="100000-130000" onclick="onboardPick(this)">10〜13万円</button>
+          <button class="onboard-chip" data-field="budget" data-val="130000-999999" onclick="onboardPick(this)">13万円〜</button>
+        </div>
+      </div>
+
+      <!-- Card 3: Move-in timing -->
+      <div class="onboard-slide" id="ocard-3">
+        <div class="onboard-emoji">📅</div>
+        <div class="onboard-title">いつ頃引越し予定ですか？</div>
+        <div class="onboard-sub"></div>
+        <div class="onboard-choices">
+          <button class="onboard-chip" data-field="move_in_timing" data-val="asap" onclick="onboardPick(this)">できるだけ早く</button>
+          <button class="onboard-chip" data-field="move_in_timing" data-val="1-3m" onclick="onboardPick(this)">1〜3ヶ月後</button>
+          <button class="onboard-chip" data-field="move_in_timing" data-val="3-6m" onclick="onboardPick(this)">3〜6ヶ月後</button>
+          <button class="onboard-chip" data-field="move_in_timing" data-val="undecided" onclick="onboardPick(this)">まだ未定</button>
+        </div>
+      </div>
+
+      <!-- Card 4: Preferred wards -->
+      <div class="onboard-slide" id="ocard-4">
+        <div class="onboard-emoji">🗺️</div>
+        <div class="onboard-title">希望エリアは？</div>
+        <div class="onboard-sub">複数選択できます（スキップ可）</div>
+        <div class="onboard-ward-grid" id="onboard-ward-grid"></div>
+      </div>
+
+    </div>
+    <div class="onboard-footer">
+      <button class="onboard-back" id="onboard-back-btn" onclick="onboardBack()" style="visibility:hidden;">← 戻る</button>
+      <button class="onboard-skip" onclick="onboardSkip()">スキップ</button>
+      <button class="onboard-next" id="onboard-next-btn" onclick="onboardNext()">次へ →</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="auth-modal">
   <div class="modal-box">
     <button class="modal-close" onclick="closeAuthModal()">×</button>
@@ -1192,6 +1401,12 @@
       <button class="modal-tab active" id="tab-login-btn" onclick="switchAuthTab('login')" data-i18n="login_tab">ログイン</button>
       <button class="modal-tab" id="tab-reg-btn" onclick="switchAuthTab('register')" data-i18n="register_tab">新規登録</button>
     </div>
+    <!-- Google sign-in (shown for both tabs) -->
+    <button class="google-btn" onclick="doGoogleLogin()" style="margin-bottom:4px;">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Googleでログイン
+    </button>
+    <div class="auth-divider">または</div>
     <div id="tab-login" class="modal-form">
       <div class="modal-err" id="login-err"></div>
       <input type="email" id="login-email" data-i18n-ph="email_ph" placeholder="メールアドレス" autocomplete="email">
@@ -2407,6 +2622,11 @@ async function loadUserProfile() {
         _commuteDest = _commuteDests[0];
       }
     }
+
+    // Personal info
+    _pinfoData = d.personal_info || {};
+    _pinfoIsGoogle = d.is_google_user || false;
+    renderPinfo();
   } catch {}
 }
 
@@ -3678,6 +3898,7 @@ function updateAuthPanels() {
   document.getElementById('account-user').style.display      = loggedIn ? 'block' : 'none';
   const emailEl = document.getElementById('account-email');
   if (emailEl && AUTH.user) emailEl.textContent = AUTH.user.email || '';
+  renderPinfo();
 }
 
 function switchAuthTab(tab) {
@@ -3696,8 +3917,10 @@ function onAuthSuccess(data) {
   updateAuthPanels();
   loadUserSettings();
   loadNotifications();
-  loadUserProfile();
   loadSavedListings();
+  loadUserProfile().then(() => {
+    if (data.needs_onboarding || !_pinfoData.onboarding_done) showOnboarding();
+  });
 }
 
 function renderUserChip() {
@@ -3767,9 +3990,203 @@ async function doRegister() {
 function doLogout() {
   AUTH.token = null;
   AUTH.user  = null;
+  _pinfoData = {};
   localStorage.removeItem('jkktrackr_token');
   renderUserChip();
   updateAuthPanels();
+}
+
+// ── Google OAuth ──────────────────────────────────────────────────────────────
+let _googlePopup = null;
+function doGoogleLogin() {
+  if (_googlePopup && !_googlePopup.closed) { _googlePopup.focus(); return; }
+  const w = 500, h = 620;
+  const left = Math.round(window.screenX + (window.outerWidth - w) / 2);
+  const top  = Math.round(window.screenY + (window.outerHeight - h) / 2);
+  _googlePopup = window.open(
+    `${API}/auth/google/start`,
+    'google-oauth',
+    `width=${w},height=${h},left=${left},top=${top},scrollbars=yes`
+  );
+}
+window.addEventListener('message', e => {
+  if (!e.data || e.data.type !== 'google-auth') return;
+  onAuthSuccess(e.data);
+});
+
+// ── Onboarding flash cards ───────────────────────────────────────────────────
+const ONBOARD_CARDS = 5;
+let _onboardStep = 0;
+let _onboardData = {};
+
+function showOnboarding() {
+  _onboardStep = 0;
+  _onboardData = {};
+  // Build ward grid
+  const grid = document.getElementById('onboard-ward-grid');
+  if (grid && !grid.dataset.built) {
+    const wards = [
+      '千代田区','中央区','港区','新宿区','渋谷区','世田谷区','目黒区','品川区',
+      '文京区','台東区','墨田区','江東区','豊島区','中野区','杉並区','北区',
+      '荒川区','板橋区','練馬区','足立区','葛飾区','江戸川区','大田区',
+      '八王子市','立川市','武蔵野市','三鷹市','調布市','町田市','多摩市',
+      '横浜市港北区','横浜市青葉区','横浜市都筑区','川崎市中原区','川崎市高津区'
+    ];
+    grid.innerHTML = wards.map(w =>
+      `<button class="onboard-chip" data-field="preferred_wards" data-val="${w}" data-multi="1" onclick="onboardPick(this)">${w}</button>`
+    ).join('');
+    grid.dataset.built = '1';
+  }
+  // Build progress dots
+  const dotsEl = document.getElementById('onboard-dots');
+  dotsEl.innerHTML = Array.from({length: ONBOARD_CARDS}, (_, i) =>
+    `<div class="onboard-dot${i === 0 ? ' active' : ''}" id="odot-${i}"></div>`
+  ).join('');
+  _onboardRender();
+  document.getElementById('onboarding-modal').classList.add('open');
+}
+
+function _onboardRender() {
+  document.querySelectorAll('.onboard-slide').forEach((el, i) => {
+    el.classList.remove('active', 'exit');
+    if (i === _onboardStep) el.classList.add('active');
+  });
+  document.querySelectorAll('.onboard-dot').forEach((el, i) => {
+    el.classList.remove('active', 'done');
+    if (i < _onboardStep) el.classList.add('done');
+    else if (i === _onboardStep) el.classList.add('active');
+  });
+  const backBtn = document.getElementById('onboard-back-btn');
+  const nextBtn = document.getElementById('onboard-next-btn');
+  backBtn.style.visibility = _onboardStep > 0 ? 'visible' : 'hidden';
+  nextBtn.textContent = _onboardStep === ONBOARD_CARDS - 1 ? '完了 ✓' : '次へ →';
+}
+
+function onboardPick(btn) {
+  const field = btn.dataset.field;
+  const val   = btn.dataset.val;
+  const multi = btn.dataset.multi === '1';
+  if (multi) {
+    const cur = _onboardData[field] || [];
+    const idx = cur.indexOf(val);
+    if (idx >= 0) { cur.splice(idx, 1); btn.classList.remove('selected'); }
+    else          { cur.push(val);      btn.classList.add('selected'); }
+    _onboardData[field] = cur;
+  } else {
+    // deselect siblings
+    btn.closest('.onboard-choices,.onboard-ward-grid')
+       .querySelectorAll(`.onboard-chip[data-field="${field}"]`)
+       .forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    _onboardData[field] = val;
+  }
+}
+
+function onboardNext() {
+  if (_onboardStep < ONBOARD_CARDS - 1) {
+    const cur = document.getElementById(`ocard-${_onboardStep}`);
+    cur.classList.add('exit');
+    setTimeout(() => cur.classList.remove('exit'), 300);
+    _onboardStep++;
+    _onboardRender();
+  } else {
+    _onboardFinish();
+  }
+}
+
+function onboardBack() {
+  if (_onboardStep > 0) { _onboardStep--; _onboardRender(); }
+}
+
+function onboardSkip() { _onboardFinish(); }
+
+async function _onboardFinish() {
+  document.getElementById('onboarding-modal').classList.remove('open');
+  // Parse budget into min/max
+  const info = { ..._onboardData, onboarding_done: true };
+  if (info.budget) {
+    const [mn, mx] = info.budget.split('-').map(Number);
+    info.budget_min = mn; info.budget_max = mx;
+    delete info.budget;
+  }
+  await saveUserProfile({ personal_info: info });
+  _pinfoData = { ..._pinfoData, ...info };
+  renderPinfo();
+}
+
+// ── Personal info tab ────────────────────────────────────────────────────────
+let _pinfoData    = {};
+let _pinfoIsGoogle = false;
+
+function renderPinfo() {
+  // Hide/show pw section for Google users
+  const pwSection = document.getElementById('pw-section');
+  if (pwSection) pwSection.style.display = _pinfoIsGoogle ? 'none' : '';
+
+  if (!AUTH.user) {
+    document.getElementById('pinfo-guest').style.display = '';
+    document.getElementById('pinfo-form').style.display  = 'none';
+    return;
+  }
+  document.getElementById('pinfo-guest').style.display = 'none';
+  document.getElementById('pinfo-form').style.display  = '';
+
+  const nameEl = document.getElementById('pinfo-name');
+  if (nameEl) nameEl.value = AUTH.user.display_name || '';
+
+  // Single-select chip fields
+  ['purpose','household','age_range','move_in_timing'].forEach(field => {
+    const container = document.getElementById(`pinfo-${field}`);
+    if (!container) return;
+    const val = _pinfoData[field] || '';
+    container.querySelectorAll('.pinfo-chip').forEach(btn => {
+      btn.classList.toggle('selected', btn.dataset.val === val);
+    });
+  });
+
+  // Budget
+  const budgetContainer = document.getElementById('pinfo-budget');
+  if (budgetContainer) {
+    const bmin = _pinfoData.budget_min || 0;
+    const bmax = _pinfoData.budget_max || 0;
+    const budgetKey = bmin || bmax ? `${bmin}-${bmax}` : '';
+    budgetContainer.querySelectorAll('.pinfo-chip').forEach(btn => {
+      btn.classList.toggle('selected', btn.dataset.val === budgetKey);
+    });
+  }
+
+  // Booleans
+  document.getElementById('pinfo-pets-btn')?.classList.toggle('selected', !!_pinfoData.pets);
+  document.getElementById('pinfo-smoking-btn')?.classList.toggle('selected', !!_pinfoData.smoking);
+}
+
+function pinfoToggle(field, val, multi) {
+  if (!multi) {
+    const prev = _pinfoData[field];
+    _pinfoData[field] = (prev === val) ? '' : val;
+  } else {
+    const arr = _pinfoData[field] || [];
+    const idx = arr.indexOf(val);
+    if (idx >= 0) arr.splice(idx, 1); else arr.push(val);
+    _pinfoData[field] = arr;
+  }
+  renderPinfo();
+}
+
+function pinfoToggleBool(field) {
+  _pinfoData[field] = !_pinfoData[field];
+  renderPinfo();
+}
+
+async function savePinfo() {
+  const nameEl = document.getElementById('pinfo-name');
+  const name   = nameEl?.value.trim() || '';
+  if (name) { _pinfoData.display_name = name; AUTH.user.display_name = name; renderUserChip(); }
+  const msg = document.getElementById('pinfo-msg');
+  msg.textContent = '保存中…';
+  await saveUserProfile({ personal_info: _pinfoData });
+  msg.textContent = '保存しました ✓';
+  setTimeout(() => { msg.textContent = ''; }, 2000);
 }
 
 async function initAuth() {
