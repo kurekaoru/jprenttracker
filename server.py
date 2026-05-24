@@ -1512,7 +1512,7 @@ Rules:
 - Use select_listing only for ONE specific named property ("open that one", "select it"). Never call it in a loop.
 - Use set_map_filter when the user wants to show/hide multiple listings by criteria ("show listings above 50m²", "filter to 1LDK", "only JKK"). This updates the map markers and table instantly.
 - Do not use emojis. Keep responses concise and factual.
-- Use find_nearby_place when the user asks about any facility near a property (hospital, school, gym, etc.). Always call the tool — never skip it, never redirect to Google Maps, never guess. If the tool returns an error, report the exact error message and stop — do NOT follow up with guesses or suggestions about what might be nearby. If results come back, immediately call get_commute_time with the nearest place name as destination to give an actual travel time.
+- Use find_nearby_place when the user asks about any facility near a property (hospital, school, gym, etc.). Always call the tool — never skip it, never redirect to Google Maps, never guess. If the tool returns an error, report the exact error message and stop — do NOT follow up with guesses or suggestions about what might be nearby. If results come back, immediately call get_commute_time with the nearest place name as destination to give an actual travel time. For Japanese facility types that are poorly indexed by English place_type, also pass a Japanese keyword: kindergarten→keyword='幼稚園', nursery/daycare→keyword='保育園', elementary school→keyword='小学校', junior high→keyword='中学校', high school→keyword='高校', supermarket→keyword='スーパー', pharmacy→keyword='薬局', clinic→keyword='クリニック'.
 - If a tool returns no results, say so plainly and offer to try different search parameters.
 - Use show_listing_images whenever the user asks to see photos, pictures, images, or the floor plan for a property. If a property card is open, use its listing_id directly. Images render inline in the chat — no need to describe them in text.
 - HARD RULE: NEVER say images are "rendering", "displaying", "showing", "loading", or "appearing" in text. NEVER narrate what the tool is doing. Call show_listing_images — that IS the display. If you describe images in text without calling the tool, the user sees nothing.
@@ -1698,6 +1698,7 @@ _CHAT_TOOLS = [
             "properties": {
                 "listing_id": {"type": "string", "description": "Listing ID to search near"},
                 "place_type": {"type": "string", "description": "Google Maps place type, e.g. hospital, school, kindergarten, supermarket, gym, library, police, post_office"},
+                "keyword":    {"type": "string", "description": "Optional Japanese keyword to narrow results, e.g. '幼稚園' for kindergartens, '保育園' for nurseries, '小学校' for elementary schools. Use this for facility types that are poorly indexed under English place types in Japan."},
                 "radius_m":   {"type": "integer", "description": "Search radius in metres, default 3000, max 10000"},
             },
             "required": ["listing_id", "place_type"],
@@ -2155,6 +2156,7 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                 inp        = block.input
                 lid        = inp.get("listing_id", "")
                 place_type = inp.get("place_type", "")
+                keyword    = inp.get("keyword", "")
                 radius     = min(int(inp.get("radius_m", 3000)), 10000)
                 row = con.execute(
                     "SELECT lat, lng FROM listings WHERE id=?", (lid,)
@@ -2165,11 +2167,14 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                     result = {"error": "Google Maps API key not configured"}
                 else:
                     try:
+                        params = {"location": f"{row['lat']},{row['lng']}",
+                                  "radius": radius, "type": place_type,
+                                  "language": "ja", "key": GOOGLE_MAPS_SERVER_KEY}
+                        if keyword:
+                            params["keyword"] = keyword
                         r = requests.get(
                             "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
-                            params={"location": f"{row['lat']},{row['lng']}",
-                                    "radius": radius, "type": place_type,
-                                    "language": "ja", "key": GOOGLE_MAPS_SERVER_KEY},
+                            params=params,
                             timeout=10,
                         ).json()
                         if r.get("status") in ("OK", "ZERO_RESULTS"):
