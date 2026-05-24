@@ -1260,6 +1260,7 @@ Rules:
 - HARD RULE: NEVER say images are "rendering", "displaying", "showing", "loading", or "appearing" in text. NEVER narrate what the tool is doing. Call show_listing_images — that IS the display. If you describe images in text without calling the tool, the user sees nothing.
 - Use batch_commute_filter when the user asks to filter/select/find ALL properties by commute time to a destination ("within 1hr of X", "reachable from Y in under 45 min", etc.). This checks every geocoded listing server-side. After it returns, immediately call save_listings with the matching listing_ids if the user asked to save/add them to selections.
 - Use save_listings to add listings to the user's saved selections. Call it immediately after batch_commute_filter (if the user asked to save) or after search_listings when the user explicitly asks to save/bookmark the results.
+- Use remove_listings to remove listings from saved selections. The user's current saved list with photo counts is provided in context — use the listing IDs directly. For "remove listings without photos" filter to those with photos=0.
 - HARD RULE: Never end a response with follow-up suggestions, offers to help further, or questions ("Would you like more details?", "Would you like help with anything else?", "Is there anything else I can help you with?" etc.). Answer exactly what was asked, then stop. No trailing questions or offers.
 """
 
@@ -1379,6 +1380,17 @@ _CHAT_TOOLS = [
             "required": ["listing_ids"],
             "properties": {
                 "listing_ids": {"type": "array", "items": {"type": "string"}, "description": "IDs to save"},
+            },
+        },
+    },
+    {
+        "name": "remove_listings",
+        "description": "Remove listings from the user's saved selections. Use when the user asks to remove, delete, or deselect specific listings or listings matching a condition (e.g. 'remove properties without photos', 'remove listings in Hachioji'). To find which listings lack photos, query the saved list and check for missing images.",
+        "input_schema": {
+            "type": "object",
+            "required": ["listing_ids"],
+            "properties": {
+                "listing_ids": {"type": "array", "items": {"type": "string"}, "description": "IDs to remove from saved selections"},
             },
         },
     },
@@ -1639,7 +1651,7 @@ def _is_photo_request(history):
         return True, "interior"
     return True, None
 
-def _call_claude(history, con, open_listing=None, user_id=None):
+def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=None):
     if not _anthropic:
         return {"text": "anthropic パッケージが未インストールです: pip install anthropic", "listing_ids": [], "actions": []}
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -1673,6 +1685,15 @@ def _call_claude(history, con, open_listing=None, user_id=None):
         )
     else:
         open_ctx = ""
+
+    if saved_listings:
+        lines = [f"User's saved selections ({len(saved_listings)} listings):"]
+        for s in saved_listings:
+            lines.append(
+                f"  - {s['name']} ({s['ward']}, {s['layout']}, ¥{s['rent']:,}) "
+                f"id={s['id']} photos={s['photo_count']}"
+            )
+        open_ctx += "\n".join(lines) + "\n"
 
     for _ in range(10):
         resp = client.messages.create(
@@ -1722,6 +1743,19 @@ def _call_claude(history, con, open_listing=None, user_id=None):
                     all_actions.append({"type": "save_listings", "listing_ids": ids})
                     all_ids.extend(ids)
                     result = {"saved": len(ids)}
+                else:
+                    result = {"error": "not logged in" if not user_id else "no listing_ids provided"}
+            elif block.name == "remove_listings":
+                ids = block.input.get("listing_ids", [])
+                if user_id and ids:
+                    for lid in ids:
+                        con.execute(
+                            "DELETE FROM user_saved_listings WHERE user_id=? AND listing_id=?",
+                            (user_id, lid),
+                        )
+                    con.commit()
+                    all_actions.append({"type": "remove_listings", "listing_ids": ids})
+                    result = {"removed": len(ids)}
                 else:
                     result = {"error": "not logged in" if not user_id else "no listing_ids provided"}
             elif block.name == "get_market_trends":
@@ -1902,7 +1936,19 @@ def chat_send():
         if row:
             open_listing = dict(row)
 
-    result = _call_claude(history, con, open_listing=open_listing, user_id=user_id)
+    saved_rows = con.execute(
+        """SELECT l.id, l.name, l.ward, l.rent, l.layout,
+                  COUNT(li.id) as photo_count
+           FROM user_saved_listings s
+           JOIN listings l ON l.id = s.listing_id
+           LEFT JOIN listing_images li ON li.listing_id = l.id AND li.local_path IS NOT NULL
+           WHERE s.user_id=?
+           GROUP BY l.id ORDER BY s.saved_at DESC""",
+        (user_id,)
+    ).fetchall() if user_id else []
+    saved_listings_ctx = [dict(r) for r in saved_rows]
+
+    result = _call_claude(history, con, open_listing=open_listing, user_id=user_id, saved_listings=saved_listings_ctx)
 
     con.execute(
         "INSERT INTO chat_messages (session_id, role, content, listing_ids) VALUES (?,?,?,?)",
