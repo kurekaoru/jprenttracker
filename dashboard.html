@@ -1104,7 +1104,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 20:12 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 20:27 JST</p>
       </div>
 
 
@@ -1500,6 +1500,7 @@ const STRINGS = {
   tab_route:            { ja:'経路',                    en:'Route' },
   tab_fac:              { ja:'施設',                    en:'Nearby' },
   tab_photos:           { ja:'写真',                    en:'Photos' },
+  tab_floorplan:        { ja:'間取り',                  en:'Floor Plan' },
   no_photos:            { ja:'写真なし',                 en:'No photos' },
   // Facility table
   col_type:             { ja:'種別',                    en:'Type' },
@@ -2601,6 +2602,7 @@ function popupHtml(l) {
       <div class="prop-tabs">
         <div class="prop-tab-bar">
           <button class="prop-tab-btn active" data-tab="fac" onclick="switchPropTab('fac')">${t('tab_fac')}</button>
+          <button class="prop-tab-btn" data-tab="floorplan" onclick="switchPropTab('floorplan')">${t('tab_floorplan')}</button>
           <button class="prop-tab-btn" data-tab="photos" onclick="switchPropTab('photos')">${t('tab_photos')}</button>
           <button class="prop-tab-btn" data-tab="route" onclick="switchPropTab('route')">${t('tab_route')}</button>
         </div>
@@ -2622,6 +2624,9 @@ function popupHtml(l) {
               <button onclick="clearDirections()" class="route-btn" style="margin-left:auto;">✕</button>
             </div>
           </div>
+          <div class="prop-tab-pane" id="prop-tab-floorplan">
+            <div class="prop-photos-grid" id="prop-floorplan-grid"></div>
+          </div>
           <div class="prop-tab-pane" id="prop-tab-photos">
             <div class="prop-photos-grid" id="prop-photos-grid"></div>
           </div>
@@ -2637,41 +2642,43 @@ function switchPropTab(tab) {
     b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.prop-tab-pane').forEach(p =>
     p.classList.toggle('active', p.id === 'prop-tab-' + tab));
-  if (tab === 'photos' && _selectedId) loadPropPhotos(_selectedId);
+  if (!_selectedId) return;
+  if (tab === 'floorplan') loadPropPhotos(_selectedId, 'prop-floorplan-grid', ['floor_plan']);
+  if (tab === 'photos')    loadPropPhotos(_selectedId, 'prop-photos-grid',    ['exterior', 'interior']);
 }
 
-async function loadPropPhotos(listingId) {
-  const grid = document.getElementById('prop-photos-grid');
+async function loadPropPhotos(listingId, gridId, filterTypes) {
+  const grid = document.getElementById(gridId);
   if (!grid) return;
   if (grid.dataset.loaded === listingId) return;
   grid.innerHTML = '<div style="color:var(--muted);font-size:12px;grid-column:1/-1;">...</div>';
   try {
     const r = await fetch(`${API}/listings/${listingId}/images`, { headers: authHeaders() });
     const imgs = await r.json();
-    if (!imgs.length) {
-      grid.innerHTML = `<div style="color:var(--muted);font-size:12px;grid-column:1/-1;">${t('no_photos')}</div>`;
-      return;
-    }
-    // Normalize relative /api/... URLs to absolute so they resolve correctly from any origin
     const imgBase = API.replace(/\/api\/?$/, '');
-    const normalizedImgs = imgs.map(img => ({
+    const allNorm = imgs.map(img => ({
       ...img,
       url: img.url.startsWith('/') ? imgBase + img.url : img.url,
     }));
+    const filtered = filterTypes ? allNorm.filter(img => filterTypes.includes(img.type)) : allNorm;
+    if (!filtered.length) {
+      grid.innerHTML = `<div style="color:var(--muted);font-size:12px;grid-column:1/-1;">${t('no_photos')}</div>`;
+      return;
+    }
     grid.dataset.loaded = listingId;
-    grid.innerHTML = normalizedImgs.map((img, i) =>
+    grid.innerHTML = filtered.map((img, i) =>
       `<img src="${escHtml(img.url)}" data-type="${escHtml(img.type || '')}"
             onerror="this.style.background='var(--surface2)';this.style.minHeight='60px'"
-            onclick="_openPropPhotoAt(${i})">`
+            onclick="_openGridPhotoAt('${gridId}',${i})">`
     ).join('');
-    grid._imgs = normalizedImgs;
+    grid._imgs = filtered;
   } catch (_) {
     grid.innerHTML = `<div style="color:var(--muted);font-size:12px;grid-column:1/-1;">${t('no_photos')}</div>`;
   }
 }
 
-function _openPropPhotoAt(idx) {
-  const grid = document.getElementById('prop-photos-grid');
+function _openGridPhotoAt(gridId, idx) {
+  const grid = document.getElementById(gridId);
   if (!grid || !grid._imgs) return;
   openImgModal(grid._imgs, '');
   _imgModalIdx = idx;
@@ -3493,7 +3500,11 @@ function _chatCommuteClient(action) {
 let _imgModalImages = [], _imgModalIdx = 0;
 
 function openImgModal(images, title) {
-  _imgModalImages = images;
+  const imgBase = API.replace(/\/api\/?$/, '');
+  _imgModalImages = images.map(img => ({
+    ...img,
+    url: img.url && img.url.startsWith('/') ? imgBase + img.url : img.url,
+  }));
   _imgModalIdx = 0;
   document.getElementById('imgModalTitle').textContent = title || '';
   _imgModalRender();
