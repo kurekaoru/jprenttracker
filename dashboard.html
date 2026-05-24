@@ -630,9 +630,14 @@
   .img-modal-nav.prev { left: -52px; }
   .img-modal-nav.next { right: -52px; }
   .img-modal-nav:disabled { opacity: 0.2; cursor: default; }
-  .img-modal-thumbs { display: flex; gap: 6px; margin-top: 12px; overflow-x: auto; max-width: 100%; padding-bottom: 2px; scrollbar-width: thin; }
-  .img-modal-thumbs::-webkit-scrollbar { height: 3px; }
-  .img-modal-thumbs::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+  /* Dark scrollbars — global */
+  * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent; }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.28); }
+
+  .img-modal-thumbs { display: flex; gap: 6px; margin-top: 12px; overflow-x: auto; max-width: 100%; padding-bottom: 2px; }
   .img-modal-thumb { width: 54px; height: 40px; object-fit: cover; border-radius: 4px; cursor: pointer; opacity: 0.5; flex-shrink: 0; border: 2px solid transparent; transition: opacity 0.12s, border-color 0.12s; }
   .img-modal-thumb.active { opacity: 1; border-color: var(--accent); }
   .img-modal-thumb:hover { opacity: 0.85; }
@@ -1261,7 +1266,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 01:42 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 01:58 JST</p>
       </div>
 
 

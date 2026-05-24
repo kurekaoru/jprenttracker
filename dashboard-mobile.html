@@ -9,9 +9,11 @@
 <script>
 (function(){
   var l=localStorage.getItem('jkktrackr_lang')||'ja';
+  // 'uk' is valid for Maps API (Ukrainian); fall back to 'ja' for unsupported codes
+  var ml = (l==='ja'||l==='en'||l==='uk') ? l : 'ja';
   document.documentElement.lang=l;
   var s=document.createElement('script');s.async=true;
-  s.src='https://maps.googleapis.com/maps/api/js?key=AIzaSyBHw3d6FU73jXiJxUJoZ4MlDGu2CmhC4i8&libraries=places&language='+l+'&callback=initMap';
+  s.src='https://maps.googleapis.com/maps/api/js?key=AIzaSyBHw3d6FU73jXiJxUJoZ4MlDGu2CmhC4i8&libraries=places&language='+ml+'&callback=initMap';
   document.head.appendChild(s);
 })();
 </script>
@@ -39,6 +41,13 @@
 body{font-family:var(--font);background:#000;color:var(--text);height:100dvh;overflow:hidden;overscroll-behavior:none;}
 a{color:var(--accent);text-decoration:none;}
 
+/* Dark scrollbars */
+*{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.15) transparent;}
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15);border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.28);}
+
 /* ── Map ── */
 #map{position:fixed;inset:0;z-index:0;}
 
@@ -58,16 +67,19 @@ a{color:var(--accent);text-decoration:none;}
 .top-bar-title span{color:var(--accent);}
 .view-chips{display:flex;gap:5px;flex:1;justify-content:center;}
 .vc{
-  padding:5px 12px;border-radius:20px;border:1px solid var(--border);
+  padding:5px 10px;border-radius:20px;border:1px solid var(--border);
   background:none;color:var(--muted);font-size:11px;font-weight:600;
   font-family:var(--font);cursor:pointer;transition:all .15s;white-space:nowrap;
 }
 .vc.active{background:var(--accent);border-color:var(--accent);color:#0a2e24;}
-.top-bar-lang{
-  background:none;border:1px solid var(--border);border-radius:8px;
-  color:var(--muted);font-size:11px;font-weight:600;font-family:var(--font);
-  padding:4px 8px;cursor:pointer;white-space:nowrap;
+.lang-select{
+  background:none;border:1px solid rgba(255,255,255,0.15);border-radius:10px;
+  color:rgba(255,255,255,0.85);font-size:11px;font-weight:700;font-family:var(--font);
+  padding:3px 6px;cursor:pointer;width:52px;text-align:center;text-align-last:center;
+  outline:none;transition:all .15s;flex-shrink:0;
 }
+.lang-select:hover{border-color:var(--accent);color:var(--accent);}
+.lang-select option{background:#1e2124;color:#fff;}
 
 /* ── Count pill ── */
 .count-pill{
@@ -230,12 +242,11 @@ a{color:var(--accent);text-decoration:none;}
   background:var(--surface);border:1px solid var(--border);border-radius:14px;
   overflow:hidden;cursor:pointer;display:flex;align-items:stretch;
   transition:border-color .15s;
-  active:border-color:rgba(93,202,165,.5);
 }
 .m-listing-card:active{border-color:var(--accent);}
-.m-card-thumb{width:88px;flex-shrink:0;background:var(--surface2);position:relative;}
+.m-card-thumb{width:88px;flex-shrink:0;background:var(--surface2);position:relative;min-height:80px;}
 .m-card-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
-.m-card-thumb-none{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;}
+.m-card-thumb-none{width:100%;height:100%;min-height:80px;display:flex;align-items:center;justify-content:center;font-size:24px;}
 .m-card-body{flex:1;padding:10px 12px;min-width:0;display:flex;flex-direction:column;gap:3px;}
 .m-card-name{font-size:12px;font-weight:600;line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
 .m-card-rent{font-size:14px;font-weight:700;color:var(--text);}
@@ -332,9 +343,9 @@ a{color:var(--accent);text-decoration:none;}
 }
 .lightbox-counter{font-size:13px;color:rgba(255,255,255,.5);}
 .lightbox-close{background:rgba(255,255,255,.12);border:none;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:20px;}
-.lightbox-img-wrap{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:0 8px;}
+.lightbox-img-wrap{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:0 8px;position:relative;}
 .lightbox-img-wrap img{max-width:100%;max-height:100%;object-fit:contain;display:block;border-radius:8px;touch-action:pinch-zoom;}
-.lightbox-type{position:absolute;top:50%;left:20px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:2px 8px;border-radius:10px;text-transform:uppercase;}
+.lightbox-type{position:absolute;bottom:8px;left:20px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:2px 8px;border-radius:10px;text-transform:uppercase;}
 .lightbox-thumbs{display:flex;gap:6px;padding:10px 12px;overflow-x:auto;flex-shrink:0;scrollbar-width:none;padding-bottom:calc(10px + var(--safe-b));}
 .lightbox-thumbs::-webkit-scrollbar{display:none;}
 .lb-thumb{width:52px;height:38px;object-fit:cover;border-radius:5px;cursor:pointer;opacity:.45;border:2px solid transparent;flex-shrink:0;}
@@ -396,7 +407,11 @@ a{color:var(--accent);text-decoration:none;}
     <button class="vc"         id="vc-starred"  onclick="setViewMode('starred')">★</button>
     <button class="vc"         id="vc-filtered" onclick="setViewMode('filtered')">Filter</button>
   </div>
-  <button class="top-bar-lang" onclick="toggleLang()" id="lang-btn">EN</button>
+  <select id="lang-select" class="lang-select" onchange="setLang(this.value)">
+    <option value="ja">🇯🇵 JP</option>
+    <option value="en">🇬🇧 EN</option>
+    <option value="uk">🇺🇦 UA</option>
+  </select>
 </div>
 
 <!-- Property bottom sheet -->
@@ -413,12 +428,12 @@ a{color:var(--accent);text-decoration:none;}
   <div class="prop-sheet-station" id="ps-station"></div>
   <div id="ps-thumb-wrap"></div>
   <div style="flex-shrink:0;padding:0 16px 6px;">
-    <a id="ps-link" href="#" target="_blank" rel="noopener" style="font-size:12px;color:var(--accent);">物件サイトで見る →</a>
+    <a id="ps-link" href="#" target="_blank" rel="noopener" style="font-size:12px;color:var(--accent);"></a>
   </div>
   <div class="sheet-tabs">
-    <button class="sheet-tab active" data-tab="fac"   onclick="switchSheet('fac')">施設</button>
-    <button class="sheet-tab"        data-tab="fp"    onclick="switchSheet('fp')">間取り</button>
-    <button class="sheet-tab"        data-tab="photos"onclick="switchSheet('photos')">写真</button>
+    <button class="sheet-tab active" data-tab="fac"    onclick="switchSheet('fac')"   id="stab-fac">施設</button>
+    <button class="sheet-tab"        data-tab="fp"     onclick="switchSheet('fp')"    id="stab-fp">間取り</button>
+    <button class="sheet-tab"        data-tab="photos" onclick="switchSheet('photos')" id="stab-photos">写真</button>
   </div>
   <div class="sheet-tab-content">
     <div class="sheet-tab-pane active" id="stp-fac">
@@ -445,7 +460,7 @@ a{color:var(--accent);text-decoration:none;}
 <!-- Chat overlay -->
 <div class="full-overlay" id="chat-overlay">
   <div class="overlay-header">
-    <div class="overlay-title">AI アシスタント</div>
+    <div class="overlay-title" id="chat-title">AI アシスタント</div>
     <button class="overlay-close" onclick="closeOverlay('chat-overlay')">✕</button>
   </div>
   <div class="chat-thread" id="chat-thread"></div>
@@ -464,37 +479,37 @@ a{color:var(--accent);text-decoration:none;}
 <div class="sheet" id="filter-sheet">
   <div class="sheet-handle"></div>
   <div style="padding:12px 16px 8px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;">
-    <div style="font-size:15px;font-weight:700;">フィルター</div>
+    <div id="filter-sheet-title" style="font-size:15px;font-weight:700;">フィルター</div>
     <button onclick="closeSheet('filter-sheet')" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;">✕</button>
   </div>
   <div class="filter-body">
     <div class="filter-section">
-      <div class="filter-label">データソース</div>
+      <div class="filter-label" id="fl-source">データソース</div>
       <div class="filter-chips" id="f-source-chips"></div>
     </div>
     <div class="filter-section">
-      <div class="filter-label">家賃</div>
+      <div class="filter-label" id="fl-rent">家賃</div>
       <div class="filter-row">
         <input class="filter-input" type="number" id="f-min-rent" placeholder="下限 (円)" step="1000">
         <input class="filter-input" type="number" id="f-max-rent" placeholder="上限 (円)" step="1000">
       </div>
     </div>
     <div class="filter-section">
-      <div class="filter-label">間取り</div>
+      <div class="filter-label" id="fl-layout">間取り</div>
       <div class="filter-chips" id="f-layout-chips"></div>
     </div>
     <div class="filter-section">
-      <div class="filter-label">面積 / 徒歩</div>
+      <div class="filter-label" id="fl-area">面積 / 徒歩</div>
       <div class="filter-row">
         <input class="filter-input" type="number" id="f-min-size" placeholder="最低 m²" step="1">
         <input class="filter-input" type="number" id="f-max-walk" placeholder="最大徒歩分" step="1" min="0">
       </div>
     </div>
     <div class="filter-section">
-      <div class="filter-label">エリア</div>
+      <div class="filter-label" id="fl-ward">エリア</div>
       <div class="filter-chips" id="f-ward-chips"></div>
     </div>
-    <button class="filter-apply" onclick="applyFilterSheet()">適用</button>
+    <button class="filter-apply" id="filter-apply-btn" onclick="applyFilterSheet()">適用</button>
   </div>
 </div>
 
@@ -504,10 +519,10 @@ a{color:var(--accent);text-decoration:none;}
     <span class="lightbox-counter" id="lb-counter"></span>
     <button class="lightbox-close" onclick="closeLightbox()">✕</button>
   </div>
-  <div class="lightbox-img-wrap" id="lb-img-wrap" style="position:relative;">
+  <div class="lightbox-img-wrap" id="lb-img-wrap">
     <button class="lightbox-nav prev" onclick="lbNav(-1)">‹</button>
-    <img id="lb-img" src="" alt="" style="max-width:100%;max-height:100%;object-fit:contain;">
-    <span class="lightbox-type" id="lb-type" style="position:absolute;bottom:8px;left:8px;top:auto;"></span>
+    <img id="lb-img" src="" alt="">
+    <span class="lightbox-type" id="lb-type"></span>
     <button class="lightbox-nav next" onclick="lbNav(1)">›</button>
   </div>
   <div class="lightbox-thumbs" id="lb-thumbs"></div>
@@ -531,15 +546,15 @@ a{color:var(--accent);text-decoration:none;}
 <nav class="bottom-nav">
   <button class="nav-btn active" id="nav-map" onclick="showNav('map')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 11l19-9-9 19-2-8-8-2z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <span>Map</span>
+    <span id="nav-map-label">Map</span>
   </button>
   <button class="nav-btn" id="nav-list" onclick="showNav('list')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-    <span>List</span>
+    <span id="nav-list-label">List</span>
   </button>
   <button class="nav-btn" id="nav-filter" onclick="showNav('filter')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-    <span>Filter</span>
+    <span id="nav-filter-label">Filter</span>
   </button>
   <button class="nav-btn" id="nav-account" onclick="showNav('account')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -557,9 +572,61 @@ a{color:var(--accent);text-decoration:none;}
 const API = 'https://jkk-monitor.duckdns.org/api';
 const IMG_BASE = API.replace(/\/api\/?$/, '');
 const LAYOUTS = ['1R','1K','1DK','1LDK','2K','2DK','2LDK','3K','3DK','3LDK','4LDK以上'];
+
 const KU=['千代田区','中央区','港区','新宿区','文京区','台東区','墨田区','江東区','品川区','目黒区','大田区','世田谷区','渋谷区','中野区','杉並区','豊島区','北区','荒川区','板橋区','練馬区','足立区','葛飾区','江戸川区'];
-const SI=['八王子市','立川市','武蔵野市','三鷹市','府中市','昭島市','調布市','町田市','小金井市','小平市','日野市','東村山市','国分寺市','国立市','西東京市','福生市','狛江市','東大和市','清瀬市','東久留米市','武蔵村山市','多摩市','稲城市','羽村市','あきる野市'];
-const ALL_WARDS = [...KU,...SI];
+const SI=['八王子市','立川市','武蔵野市','三鷹市','府中市','昭島市','調布市','町田市','小金井市','小平市','日野市','東村山市','国分寺市','国立市','西東京市','福生市','狛江市','東大和市','清瀬市','東久留米市','武蔵村山市','多摩市','稲城市','羽村市','あきる野市','日の出町','檜原村','奥多摩町','瑞穂町'];
+const YOKOHAMA=['横浜市鶴見区','横浜市神奈川区','横浜市西区','横浜市中区','横浜市南区','横浜市保土ケ谷区','横浜市磯子区','横浜市金沢区','横浜市港北区','横浜市戸塚区','横浜市港南区','横浜市旭区','横浜市緑区','横浜市瀬谷区','横浜市栄区','横浜市青葉区','横浜市都筑区'];
+const KAWASAKI=['川崎市川崎区','川崎市幸区','川崎市中原区','川崎市高津区','川崎市麻生区','川崎市多摩区','川崎市宮前区'];
+const SAGAMIHARA=['相模原市緑区','相模原市中央区','相模原市南区'];
+const ALL_WARDS=[...KU,...SI,...YOKOHAMA,...KAWASAKI,...SAGAMIHARA];
+
+const WARD_EN={
+  '千代田区':'Chiyoda','中央区':'Chuo','港区':'Minato','新宿区':'Shinjuku','文京区':'Bunkyo','台東区':'Taito','墨田区':'Sumida','江東区':'Koto','品川区':'Shinagawa','目黒区':'Meguro','大田区':'Ota','世田谷区':'Setagaya','渋谷区':'Shibuya','中野区':'Nakano','杉並区':'Suginami','豊島区':'Toshima','北区':'Kita','荒川区':'Arakawa','板橋区':'Itabashi','練馬区':'Nerima','足立区':'Adachi','葛飾区':'Katsushika','江戸川区':'Edogawa',
+  '八王子市':'Hachioji','立川市':'Tachikawa','武蔵野市':'Musashino','三鷹市':'Mitaka','府中市':'Fuchu','昭島市':'Akishima','調布市':'Chofu','町田市':'Machida','小金井市':'Koganei','小平市':'Kodaira','日野市':'Hino','東村山市':'Higashi-Murayama','国分寺市':'Kokubunji','国立市':'Kunitachi','西東京市':'Nishi-Tokyo','福生市':'Fussa','狛江市':'Komae','東大和市':'Higashi-Yamato','清瀬市':'Kiyose','東久留米市':'Higashi-Kurume','武蔵村山市':'Musashimurayama','多摩市':'Tama','稲城市':'Inagi','羽村市':'Hamura','あきる野市':'Akiruno','日の出町':'Hinode','檜原村':'Hinohara','奥多摩町':'Okutama','瑞穂町':'Mizuho',
+  '横浜市鶴見区':'Yokohama Tsurumi','横浜市神奈川区':'Yokohama Kanagawa','横浜市西区':'Yokohama Nishi','横浜市中区':'Yokohama Naka','横浜市南区':'Yokohama Minami','横浜市保土ケ谷区':'Yokohama Hodogaya','横浜市磯子区':'Yokohama Isogo','横浜市金沢区':'Yokohama Kanazawa','横浜市港北区':'Yokohama Kohoku','横浜市戸塚区':'Yokohama Totsuka','横浜市港南区':'Yokohama Konan','横浜市旭区':'Yokohama Asahi','横浜市緑区':'Yokohama Midori','横浜市瀬谷区':'Yokohama Seya','横浜市栄区':'Yokohama Sakae','横浜市青葉区':'Yokohama Aoba','横浜市都筑区':'Yokohama Tsuzuki',
+  '川崎市川崎区':'Kawasaki Kawasaki','川崎市幸区':'Kawasaki Saiwai','川崎市中原区':'Kawasaki Nakahara','川崎市高津区':'Kawasaki Takatsu','川崎市麻生区':'Kawasaki Asao','川崎市多摩区':'Kawasaki Tama','川崎市宮前区':'Kawasaki Miyamae',
+  '相模原市緑区':'Sagamihara Midori','相模原市中央区':'Sagamihara Chuo','相模原市南区':'Sagamihara Minami',
+};
+
+// ── i18n ───────────────────────────────────────────────────────────────────
+const STRINGS = {
+  view_all:     { ja:'すべて',      en:'All',       uk:'Всі' },
+  view_saved:   { ja:'★',          en:'★',          uk:'★' },
+  view_filtered:{ ja:'絞り込み',    en:'Filter',    uk:'Фільтр' },
+  list_title:   { ja:'物件一覧',    en:'Listings',  uk:'Об\'єкти' },
+  login:        { ja:'ログイン',    en:'Login',     uk:'Увійти' },
+  no_photos:    { ja:'写真なし',    en:'No photos', uk:'Немає фото' },
+  fac_empty:    { ja:'周辺施設なし', en:'No nearby facilities', uk:'Немає об\'єктів поруч' },
+  tab_fac:      { ja:'施設',        en:'Nearby',    uk:'Поруч' },
+  tab_fp:       { ja:'間取り',      en:'Floor Plan',uk:'Планування' },
+  tab_photos:   { ja:'写真',        en:'Photos',    uk:'Фото' },
+  open_listing: { ja:'物件ページを開く →', en:'Open listing →', uk:'Відкрити →' },
+  filter_title: { ja:'フィルター',  en:'Filter',    uk:'Фільтр' },
+  source_label: { ja:'データソース', en:'Source',    uk:'Джерело' },
+  rent_label:   { ja:'家賃',        en:'Rent',      uk:'Оренда' },
+  layout_label: { ja:'間取り',      en:'Layout',    uk:'Планування' },
+  area_label:   { ja:'面積 / 徒歩', en:'Area / Walk',uk:'Площа / Хода' },
+  ward_label:   { ja:'エリア',      en:'Area',      uk:'Район' },
+  apply:        { ja:'適用',        en:'Apply',     uk:'Застосувати' },
+  nav_map:      { ja:'マップ',      en:'Map',       uk:'Карта' },
+  nav_list:     { ja:'リスト',      en:'List',      uk:'Список' },
+  nav_filter:   { ja:'フィルター',  en:'Filter',    uk:'Фільтр' },
+  ai_title:     { ja:'AIアシスタント', en:'AI Assistant', uk:'AI Асистент' },
+};
+
+function t(k) {
+  const s = STRINGS[k];
+  if (!s) return k;
+  return s[_lang] !== undefined ? s[_lang] : s.ja;
+}
+
+function wardLabel(ja) {
+  if (_lang === 'en' || _lang === 'uk') {
+    const en = WARD_EN[ja] || ja;
+    return en.replace(/^(Yokohama|Kawasaki|Sagamihara) /, '');
+  }
+  return ja.replace(/^(横浜市|川崎市|相模原市)/, '');
+}
 
 // ── State ──────────────────────────────────────────────────────────────────
 let map, _allListings=[], _markers={}, _filteredListings=[];
@@ -570,6 +637,7 @@ let _filterLayouts=new Set(LAYOUTS);
 let _filterWards=new Set(ALL_WARDS);
 let _chatSessionId=localStorage.getItem('m_chatSessionId')||null;
 let _chatBusy=false;
+let _chatPendingIntent=null;
 let AUTH={token:null,email:null};
 let _lbImages=[], _lbIdx=0;
 
@@ -583,52 +651,96 @@ async function initAuth(){
   await loadSaved();
 }
 function updateAuthUI(){
-  const l=document.getElementById('nav-acct-label');
-  if(AUTH.token&&AUTH.email){l.textContent=AUTH.email.split('@')[0];}else{l.textContent=_lang==='ja'?'ログイン':'Login';}
+  const el=document.getElementById('nav-acct-label');
+  if(AUTH.token&&AUTH.email){el.textContent=AUTH.email.split('@')[0];}
+  else{el.textContent=t('login');}
 }
 
 // ── Language ───────────────────────────────────────────────────────────────
-const I18N={
-  ja:{all:'すべて',saved:'保存済み',filter:'絞り込み',list_title:'物件一覧',no_photos:'写真なし',fac_empty:'周辺施設なし',login:'ログイン'},
-  en:{all:'All',saved:'Saved',filter:'Filter',list_title:'Listings',no_photos:'No photos',fac_empty:'No nearby facilities',login:'Login'},
-};
-function t(k){return (I18N[_lang]||I18N.ja)[k]||k;}
-function toggleLang(){
-  _lang=_lang==='ja'?'en':'ja';
-  localStorage.setItem('jkktrackr_lang',_lang);
-  document.getElementById('lang-btn').textContent=_lang==='ja'?'EN':'JP';
+async function setLang(lang) {
+  if (_lang === lang) return;
+  _lang = lang;
+  localStorage.setItem('jkktrackr_lang', _lang);
+  applyLang();
+}
+
+function applyLang() {
+  const sel = document.getElementById('lang-select');
+  if (sel) sel.value = _lang;
+
+  // View chips
+  document.getElementById('vc-all').textContent      = t('view_all');
+  document.getElementById('vc-starred').textContent  = t('view_saved');
+  document.getElementById('vc-filtered').textContent = t('view_filtered');
+
+  // Nav labels
+  document.getElementById('nav-map-label').textContent    = t('nav_map');
+  document.getElementById('nav-list-label').textContent   = t('nav_list');
+  document.getElementById('nav-filter-label').textContent = t('nav_filter');
+
+  // Sheet tabs
+  document.getElementById('stab-fac').textContent    = t('tab_fac');
+  document.getElementById('stab-fp').textContent     = t('tab_fp');
+  document.getElementById('stab-photos').textContent = t('tab_photos');
+
+  // Overlay / sheet titles
+  document.getElementById('list-title').textContent         = t('list_title');
+  document.getElementById('chat-title').textContent         = t('ai_title');
+  document.getElementById('filter-sheet-title').textContent = t('filter_title');
+  document.getElementById('fl-source').textContent          = t('source_label');
+  document.getElementById('fl-rent').textContent            = t('rent_label');
+  document.getElementById('fl-layout').textContent          = t('layout_label');
+  document.getElementById('fl-area').textContent            = t('area_label');
+  document.getElementById('fl-ward').textContent            = t('ward_label');
+  document.getElementById('filter-apply-btn').textContent   = t('apply');
+
+  // Open listing link
+  const lnk = document.getElementById('ps-link');
+  if (lnk && lnk.href !== '#') lnk.textContent = t('open_listing');
+
   updateAuthUI();
+  buildFilterChips();
   renderList();
 }
 
 // ── Map ────────────────────────────────────────────────────────────────────
 function initMap(){
   map=new google.maps.Map(document.getElementById('map'),{
-    center:{lat:35.660,lng:139.745},zoom:11,
+    center:{lat:35.680,lng:139.750},zoom:11,
     gestureHandling:'greedy',
     styles:darkMapStyle(),
     mapTypeControl:false,streetViewControl:false,
     fullscreenControl:false,zoomControl:false,
   });
+  applyLang();
   loadListings();
   initAuth();
   buildFilterChips();
 }
 
-function markerIcon(source,selected,saved){
-  const isUR=source==='ur';
-  const fill=selected?(isUR?'#1d4ed8':'#b91c1c'):(isUR?'#3a86ff':'#dc2626');
-  const border=selected?'rgba(255,255,255,0.95)':'rgba(255,255,255,0.7)';
-  const w=selected?32:24,h=Math.round(w*1.45),cx=w/2,cr=w*0.28;
-  const inner=saved?'#FCD34D':'rgba(255,255,255,0.88)';
-  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-    <path d="M${cx} 1 C${cx-w*.42} 1 1 ${w*.38} 1 ${w*.5} C1 ${w*.92} ${cx} ${h} ${cx} ${h} C${cx} ${h} ${w-1} ${w*.92} ${w-1} ${w*.5} C${w-1} ${w*.38} ${cx+w*.42} 1 ${cx} 1 Z" fill="${fill}" stroke="${border}" stroke-width="1.5"/>
-    <circle cx="${cx}" cy="${w*.5}" r="${cr}" fill="${inner}"/></svg>`;
-  return{url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg),scaledSize:new google.maps.Size(w,h),anchor:new google.maps.Point(cx,h)};
+function markerIcon(source, selected, saved){
+  const isUR = source==='ur';
+  const fill = selected ? (isUR?'#1d4ed8':'#b91c1c') : (isUR?'#3a86ff':'#dc2626');
+  const stroke = selected ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.7)';
+  const w = selected?32:26, h = Math.round(w*1.45), cx = w/2, cr = w*0.28;
+  const inner = saved ? '#FCD34D' : 'rgba(255,255,255,0.88)';
+  const py = (w*0.5).toFixed(1), ph = h.toFixed(0);
+  const c1x = (cx - w*0.42).toFixed(1), c2x = (cx + w*0.42).toFixed(1);
+  const w38 = (w*0.38).toFixed(1), w92 = (w*0.92).toFixed(1);
+  const crStr = cr.toFixed(1);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${ph}" viewBox="0 0 ${w} ${ph}"><path d="M${cx} 1 C${c1x} 1 1 ${w38} 1 ${py} C1 ${w92} ${cx} ${ph} ${cx} ${ph} C${cx} ${ph} ${w-1} ${w92} ${w-1} ${py} C${w-1} ${w38} ${c2x} 1 ${cx} 1 Z" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/><circle cx="${cx}" cy="${py}" r="${crStr}" fill="${inner}"/></svg>`;
+  let url;
+  try { url = 'data:image/svg+xml;base64,' + btoa(svg); }
+  catch(e) { url = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg); }
+  return {
+    url,
+    scaledSize: new google.maps.Size(w, parseInt(ph)),
+    anchor: new google.maps.Point(cx, parseInt(ph)),
+  };
 }
 
 function applyMapFilters(){
-  if(!map)return;
+  if(!map) return;
   const minRent=parseInt(document.getElementById('f-min-rent').value)||0;
   const maxRent=parseInt(document.getElementById('f-max-rent').value)||0;
   const minSize=parseFloat(document.getElementById('f-min-size').value)||0;
@@ -636,29 +748,33 @@ function applyMapFilters(){
   Object.values(_markers).forEach(e=>e.marker.setMap(null));
   _markers={};_filteredListings=[];
   _allListings.forEach(l=>{
-    if(l.disappeared_at)return;
-    if(_viewMode==='starred'&&!_savedListings.has(l.id))return;
+    if(l.disappeared_at) return;
+    if(_viewMode==='starred' && !_savedListings.has(l.id)) return;
     if(_viewMode==='filtered'){
-      if(!_filterSources.has(l.source))return;
-      if(!_filterWards.has(l.ward))return;
-      if(!_filterLayouts.has(l.layout))return;
-      if(minRent>0&&l.rent<minRent)return;
-      if(maxRent>0&&l.rent>maxRent)return;
-      if(minSize>0&&l.size_m2<minSize)return;
-      if(maxWalk>0&&(l.walk_min==null||l.walk_min>maxWalk))return;
+      if(!_filterSources.has(l.source)) return;
+      if(!_filterWards.has(l.ward)) return;
+      if(!_filterLayouts.has(l.layout)) return;
+      if(minRent>0 && l.rent<minRent) return;
+      if(maxRent>0 && l.rent>maxRent) return;
+      if(minSize>0 && l.size_m2<minSize) return;
+      if(maxWalk>0 && (l.walk_min==null||l.walk_min>maxWalk)) return;
     }
     _filteredListings.push(l);
-    if(!l.lat||!l.lng)return;
-    const marker=new google.maps.Marker({
-      position:{lat:l.lat,lng:l.lng},map,
-      icon:markerIcon(l.source,false,_savedListings.has(l.id)),
-      title:l.name,
-    });
-    marker.addListener('click',()=>selectListing(l.id));
-    _markers[l.id]={marker,source:l.source,listing:l};
+    if(!l.lat||!l.lng) return;
+    try {
+      const marker=new google.maps.Marker({
+        position:{lat:l.lat,lng:l.lng},map,
+        icon:markerIcon(l.source,false,_savedListings.has(l.id)),
+        title:l.name,
+        optimized:false,
+      });
+      marker.addListener('click',()=>selectListing(l.id));
+      _markers[l.id]={marker,source:l.source,listing:l};
+    } catch(e) { console.warn('Marker error', l.id, e); }
   });
   const pill=document.getElementById('count-pill');
-  pill.textContent=_filteredListings.length+' / '+_allListings.filter(l=>!l.disappeared_at).length;
+  const total=_allListings.filter(l=>!l.disappeared_at).length;
+  pill.textContent=_filteredListings.length+' / '+total;
 }
 
 function setViewMode(m){
@@ -673,18 +789,19 @@ function setViewMode(m){
 async function loadListings(){
   try{
     const r=await fetch(`${API}/listings`,{headers:authHeaders()});
+    if(!r.ok) throw new Error('HTTP '+r.status);
     const d=await r.json();
     _allListings=d.listings||[];
     applyMapFilters();
     renderList();
-  }catch(e){console.error(e);}
+  }catch(e){ console.error('loadListings error',e); }
 }
 
 async function loadSaved(){
-  if(!AUTH.token)return;
+  if(!AUTH.token) return;
   try{
     const r=await fetch(`${API}/user/saved`,{headers:authHeaders()});
-    if(!r.ok)return;
+    if(!r.ok) return;
     const d=await r.json();
     _savedListings=new Set((d.saved||[]).map(s=>s.listing_id));
     Object.entries(_markers).forEach(([id,e])=>
@@ -714,7 +831,7 @@ function selectListing(id){
 
 function openPropSheet(id){
   const l=_allListings.find(x=>x.id===id);
-  if(!l)return;
+  if(!l) return;
   const rent=l.rent?'¥'+Number(l.rent).toLocaleString():'—';
   document.getElementById('ps-name').textContent=l.name||'—';
   document.getElementById('ps-src').innerHTML=`<span class="prop-sheet-src ${l.source}">${l.source==='ur'?'UR':'公社'}</span>`;
@@ -724,8 +841,8 @@ function openPropSheet(id){
   const starBtn=document.getElementById('ps-star');
   starBtn.classList.toggle('saved',_savedListings.has(id));
   const link=document.getElementById('ps-link');
-  if(l.url){link.href=l.url;link.style.display='';}else{link.style.display='none';}
-  // Thumbnail
+  if(l.url){link.href=l.url;link.textContent=t('open_listing');link.style.display='';}
+  else{link.style.display='none';}
   const wrap=document.getElementById('ps-thumb-wrap');
   if(l.thumbnail_url){
     const src=toAbsUrl(l.thumbnail_url);
@@ -733,10 +850,8 @@ function openPropSheet(id){
   }else{
     wrap.innerHTML=`<div class="prop-thumb-none">🏠</div>`;
   }
-  // Reset tabs
   switchSheet('fac');
   loadSheetFacilities(id);
-  // Clear photo grids
   const fpGrid=document.getElementById('m-floorplan-grid');
   const pGrid=document.getElementById('m-photos-grid');
   fpGrid.innerHTML='';pGrid.innerHTML='';
@@ -749,8 +864,8 @@ function openSheetTab(tab){switchSheet(tab);}
 function switchSheet(tab){
   document.querySelectorAll('.sheet-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   document.querySelectorAll('.sheet-tab-pane').forEach(p=>p.classList.toggle('active',p.id==='stp-'+tab));
-  if(tab==='fp'&&_selectedId)loadSheetPhotos(_selectedId,'m-floorplan-grid',['floor_plan']);
-  if(tab==='photos'&&_selectedId)loadSheetPhotos(_selectedId,'m-photos-grid',['exterior','interior']);
+  if(tab==='fp'&&_selectedId) loadSheetPhotos(_selectedId,'m-floorplan-grid',['floor_plan']);
+  if(tab==='photos'&&_selectedId) loadSheetPhotos(_selectedId,'m-photos-grid',['exterior','interior']);
 }
 
 async function loadSheetFacilities(id){
@@ -771,7 +886,7 @@ async function loadSheetFacilities(id){
 
 async function loadSheetPhotos(id,gridId,types){
   const grid=document.getElementById(gridId);
-  if(!grid||grid.dataset.loaded===id)return;
+  if(!grid||grid.dataset.loaded===id) return;
   grid.innerHTML=`<div style="color:var(--muted);font-size:12px;">…</div>`;
   try{
     const r=await fetch(`${API}/listings/${encodeURIComponent(id)}/images`,{headers:authHeaders()});
@@ -809,12 +924,12 @@ function lbRender(){
 
 // ── Save / Toggle ──────────────────────────────────────────────────────────
 async function toggleSave(id){
-  if(!id)return;
+  if(!id) return;
   if(!AUTH.token){openAuthModal();return;}
   const was=_savedListings.has(id);
   if(was)_savedListings.delete(id);else _savedListings.add(id);
   const starBtn=document.getElementById('ps-star');
-  if(starBtn&&_selectedId===id)starBtn.classList.toggle('saved',!was);
+  if(starBtn&&_selectedId===id) starBtn.classList.toggle('saved',!was);
   if(_markers[id]){
     const e=_markers[id];
     e.marker.setIcon(markerIcon(e.source,id===_selectedId,!was));
@@ -828,35 +943,39 @@ async function toggleSave(id){
 // ── List view ──────────────────────────────────────────────────────────────
 function renderList(){
   const el=document.getElementById('listing-list');
+  if(!el) return;
   const listings=_filteredListings.length?_filteredListings:_allListings.filter(l=>!l.disappeared_at);
-  document.getElementById('list-title').textContent=(listings.length)+' 件';
+  document.getElementById('list-title').textContent=t('list_title')+' ('+listings.length+')';
   el.innerHTML=listings.map(l=>{
-    const rent=l.rent?'¥'+Number(l.rent).toLocaleString():'—';
-    const src=toAbsUrl(l.thumbnail_url);
-    const thumb=src?`<img src="${escHtml(src)}" onerror="this.style.display='none'">`:`<div class="m-card-thumb-none">🏠</div>`;
-    const saved=_savedListings.has(l.id);
-    return `<div class="m-listing-card" onclick="selectListing('${escHtml(l.id)}')">
-      <div class="m-card-thumb">${thumb}</div>
-      <div class="m-card-body">
-        <div class="m-card-name">${escHtml(l.name||'')}</div>
-        <div class="m-card-rent">${rent}</div>
-        <div class="m-card-meta">${escHtml([l.layout,l.size_m2?l.size_m2+'m²':null].filter(Boolean).join(' · '))}</div>
-        ${l.nearest_station?`<div class="m-card-meta">🚉 ${escHtml(l.nearest_station)}${l.walk_min?' 徒歩'+l.walk_min+'分':''}</div>`:''}
-        <span class="m-card-src ${l.source}">${l.source==='ur'?'UR':'公社'}</span>
-      </div>
-      <div class="m-card-star${saved?' saved':''}" onclick="event.stopPropagation();toggleSave('${escHtml(l.id)}')">★</div>
-    </div>`;
+    try {
+      const rent=l.rent?'¥'+Number(l.rent).toLocaleString():'—';
+      const src=toAbsUrl(l.thumbnail_url);
+      const thumb=src?`<img src="${escHtml(src)}" loading="lazy" onerror="this.style.display='none'">`:`<div class="m-card-thumb-none">🏠</div>`;
+      const saved=_savedListings.has(l.id);
+      const ward=wardLabel(l.ward||'');
+      return `<div class="m-listing-card" onclick="selectListing('${escHtml(l.id)}')">
+        <div class="m-card-thumb">${thumb}</div>
+        <div class="m-card-body">
+          <div class="m-card-name">${escHtml(l.name||'')}</div>
+          <div class="m-card-rent">${rent}</div>
+          <div class="m-card-meta">${escHtml([l.layout,l.size_m2?l.size_m2+'m²':null,ward].filter(Boolean).join(' · '))}</div>
+          ${l.nearest_station?`<div class="m-card-meta">🚉 ${escHtml(l.nearest_station)}${l.walk_min?' '+l.walk_min+'min':''}</div>`:''}
+          <span class="m-card-src ${l.source}">${l.source==='ur'?'UR':'公社'}</span>
+        </div>
+        <div class="m-card-star${saved?' saved':''}" onclick="event.stopPropagation();toggleSave('${escHtml(l.id)}')">★</div>
+      </div>`;
+    } catch(e) { return ''; }
   }).join('');
 }
 
 // ── Filter sheet ───────────────────────────────────────────────────────────
 function buildFilterChips(){
   const sc=document.getElementById('f-source-chips');
-  sc.innerHTML=['jkk','ur'].map(s=>`<button class="fchip${_filterSources.has(s)?' active':''}" onclick="toggleFilterChip(this,'source','${s}')">${s==='ur'?'UR':'公社'}</button>`).join('');
+  if(sc) sc.innerHTML=['jkk','ur'].map(s=>`<button class="fchip${_filterSources.has(s)?' active':''}" onclick="toggleFilterChip(this,'source','${s}')">${s==='ur'?'UR':'公社'}</button>`).join('');
   const lc=document.getElementById('f-layout-chips');
-  lc.innerHTML=LAYOUTS.map(l=>`<button class="fchip${_filterLayouts.has(l)?' active':''}" onclick="toggleFilterChip(this,'layout','${escHtml(l)}')">${escHtml(l)}</button>`).join('');
+  if(lc) lc.innerHTML=LAYOUTS.map(l=>`<button class="fchip${_filterLayouts.has(l)?' active':''}" onclick="toggleFilterChip(this,'layout','${escHtml(l)}')">${escHtml(l)}</button>`).join('');
   const wc=document.getElementById('f-ward-chips');
-  wc.innerHTML=ALL_WARDS.map(w=>`<button class="fchip${_filterWards.has(w)?' active':''}" onclick="toggleFilterChip(this,'ward','${escHtml(w)}')">${escHtml(w.replace(/^(横浜市|川崎市|相模原市)/,''))}</button>`).join('');
+  if(wc) wc.innerHTML=ALL_WARDS.map(w=>`<button class="fchip${_filterWards.has(w)?' active':''}" onclick="toggleFilterChip(this,'ward','${escHtml(w)}')">${escHtml(wardLabel(w))}</button>`).join('');
 }
 function toggleFilterChip(btn,type,val){
   btn.classList.toggle('active');
@@ -864,7 +983,7 @@ function toggleFilterChip(btn,type,val){
   set.has(val)?set.delete(val):set.add(val);
 }
 function applyFilterSheet(){
-  if(_viewMode!=='filtered')setViewMode('filtered');
+  if(_viewMode!=='filtered') setViewMode('filtered');
   else applyMapFilters();
   renderList();
   closeSheet('filter-sheet');
@@ -873,6 +992,18 @@ function applyFilterSheet(){
 // ── Chat ───────────────────────────────────────────────────────────────────
 function chatAutoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,120)+'px';}
 function chatKeydown(e){if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();chatSend();}}
+
+function chatCardSelect(id){
+  selectListing(id);
+  if(_chatPendingIntent){
+    const intent=_chatPendingIntent;
+    _chatPendingIntent=null;
+    setTimeout(()=>{
+      const inp=document.getElementById('chat-input');
+      if(inp){inp.value=intent;chatSend();}
+    },150);
+  }
+}
 
 function _chatAppend(role,text,ids){
   const thread=document.getElementById('chat-thread');
@@ -889,11 +1020,11 @@ function _chatAppend(role,text,ids){
     row.className='chat-listings-row';
     ids.forEach(id=>{
       const l=_allListings.find(x=>x.id===id);
-      if(!l)return;
+      if(!l) return;
       const src=toAbsUrl(l.thumbnail_url);
       const pill=document.createElement('div');
       pill.className='chat-card-pill';
-      pill.onclick=()=>selectListing(id);
+      pill.onclick=()=>chatCardSelect(id);
       pill.innerHTML=`${src?`<img src="${escHtml(src)}" onerror="this.style.display='none'">`:'<div style="height:68px;background:var(--surface2);display:flex;align-items:center;justify-content:center;">🏠</div>'}
         <div class="chat-card-pill-info">
           <div class="chat-card-pill-name">${escHtml(l.name||'')}</div>
@@ -901,7 +1032,7 @@ function _chatAppend(role,text,ids){
         </div>`;
       row.appendChild(pill);
     });
-    if(row.children.length)wrap.appendChild(row);
+    if(row.children.length) wrap.appendChild(row);
   }
   thread.appendChild(wrap);
   thread.scrollTop=thread.scrollHeight;
@@ -919,7 +1050,7 @@ function _chatRemoveTyping(){document.getElementById('chat-typing')?.remove();}
 async function chatSend(){
   const input=document.getElementById('chat-input');
   const msg=(input.value||'').trim();
-  if(!msg||_chatBusy)return;
+  if(!msg||_chatBusy) return;
   input.value='';chatAutoResize(input);
   _chatBusy=true;
   _chatAppend('user',msg,[]);
@@ -931,44 +1062,69 @@ async function chatSend(){
     });
     const d=await r.json();
     _chatRemoveTyping();
-    if(!r.ok)throw new Error(d.error||r.status);
+    if(!r.ok) throw new Error(d.error||r.status);
     _chatSessionId=d.session_id;
     localStorage.setItem('m_chatSessionId',_chatSessionId);
     _chatAppend('assistant',d.response||'',d.listing_ids||[]);
     (d.actions||[]).forEach(chatExecAction);
-  }catch(e){_chatRemoveTyping();_chatAppend('assistant','エラー: '+e.message,[]);}
+  }catch(e){_chatRemoveTyping();_chatAppend('assistant','Error: '+e.message,[]);}
   finally{_chatBusy=false;}
 }
 
 function chatExecAction(action){
   if(action.type==='show_images'){
     const imgs=(action.images||[]).map(i=>({...i,url:toAbsUrl(i.url)}));
-    if(imgs.length)openLightbox(imgs,0);
-  }else if(action.type==='save_listings'){
+    if(imgs.length) openLightbox(imgs,0);
+  } else if(action.type==='await_card_pick'){
+    _chatPendingIntent=action.pending_message||null;
+  } else if(action.type==='select_listing'){
+    if(action.listing_id) selectListing(action.listing_id);
+  } else if(action.type==='center_map'){
+    if(map && action.lat!=null && action.lng!=null){
+      map.panTo({lat:action.lat,lng:action.lng});
+      map.setZoom(action.zoom||15);
+    }
+  } else if(action.type==='get_commute_client'){
+    // Transit commute not supported in mobile (no DirectionsRenderer setup)
+    _chatAppend('assistant','Transit commute is only available on the desktop version.',[]);
+  } else if(action.type==='show_driving_route'){
+    if(map && action.lat!=null && action.lng!=null){
+      map.panTo({lat:action.lat,lng:action.lng});
+      map.setZoom(14);
+    }
+  } else if(action.type==='set_map_filter'){
+    if(action.min_rent!=null) document.getElementById('f-min-rent').value=action.min_rent||'';
+    if(action.max_rent!=null) document.getElementById('f-max-rent').value=action.max_rent||'';
+    if(action.min_size!=null) document.getElementById('f-min-size').value=action.min_size||'';
+    if(action.max_walk!=null) document.getElementById('f-max-walk').value=action.max_walk||'';
+    if(action.source==='jkk') _filterSources=new Set(['jkk']);
+    else if(action.source==='ur') _filterSources=new Set(['ur']);
+    else if(action.source==='both') _filterSources=new Set(['jkk','ur']);
+    buildFilterChips();
+    applyMapFilters();
+  } else if(action.type==='save_listings'){
     (action.listing_ids||[]).forEach(id=>_savedListings.add(id));
     Object.entries(_markers).forEach(([id,e])=>e.marker.setIcon(markerIcon(e.source,id===_selectedId,_savedListings.has(id))));
     renderList();
-    if(AUTH.token)loadSaved();
-  }else if(action.type==='remove_listings'){
+    if(AUTH.token) loadSaved();
+  } else if(action.type==='remove_listings'){
     (action.listing_ids||[]).forEach(id=>_savedListings.delete(id));
     Object.entries(_markers).forEach(([id,e])=>e.marker.setIcon(markerIcon(e.source,id===_selectedId,_savedListings.has(id))));
     renderList();
-  }else if(action.type==='select_listing'){
-    if(action.listing_id)selectListing(action.listing_id);
   }
 }
 
 // ── Navigation ─────────────────────────────────────────────────────────────
 function showNav(tab){
-  ['map','list','filter','account','chat'].forEach(t=>{
-    document.getElementById('nav-'+t)?.classList.toggle('active',t===tab);
+  ['map','list','filter','account','chat'].forEach(n=>{
+    document.getElementById('nav-'+n)?.classList.toggle('active',n===tab);
   });
   if(tab==='list'){openOverlay('list-overlay');renderList();}
   else if(tab==='chat'){openOverlay('chat-overlay');setTimeout(()=>document.getElementById('chat-input')?.focus(),300);}
   else if(tab==='filter'){openSheet('filter-sheet');}
   else if(tab==='account'){
-    if(AUTH.token)alert(AUTH.email||'');else openAuthModal();
-  }else{
+    if(AUTH.token) alert(AUTH.email||''); else openAuthModal();
+  } else {
     closeOverlay('list-overlay');closeOverlay('chat-overlay');closeSheet('filter-sheet');
   }
 }
@@ -978,17 +1134,11 @@ function closeSheet(id){document.getElementById(id)?.classList.remove('open');}
 function openOverlay(id){document.getElementById(id)?.classList.add('open');}
 function closeOverlay(id){
   document.getElementById(id)?.classList.remove('open');
-  ['nav-map','nav-list','nav-filter','nav-account','nav-chat'].forEach(n=>{
-    const el=document.getElementById(n);
-    if(el)el.classList.remove('active');
+  ['nav-map','nav-list','nav-filter','nav-account'].forEach(n=>{
+    document.getElementById(n)?.classList.remove('active');
   });
   document.getElementById('nav-map')?.classList.add('active');
 }
-
-// Close prop sheet on map tap
-document.getElementById('map').addEventListener('click',()=>{
-  // Only close if tapping on empty map area (marker click is handled separately)
-});
 
 // ── Auth ───────────────────────────────────────────────────────────────────
 let _authMode='login';
@@ -1034,16 +1184,16 @@ function darkMapStyle(){
   const sheet=document.getElementById('prop-sheet');
   let startY=0,isDragging=false;
   sheet.addEventListener('touchstart',e=>{
-    if(e.target.closest('.sheet-tab-content'))return;
+    if(e.target.closest('.sheet-tab-content')) return;
     startY=e.touches[0].clientY;isDragging=true;
   },{passive:true});
   sheet.addEventListener('touchmove',e=>{
-    if(!isDragging)return;
+    if(!isDragging) return;
     const dy=e.touches[0].clientY-startY;
-    if(dy>0)sheet.style.transform=`translateY(${dy}px)`;
+    if(dy>0) sheet.style.transform=`translateY(${dy}px)`;
   },{passive:true});
   sheet.addEventListener('touchend',e=>{
-    if(!isDragging)return;
+    if(!isDragging) return;
     isDragging=false;
     const dy=e.changedTouches[0].clientY-startY;
     sheet.style.transform='';
