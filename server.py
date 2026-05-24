@@ -2243,7 +2243,7 @@ def chat_send():
     open_listing = None
     if open_listing_id:
         row = con.execute(
-            "SELECT id, name, ward, layout, rent, size_m2 FROM listings WHERE id=? AND disappeared_at IS NULL",
+            "SELECT id, name, ward, layout, rent, size_m2 FROM listings WHERE id=?",
             (open_listing_id,)
         ).fetchone()
         if row:
