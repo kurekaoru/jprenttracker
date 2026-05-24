@@ -1113,6 +1113,15 @@
                     <button class="pinfo-chip" data-val="family" onclick="pinfoToggle('household','family',false)">家族（子あり）</button>
                     <button class="pinfo-chip" data-val="other" onclick="pinfoToggle('household','other',false)">その他</button>
                   </div>
+                  <div id="pinfo-children-row" style="display:none;margin-top:8px;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <span style="font-size:11px;color:var(--muted);">子供の人数</span>
+                    <div class="pinfo-chips" id="pinfo-num_children">
+                      <button class="pinfo-chip" data-val="1" onclick="pinfoToggle('num_children','1',false)">1人</button>
+                      <button class="pinfo-chip" data-val="2" onclick="pinfoToggle('num_children','2',false)">2人</button>
+                      <button class="pinfo-chip" data-val="3" onclick="pinfoToggle('num_children','3',false)">3人</button>
+                      <button class="pinfo-chip" data-val="4" onclick="pinfoToggle('num_children','4',false)">4人以上</button>
+                    </div>
+                  </div>
                 </div>
                 <div class="pinfo-row">
                   <div class="pinfo-label">年代</div>
@@ -1252,7 +1261,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 22:05 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 22:14 JST</p>
       </div>
 
 
@@ -1347,6 +1356,15 @@
           <button class="onboard-chip" data-field="household" data-val="couple" onclick="onboardPick(this)">二人暮らし</button>
           <button class="onboard-chip" data-field="household" data-val="family" onclick="onboardPick(this)">家族（子あり）</button>
           <button class="onboard-chip" data-field="household" data-val="other" onclick="onboardPick(this)">その他</button>
+        </div>
+        <div id="onboard-children-row" style="display:none;margin-top:18px;align-items:center;gap:10px;justify-content:center;">
+          <span style="font-size:13px;color:var(--muted);">子供の人数</span>
+          <div style="display:flex;gap:6px;">
+            <button class="onboard-chip" data-field="num_children" data-val="1" onclick="onboardPick(this)">1人</button>
+            <button class="onboard-chip" data-field="num_children" data-val="2" onclick="onboardPick(this)">2人</button>
+            <button class="onboard-chip" data-field="num_children" data-val="3" onclick="onboardPick(this)">3人</button>
+            <button class="onboard-chip" data-field="num_children" data-val="4" onclick="onboardPick(this)">4人以上</button>
+          </div>
         </div>
       </div>
 
@@ -4083,12 +4101,19 @@ function onboardPick(btn) {
     else          { cur.push(val);      btn.classList.add('selected'); }
     _onboardData[field] = cur;
   } else {
-    // deselect siblings
-    btn.closest('.onboard-choices,.onboard-ward-grid')
+    btn.closest('.onboard-choices,.onboard-ward-grid,.onboard-slide')
        .querySelectorAll(`.onboard-chip[data-field="${field}"]`)
        .forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
     _onboardData[field] = val;
+  }
+  // Show children count row when 家族 is selected
+  if (field === 'household') {
+    const row = document.getElementById('onboard-children-row');
+    if (row) {
+      row.style.display = (val === 'family') ? 'flex' : 'none';
+      if (val !== 'family') delete _onboardData.num_children;
+    }
   }
 }
 
@@ -4145,14 +4170,18 @@ function renderPinfo() {
   if (nameEl) nameEl.value = AUTH.user.display_name || '';
 
   // Single-select chip fields
-  ['purpose','household','age_range','move_in_timing'].forEach(field => {
+  ['purpose','household','age_range','move_in_timing','num_children'].forEach(field => {
     const container = document.getElementById(`pinfo-${field}`);
     if (!container) return;
-    const val = _pinfoData[field] || '';
+    const val = _pinfoData[field] != null ? String(_pinfoData[field]) : '';
     container.querySelectorAll('.pinfo-chip').forEach(btn => {
       btn.classList.toggle('selected', btn.dataset.val === val);
     });
   });
+
+  // Show/hide children row
+  const childrenRow = document.getElementById('pinfo-children-row');
+  if (childrenRow) childrenRow.style.display = _pinfoData.household === 'family' ? 'flex' : 'none';
 
   // Budget
   const budgetContainer = document.getElementById('pinfo-budget');
@@ -4173,7 +4202,8 @@ function renderPinfo() {
 function pinfoToggle(field, val, multi) {
   if (!multi) {
     const prev = _pinfoData[field];
-    _pinfoData[field] = (prev === val) ? '' : val;
+    _pinfoData[field] = (prev === val || prev === Number(val)) ? '' : val;
+    if (field === 'household' && val !== 'family') delete _pinfoData.num_children;
   } else {
     const arr = _pinfoData[field] || [];
     const idx = arr.indexOf(val);

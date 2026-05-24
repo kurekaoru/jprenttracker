@@ -744,7 +744,7 @@ def set_user_profile():
     if "personal_info" in data and isinstance(data["personal_info"], dict):
         allowed = {"purpose","household","age_range","income_bracket","budget_min","budget_max",
                    "preferred_wards","preferred_layouts","move_in_timing","pets","smoking",
-                   "notes","onboarding_done","display_name"}
+                   "notes","onboarding_done","display_name","num_children"}
         info = {k: v for k, v in data["personal_info"].items() if k in allowed}
         updates["personal_info"] = json.dumps(info)
         # sync display_name to users table if provided
