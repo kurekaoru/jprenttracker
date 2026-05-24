@@ -588,14 +588,15 @@
     border-bottom-left-radius: 4px;
   }
   .chat-listings {
-    display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 2px;
-    scrollbar-width: thin;
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 4px 0 2px;
   }
   .chat-listing-card {
-    flex-shrink: 0; width: 150px; background: var(--surface);
-    border: 1px solid var(--border); border-radius: 8px;
-    overflow: hidden; cursor: pointer; transition: border-color 0.15s;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    overflow: hidden; cursor: pointer; transition: border-color 0.15s; min-width: 0;
   }
+  .prop-photos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding-top: 4px; }
+  .prop-photos-grid img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 5px; cursor: pointer; background: var(--surface2); display: block; }
+  .prop-photos-grid img[data-type="floor_plan"] { grid-column: 1 / -1; aspect-ratio: 16/9; object-fit: contain; }
   .chat-listing-card:hover { border-color: rgba(74,222,128,0.5); }
   .chat-listing-card img { width: 100%; height: 80px; object-fit: cover; display: block; background: var(--surface2); }
   .chat-listing-card-no-img { width: 100%; height: 80px; background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 22px; }
@@ -1103,7 +1104,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 19:27 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 19:35 JST</p>
       </div>
 
 
@@ -1498,6 +1499,8 @@ const STRINGS = {
   saved_listing:        { ja:'保存済み',                 en:'Saved' },
   tab_route:            { ja:'経路',                    en:'Route' },
   tab_fac:              { ja:'施設',                    en:'Nearby' },
+  tab_photos:           { ja:'写真',                    en:'Photos' },
+  no_photos:            { ja:'写真なし',                 en:'No photos' },
   // Facility table
   col_type:             { ja:'種別',                    en:'Type' },
   col_dist:             { ja:'距離',                    en:'Dist.' },
@@ -2598,6 +2601,7 @@ function popupHtml(l) {
       <div class="prop-tabs">
         <div class="prop-tab-bar">
           <button class="prop-tab-btn active" data-tab="fac" onclick="switchPropTab('fac')">${t('tab_fac')}</button>
+          <button class="prop-tab-btn" data-tab="photos" onclick="switchPropTab('photos')">${t('tab_photos')}</button>
           <button class="prop-tab-btn" data-tab="route" onclick="switchPropTab('route')">${t('tab_route')}</button>
         </div>
         <div class="prop-tab-content">
@@ -2618,6 +2622,9 @@ function popupHtml(l) {
               <button onclick="clearDirections()" class="route-btn" style="margin-left:auto;">✕</button>
             </div>
           </div>
+          <div class="prop-tab-pane" id="prop-tab-photos">
+            <div class="prop-photos-grid" id="prop-photos-grid"></div>
+          </div>
           <div class="prop-tab-pane active" id="prop-tab-fac">
             <div id="fac-section"></div>
           </div>
@@ -2630,6 +2637,39 @@ function switchPropTab(tab) {
     b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.prop-tab-pane').forEach(p =>
     p.classList.toggle('active', p.id === 'prop-tab-' + tab));
+  if (tab === 'photos' && _selectedId) loadPropPhotos(_selectedId);
+}
+
+async function loadPropPhotos(listingId) {
+  const grid = document.getElementById('prop-photos-grid');
+  if (!grid) return;
+  if (grid.dataset.loaded === listingId) return;
+  grid.innerHTML = '<div style="color:var(--muted);font-size:12px;grid-column:1/-1;">...</div>';
+  try {
+    const r = await fetch(`${API}/listings/${listingId}/images`, { headers: authHeaders() });
+    const imgs = await r.json();
+    if (!imgs.length) {
+      grid.innerHTML = `<div style="color:var(--muted);font-size:12px;grid-column:1/-1;">${t('no_photos')}</div>`;
+      return;
+    }
+    grid.dataset.loaded = listingId;
+    grid.innerHTML = imgs.map((img, i) =>
+      `<img src="${escHtml(img.url)}" data-type="${escHtml(img.type || '')}" loading="lazy"
+            onerror="this.style.display='none'"
+            onclick="_openPropPhotoAt(${i})">`
+    ).join('');
+    grid._imgs = imgs;
+  } catch (_) {
+    grid.innerHTML = `<div style="color:var(--muted);font-size:12px;grid-column:1/-1;">${t('no_photos')}</div>`;
+  }
+}
+
+function _openPropPhotoAt(idx) {
+  const grid = document.getElementById('prop-photos-grid');
+  if (!grid || !grid._imgs) return;
+  openImgModal(grid._imgs, document.getElementById('imgModalTitle').textContent);
+  _imgModalIdx = idx;
+  _imgModalRender();
 }
 
 function showRoute(listingId, travelMode) {

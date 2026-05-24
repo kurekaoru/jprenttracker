@@ -805,6 +805,19 @@ def serve_listing_image(image_id):
     return send_file(row["local_path"])
 
 
+@app.route("/api/listings/<listing_id>/images")
+def get_listing_images(listing_id):
+    con = db()
+    rows = con.execute(
+        "SELECT id, image_type FROM listing_images "
+        "WHERE listing_id=? AND local_path IS NOT NULL "
+        "ORDER BY CASE image_type WHEN 'floor_plan' THEN 0 WHEN 'exterior' THEN 1 ELSE 2 END, id",
+        (listing_id,),
+    ).fetchall()
+    con.close()
+    return jsonify([{"url": f"/api/images/{r['id']}", "type": r["image_type"]} for r in rows])
+
+
 @app.route("/api/listings/<listing_id>/facilities")
 def get_listing_facilities(listing_id):
     con  = db()

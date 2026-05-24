@@ -84,15 +84,9 @@ def backfill_ur(limit: int, delay: float):
             fp_count = sum(1 for _, t in images if t == "floor_plan")
             log.info(f"  {len(images)} image(s) ({fp_count} floor plan(s))")
 
-            # Only update thumbnail if it isn't already set
-            existing_thumb = con.execute(
-                "SELECT thumbnail_url FROM listings WHERE id=?", (lid,)
-            ).fetchone()
-            if not existing_thumb or not existing_thumb[0]:
-                con.execute(
-                    "UPDATE listings SET thumbnail_url=? WHERE id=?",
-                    (images[0][0], lid),
-                )
+            # Set thumbnail to first exterior image, falling back to first image
+            thumb_url = next((url for url, t in images if t == "exterior"), images[0][0])
+            con.execute("UPDATE listings SET thumbnail_url=? WHERE id=?", (thumb_url, lid))
             for img_url, img_type in images:
                 con.execute(
                     "INSERT OR IGNORE INTO listing_images (listing_id, url, image_type) VALUES (?,?,?)",
