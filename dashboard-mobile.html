@@ -8,6 +8,11 @@
 <title>JKK Monitor</title>
 <script>
 (function(){
+  window.__jkkMapsReady = false;
+  window.initMap = function(){
+    window.__jkkMapsReady = true;
+    if (typeof window.bootMap === 'function') window.bootMap();
+  };
   var l=localStorage.getItem('jkktrackr_lang')||'ja';
   // 'uk' is valid for Maps API (Ukrainian); fall back to 'ja' for unsupported codes
   var ml = (l==='ja'||l==='en'||l==='uk') ? l : 'ja';
@@ -704,7 +709,8 @@ function applyLang() {
 }
 
 // ── Map ────────────────────────────────────────────────────────────────────
-function initMap(){
+function bootMap(){
+  if (map) return;
   map=new google.maps.Map(document.getElementById('map'),{
     center:{lat:35.680,lng:139.750},zoom:11,
     gestureHandling:'greedy',
@@ -715,6 +721,8 @@ function initMap(){
   loadListings();
   initAuth();
 }
+window.bootMap = bootMap;
+if (window.__jkkMapsReady && window.google && window.google.maps) bootMap();
 
 function markerIcon(source, selected, saved){
   const isUR = source==='ur';
