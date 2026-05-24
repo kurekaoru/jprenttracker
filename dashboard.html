@@ -260,6 +260,15 @@
     color: var(--muted);
     margin-bottom: 7px;
   }
+  .view-toggle { display: flex; gap: 4px; margin-bottom: 14px; }
+  .view-toggle-btn {
+    flex: 1; padding: 6px 4px; border: 1px solid var(--border); border-radius: 7px;
+    background: none; color: var(--muted); font-size: 10px; font-weight: 600;
+    letter-spacing: .05em; text-transform: uppercase; cursor: pointer;
+    font-family: var(--font); transition: all 0.15s; text-align: center;
+  }
+  .view-toggle-btn:hover { color: var(--text); border-color: var(--accent); }
+  .view-toggle-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
   .card {
     background: var(--surface2);
     border: 1px solid var(--border);
@@ -960,6 +969,11 @@
 
       <!-- Filter page -->
       <div class="panel-page" id="panel-filter">
+        <div class="view-toggle">
+          <button class="view-toggle-btn active" id="vtb-all"      onclick="setViewMode('all')">All</button>
+          <button class="view-toggle-btn"         id="vtb-starred"  onclick="setViewMode('starred')">★ Saved</button>
+          <button class="view-toggle-btn"         id="vtb-filtered" onclick="setViewMode('filtered')">Filtered</button>
+        </div>
         <p class="section-label" data-i18n="area">エリア（区・市）</p>
         <div class="chips" id="ward-chips"></div>
         <p class="section-label" style="margin-top:10px;" data-i18n="rent">家賃</p>
@@ -1105,7 +1119,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 21:25 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 21:29 JST</p>
       </div>
 
 
@@ -1650,6 +1664,7 @@ const DEFAULT_SOURCES = new Set(['jkk', 'ur']);
 let selectedWards   = new Set(DEFAULT_WARDS);
 let selectedLayouts = new Set(DEFAULT_LAYOUTS);
 let filterSources   = new Set(DEFAULT_SOURCES);
+let _viewMode = 'all'; // 'all' | 'starred' | 'filtered'
 
 function makeChip(label, set, container, onChange, displayLabel) {
   const c = document.createElement('div');
@@ -2915,6 +2930,14 @@ function selectListing(id) {
 
 let _listingsPollTimer = null;
 
+function setViewMode(mode) {
+  _viewMode = mode;
+  ['all','starred','filtered'].forEach(m => {
+    document.getElementById('vtb-' + m)?.classList.toggle('active', m === mode);
+  });
+  applyMapFilters();
+}
+
 function applyMapFilters() {
   if (!map) return;
   const minRent = parseInt(document.getElementById('min-rent').value) || 0;
@@ -2930,13 +2953,16 @@ function applyMapFilters() {
 
   _allListings.forEach(l => {
     if (l.disappeared_at) return;
-    if (!filterSources.has(l.source)) return;
-    if (!selectedWards.has(l.ward)) return;
-    if (!selectedLayouts.has(l.layout)) return;
-    if (minRent > 0 && l.rent < minRent) return;
-    if (maxRent > 0 && l.rent > maxRent) return;
-    if (minSize > 0 && l.size_m2 < minSize) return;
-    if (maxWalk > 0 && (l.walk_min == null || l.walk_min > maxWalk)) return;
+    if (_viewMode === 'starred' && !_savedListings.has(l.id)) return;
+    if (_viewMode === 'filtered') {
+      if (!filterSources.has(l.source)) return;
+      if (!selectedWards.has(l.ward)) return;
+      if (!selectedLayouts.has(l.layout)) return;
+      if (minRent > 0 && l.rent < minRent) return;
+      if (maxRent > 0 && l.rent > maxRent) return;
+      if (minSize > 0 && l.size_m2 < minSize) return;
+      if (maxWalk > 0 && (l.walk_min == null || l.walk_min > maxWalk)) return;
+    }
 
     _filteredListings.push(l);
     const marker = new google.maps.Marker({
