@@ -1516,7 +1516,7 @@ Rules:
 - If a tool returns no results, say so plainly and offer to try different search parameters.
 - Use show_listing_images whenever the user asks to see photos, pictures, images, or the floor plan for a property. If a property card is open, use its listing_id directly. Images render inline in the chat — no need to describe them in text.
 - HARD RULE: NEVER say images are "rendering", "displaying", "showing", "loading", or "appearing" in text. NEVER narrate what the tool is doing. Call show_listing_images — that IS the display. If you describe images in text without calling the tool, the user sees nothing.
-- Use batch_commute_filter when the user asks to filter/select/find ALL properties by commute time to a destination ("within 1hr of X", "reachable from Y in under 45 min", etc.). This checks every geocoded listing server-side. After it returns, immediately call save_listings with the matching listing_ids if the user asked to save/add them to selections.
+- Use batch_commute_filter when the user asks to filter by commute time to a destination. IMPORTANT: if the query is about the user's saved listings ("which of my saved...", "remove saved listings that are...", etc.), pass their listing IDs as listing_ids — this is MUCH faster and avoids timeouts. Only omit listing_ids when the user wants to search ALL properties. After it returns, immediately call save_listings or remove_listings with the matching IDs if the user asked to save/remove them.
 - Use save_listings to add listings to the user's saved selections. Call it immediately after batch_commute_filter or search_listings when the user explicitly asks to save/bookmark the results. To add all listings with a floor plan: call search_listings(has_floor_plan=true, limit=200) then save_listings with all returned IDs.
 - To search all 23 Tokyo special wards (23区, 23-ku, 都内, inner Tokyo, etc.): call search_listings with wards=["23区"] — the server expands this automatically. Never claim there are no results without calling the tool first.
 - Use remove_listings to remove listings from saved selections. The user's current saved list with photo counts is provided in context — use the listing IDs directly. For "remove listings without photos" filter to those with photos=0.
@@ -1624,7 +1624,7 @@ _CHAT_TOOLS = [
     },
     {
         "name": "batch_commute_filter",
-        "description": "Check transit commute time from EVERY active geocoded listing to a destination and return those within the limit. Use when user says 'find all properties within X minutes of Y' or 'select everything reachable from Z in under N min'. Returns matching listing IDs with commute times. Batches all listings in a few API calls.",
+        "description": "Check transit commute time from listings to a destination and return those within the limit. When checking the user's saved listings, pass their IDs as listing_ids to avoid checking all properties (much faster). Use when user says 'find properties within X minutes of Y' or 'which of my saved listings are more than N min from Z'. Returns matching listing IDs with commute times.",
         "input_schema": {
             "type": "object",
             "required": ["destination", "max_minutes"],
@@ -1632,6 +1632,7 @@ _CHAT_TOOLS = [
                 "destination": {"type": "string",  "description": "Destination station or address in Japanese, e.g. '目黒駅'"},
                 "max_minutes": {"type": "integer", "description": "Maximum one-way transit commute in minutes"},
                 "source":      {"type": "string",  "enum": ["jkk", "ur"], "description": "Optionally restrict to one source"},
+                "listing_ids": {"type": "array", "items": {"type": "string"}, "description": "If provided, only check these specific listings instead of all geocoded listings. Use this when filtering the user's saved selections."},
             },
         },
     },
@@ -1804,6 +1805,11 @@ def _chat_batch_commute(params, con):
     conds, args = ["disappeared_at IS NULL", "lat IS NOT NULL", "lng IS NOT NULL"], []
     if params.get("source"):
         conds.append("source = ?"); args.append(params["source"])
+    listing_ids = params.get("listing_ids") or []
+    if listing_ids:
+        placeholders = ",".join("?" * len(listing_ids))
+        conds.append(f"id IN ({placeholders})")
+        args.extend(listing_ids)
     rows = con.execute(
         f"SELECT id, name, ward, rent, layout, source, lat, lng FROM listings WHERE {' AND '.join(conds)}",
         args,
