@@ -94,18 +94,13 @@
     transition: all 0.15s;
   }
   .topbar-refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .lang-toggle-group {
-    display: flex; background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.15); border-radius: 5px; overflow: hidden;
+  .lang-select {
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 5px; color: rgba(255,255,255,0.85); font-size: 10px; font-weight: 700;
+    letter-spacing: .04em; padding: 3px 6px; cursor: pointer; font-family: var(--font);
+    outline: none; appearance: none; -webkit-appearance: none;
   }
-  .lang-seg {
-    background: transparent; border: none; color: rgba(255,255,255,0.45);
-    font-size: 10px; font-weight: 700; letter-spacing: .06em;
-    padding: 3px 7px; cursor: pointer; font-family: var(--font);
-    transition: background .15s, color .15s;
-  }
-  .lang-seg.active { background: rgba(255,255,255,0.22); color: #fff; }
-  .lang-seg:hover:not(.active) { color: rgba(255,255,255,0.8); }
+  .lang-select option { background: #1e2124; color: #fff; }
   .topbar-title {
     font-size: 13px; font-weight: 600; letter-spacing: -0.02em;
     color: rgba(255,255,255,0.85);
@@ -979,10 +974,11 @@
         <button class="topbar-refresh-btn" onclick="loadListings()" data-i18n="refresh">更新</button>
       </div>
       <div class="status-pill"><div class="pulse"></div><span data-i18n="monitoring">監視中</span></div>
-      <div class="lang-toggle-group" id="lang-toggle-group">
-        <button class="lang-seg" id="lang-ja" onclick="setLang('ja')">JP</button>
-        <button class="lang-seg" id="lang-en" onclick="setLang('en')">EN</button>
-      </div>
+      <select id="lang-select" class="lang-select" onchange="setLang(this.value)">
+        <option value="ja">🇯🇵 JP</option>
+        <option value="en">🇬🇧 EN</option>
+        <option value="uk">🇺🇦 UK</option>
+      </select>
       <div id="user-area">
         <button class="login-btn" onclick="openAuthModal()" data-i18n="login">ログイン</button>
       </div>
@@ -1261,7 +1257,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 22:43 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 23:09 JST</p>
       </div>
 
 
@@ -1333,8 +1329,20 @@
     <div class="onboard-progress" id="onboard-dots"></div>
     <div class="onboard-slides" id="onboard-slides">
 
-      <!-- Card 0: Purpose -->
+      <!-- Card 0: Language -->
       <div class="onboard-slide active" id="ocard-0">
+        <div class="onboard-emoji">🌐</div>
+        <div class="onboard-title" data-i18n="ob_lang_title">Choose your language</div>
+        <div class="onboard-sub" data-i18n="ob_lang_sub">You can change this later</div>
+        <div class="onboard-choices">
+          <button class="onboard-chip" data-field="lang" data-val="ja" onclick="onboardPick(this)">🇯🇵 日本語</button>
+          <button class="onboard-chip" data-field="lang" data-val="en" onclick="onboardPick(this)">🇬🇧 English</button>
+          <button class="onboard-chip" data-field="lang" data-val="uk" onclick="onboardPick(this)">🇺🇦 Українська</button>
+        </div>
+      </div>
+
+      <!-- Card 1: Purpose -->
+      <div class="onboard-slide" id="ocard-1">
         <div class="onboard-emoji">🏠</div>
         <div class="onboard-title" data-i18n="ob_purpose_title">ようこそ！何のためにお探しですか？</div>
         <div class="onboard-sub" data-i18n="ob_purpose_sub">あなたに合った提案をするために教えてください</div>
@@ -1346,8 +1354,8 @@
         </div>
       </div>
 
-      <!-- Card 1: Household -->
-      <div class="onboard-slide" id="ocard-1">
+      <!-- Card 2: Household -->
+      <div class="onboard-slide" id="ocard-2">
         <div class="onboard-emoji">👥</div>
         <div class="onboard-title" data-i18n="ob_household_title">世帯構成を教えてください</div>
         <div class="onboard-sub" data-i18n="ob_household_sub">物件の広さの参考にします</div>
@@ -1368,8 +1376,8 @@
         </div>
       </div>
 
-      <!-- Card 2: Budget -->
-      <div class="onboard-slide" id="ocard-2">
+      <!-- Card 3: Budget -->
+      <div class="onboard-slide" id="ocard-3">
         <div class="onboard-emoji">💰</div>
         <div class="onboard-title" data-i18n="ob_budget_title">家賃の予算は？</div>
         <div class="onboard-sub" data-i18n="ob_budget_sub">おおよそで大丈夫です</div>
@@ -1382,8 +1390,8 @@
         </div>
       </div>
 
-      <!-- Card 3: Move-in timing -->
-      <div class="onboard-slide" id="ocard-3">
+      <!-- Card 4: Move-in timing -->
+      <div class="onboard-slide" id="ocard-4">
         <div class="onboard-emoji">📅</div>
         <div class="onboard-title" data-i18n="ob_movein_title">いつ頃引越し予定ですか？</div>
         <div class="onboard-sub"></div>
@@ -1395,8 +1403,8 @@
         </div>
       </div>
 
-      <!-- Card 4: Preferred wards -->
-      <div class="onboard-slide" id="ocard-4">
+      <!-- Card 5: Preferred wards -->
+      <div class="onboard-slide" id="ocard-5">
         <div class="onboard-emoji">🗺️</div>
         <div class="onboard-title" data-i18n="ob_area_title">希望エリアは？</div>
         <div class="onboard-sub" data-i18n="ob_area_sub">複数選択できます（スキップ可）</div>
@@ -1563,267 +1571,271 @@ let _lang = localStorage.getItem('jkktrackr_lang') || 'ja';
 
 const STRINGS = {
   // Topbar
-  refresh:              { ja:'更新',              en:'Refresh' },
-  monitoring:           { ja:'監視中',             en:'Monitoring' },
-  login:                { ja:'ログイン',           en:'Login' },
+  refresh:              { ja:'更新',              en:'Refresh',          uk:'Оновити' },
+  monitoring:           { ja:'監視中',             en:'Monitoring',       uk:'Моніторинг' },
+  login:                { ja:'ログイン',           en:'Login',            uk:'Увійти' },
   // Rail
-  filter:               { ja:'フィルター',          en:'Filter' },
-  vacancies:            { ja:'空室一覧',            en:'Vacancies' },
-  notifications:        { ja:'通知設定',            en:'Alerts' },
-  account:              { ja:'アカウント',           en:'Account' },
-  map_layers:           { ja:'地図レイヤー',         en:'Map Layers' },
-  setup:                { ja:'セットアップ',          en:'Setup' },
+  filter:               { ja:'フィルター',          en:'Filter',           uk:'Фільтр' },
+  vacancies:            { ja:'空室一覧',            en:'Vacancies',        uk:'Вакансії' },
+  notifications:        { ja:'通知設定',            en:'Alerts',           uk:'Сповіщення' },
+  account:              { ja:'アカウント',           en:'Account',          uk:'Акаунт' },
+  map_layers:           { ja:'地図レイヤー',         en:'Map Layers',       uk:'Шари карти' },
+  setup:                { ja:'セットアップ',          en:'Setup',            uk:'Налаштування' },
   // Right panel
-  property_info:        { ja:'物件情報',            en:'Property' },
+  property_info:        { ja:'物件情報',            en:'Property',         uk:'Об\'єкт' },
   // Filter panel
-  area:                 { ja:'エリア（区・市）',      en:'Area (Ward/City)' },
-  rent:                 { ja:'家賃',               en:'Rent' },
-  min_rent:             { ja:'最低家賃 (円)',        en:'Min Rent (¥)' },
-  max_rent_label:       { ja:'上限家賃 (円)',        en:'Max Rent (¥)' },
-  max_rent_ph:          { ja:'例: 200000 (0=上限なし)', en:'e.g. 200000 (0=no limit)' },
-  layout:               { ja:'間取り',              en:'Layout' },
-  layout_4ldkp:         { ja:'4LDK以上',            en:'4LDK+' },
-  floor_area:           { ja:'専有面積',             en:'Floor Area' },
-  min_area:             { ja:'最低面積 (m²)',        en:'Min Area (m²)' },
-  walk_station:         { ja:'駅徒歩',              en:'Walk to Station' },
-  max_walk:             { ja:'最大徒歩分数 (分)',     en:'Max Walk (min)' },
-  max_walk_ph:          { ja:'例: 10 (0=上限なし)',  en:'e.g. 10 (0=no limit)' },
-  source:               { ja:'データソース',          en:'Source' },
-  save_settings:        { ja:'設定を保存',           en:'Save Settings' },
+  area:                 { ja:'エリア（区・市）',      en:'Area (Ward/City)', uk:'Район' },
+  rent:                 { ja:'家賃',               en:'Rent',             uk:'Оренда' },
+  min_rent:             { ja:'最低家賃 (円)',        en:'Min Rent (¥)',     uk:'Мін. оренда (¥)' },
+  max_rent_label:       { ja:'上限家賃 (円)',        en:'Max Rent (¥)',     uk:'Макс. оренда (¥)' },
+  max_rent_ph:          { ja:'例: 200000 (0=上限なし)', en:'e.g. 200000 (0=no limit)', uk:'напр. 200000 (0=без ліміту)' },
+  layout:               { ja:'間取り',              en:'Layout',           uk:'Планування' },
+  layout_4ldkp:         { ja:'4LDK以上',            en:'4LDK+',            uk:'4LDK+' },
+  floor_area:           { ja:'専有面積',             en:'Floor Area',       uk:'Площа' },
+  min_area:             { ja:'最低面積 (m²)',        en:'Min Area (m²)',    uk:'Мін. площа (м²)' },
+  walk_station:         { ja:'駅徒歩',              en:'Walk to Station',  uk:'Хода до станції' },
+  max_walk:             { ja:'最大徒歩分数 (分)',     en:'Max Walk (min)',   uk:'Макс. хвилин пішки' },
+  max_walk_ph:          { ja:'例: 10 (0=上限なし)',  en:'e.g. 10 (0=no limit)', uk:'напр. 10 (0=без ліміту)' },
+  source:               { ja:'データソース',          en:'Source',           uk:'Джерело' },
+  save_settings:        { ja:'設定を保存',           en:'Save Settings',    uk:'Зберегти налаштування' },
   // Layers panel
-  stations_lines:       { ja:'駅・路線',             en:'Stations & Lines' },
-  road_labels:          { ja:'道路名',               en:'Road Labels' },
-  neighborhoods:        { ja:'丁目・町名',           en:'Neighborhoods' },
-  parks:                { ja:'公園',                en:'Parks' },
-  nearby_facilities:    { ja:'周辺施設',             en:'Nearby Facilities' },
-  all_on:               { ja:'全ON',                en:'All ON' },
-  all_off:              { ja:'全OFF',               en:'All OFF' },
-  konbini:              { ja:'コンビニ',             en:'Convenience Stores' },
-  supermarket:          { ja:'スーパー',             en:'Supermarkets' },
-  kindergarten:         { ja:'幼稚園・保育園',        en:'Kindergartens' },
-  clinic:               { ja:'クリニック・診療所',     en:'Clinics & GPs' },
+  stations_lines:       { ja:'駅・路線',             en:'Stations & Lines', uk:'Станції та лінії' },
+  road_labels:          { ja:'道路名',               en:'Road Labels',      uk:'Назви вулиць' },
+  neighborhoods:        { ja:'丁目・町名',           en:'Neighborhoods',    uk:'Мікрорайони' },
+  parks:                { ja:'公園',                en:'Parks',            uk:'Парки' },
+  nearby_facilities:    { ja:'周辺施設',             en:'Nearby Facilities',uk:'Поруч' },
+  all_on:               { ja:'全ON',                en:'All ON',           uk:'Все ВКЛ' },
+  all_off:              { ja:'全OFF',               en:'All OFF',          uk:'Все ВИКЛ' },
+  konbini:              { ja:'コンビニ',             en:'Convenience Stores',uk:'Магазини' },
+  supermarket:          { ja:'スーパー',             en:'Supermarkets',     uk:'Супермаркети' },
+  kindergarten:         { ja:'幼稚園・保育園',        en:'Kindergartens',    uk:'Дитячі садки' },
+  clinic:               { ja:'クリニック・診療所',     en:'Clinics & GPs',   uk:'Клініки' },
   // About panel
-  setup_instructions:   { ja:'セットアップ手順',      en:'Setup Instructions' },
-  setup_terminal:       { ja:'（別ターミナル）',       en:' (separate terminal)' },
-  setup_step5:          { ja:'フィルターで条件を設定 → 保存', en:'Set filter conditions → Save' },
-  activity_log:         { ja:'実行ログ（最新50件）',   en:'Activity Log (latest 50)' },
-  log_loading:          { ja:'サーバーが起動するとここにログが表示されます。', en:'Logs will appear here once the server is running.' },
+  setup_instructions:   { ja:'セットアップ手順',      en:'Setup Instructions',uk:'Інструкції' },
+  setup_terminal:       { ja:'（別ターミナル）',       en:' (separate terminal)', uk:' (окремий термінал)' },
+  setup_step5:          { ja:'フィルターで条件を設定 → 保存', en:'Set filter conditions → Save', uk:'Встановити фільтри → Зберегти' },
+  activity_log:         { ja:'実行ログ（最新50件）',   en:'Activity Log (latest 50)', uk:'Журнал (50 записів)' },
+  log_loading:          { ja:'サーバーが起動するとここにログが表示されます。', en:'Logs will appear here once the server is running.', uk:'Журнал з\'явиться після запуску сервера.' },
   // Notifications panel
-  notif_login_required: { ja:'通知設定はログイン後に利用できます。', en:'Notifications require login.' },
-  notif_none:           { ja:'登録なし',             en:'None registered' },
-  add_notif:            { ja:'＋ 通知先を追加',        en:'+ Add Notification' },
+  notif_login_required: { ja:'通知設定はログイン後に利用できます。', en:'Notifications require login.', uk:'Сповіщення доступні після входу.' },
+  notif_none:           { ja:'登録なし',             en:'None registered',  uk:'Не додано' },
+  add_notif:            { ja:'＋ 通知先を追加',        en:'+ Add Notification',uk:'+ Додати сповіщення' },
   // Account panel
-  account_guest_msg:    { ja:'ログインして設定を保存・通知を受け取りましょう。', en:'Log in to save settings and receive notifications.' },
-  login_register:       { ja:'ログイン / 新規登録',   en:'Login / Register' },
-  change_password:      { ja:'パスワード変更',         en:'Change Password' },
-  current_pw:           { ja:'現在のパスワード',        en:'Current password' },
-  new_pw:               { ja:'新しいパスワード（8文字以上）', en:'New password (8+ chars)' },
-  update:               { ja:'変更する',              en:'Update' },
-  logout:               { ja:'ログアウト',             en:'Logout' },
+  account_guest_msg:    { ja:'ログインして設定を保存・通知を受け取りましょう。', en:'Log in to save settings and receive notifications.', uk:'Увійдіть, щоб зберегти налаштування та отримувати сповіщення.' },
+  login_register:       { ja:'ログイン / 新規登録',   en:'Login / Register',  uk:'Увійти / Зареєструватися' },
+  change_password:      { ja:'パスワード変更',         en:'Change Password',   uk:'Змінити пароль' },
+  current_pw:           { ja:'現在のパスワード',        en:'Current password',  uk:'Поточний пароль' },
+  new_pw:               { ja:'新しいパスワード（8文字以上）', en:'New password (8+ chars)', uk:'Новий пароль (8+ символів)' },
+  update:               { ja:'変更する',              en:'Update',            uk:'Оновити' },
+  logout:               { ja:'ログアウト',             en:'Logout',            uk:'Вийти' },
   // Listings panel
-  disappeared_title:    { ja:'最近消えた物件',          en:'Recently Removed' },
-  loading:              { ja:'読み込み中…',            en:'Loading…' },
+  disappeared_title:    { ja:'最近消えた物件',          en:'Recently Removed',  uk:'Нещодавно видалені' },
+  loading:              { ja:'読み込み中…',            en:'Loading…',          uk:'Завантаження…' },
   // Auth modal
-  login_tab:            { ja:'ログイン',               en:'Login' },
-  register_tab:         { ja:'新規登録',               en:'Register' },
-  email_ph:             { ja:'メールアドレス',           en:'Email address' },
-  password_ph:          { ja:'パスワード',              en:'Password' },
-  display_name_ph:      { ja:'表示名（任意）',           en:'Display name (optional)' },
-  password_new_ph:      { ja:'パスワード（8文字以上）',   en:'Password (8+ chars)' },
-  register_btn:         { ja:'登録',                  en:'Register' },
+  login_tab:            { ja:'ログイン',               en:'Login',             uk:'Увійти' },
+  register_tab:         { ja:'新規登録',               en:'Register',          uk:'Реєстрація' },
+  email_ph:             { ja:'メールアドレス',           en:'Email address',     uk:'Електронна пошта' },
+  password_ph:          { ja:'パスワード',              en:'Password',          uk:'Пароль' },
+  display_name_ph:      { ja:'表示名（任意）',           en:'Display name (optional)', uk:'Ім\'я (необов\'язково)' },
+  password_new_ph:      { ja:'パスワード（8文字以上）',   en:'Password (8+ chars)', uk:'Пароль (8+ символів)' },
+  register_btn:         { ja:'登録',                  en:'Register',          uk:'Зареєструватися' },
   // Add notif modal
-  add_notif_title:      { ja:'通知先を追加',             en:'Add Notification' },
-  email_label:          { ja:'メール',                 en:'Email' },
-  scan_phone:           { ja:'スマホでスキャン',          en:'Scan with phone' },
-  email_address:        { ja:'メールアドレス',           en:'Email address' },
-  label_optional:       { ja:'ラベル（任意）',           en:'Label (optional)' },
-  label_ph:             { ja:'例: 自分のメール',         en:'e.g. My email' },
-  smtp_hint:            { ja:'サーバーの .env に SMTP 設定が必要です。', en:'SMTP settings required in server .env file.' },
-  add_btn:              { ja:'追加する',               en:'Add' },
+  add_notif_title:      { ja:'通知先を追加',             en:'Add Notification',  uk:'Додати сповіщення' },
+  email_label:          { ja:'メール',                 en:'Email',             uk:'Email' },
+  scan_phone:           { ja:'スマホでスキャン',          en:'Scan with phone',   uk:'Сканувати телефоном' },
+  email_address:        { ja:'メールアドレス',           en:'Email address',     uk:'Електронна пошта' },
+  label_optional:       { ja:'ラベル（任意）',           en:'Label (optional)',  uk:'Мітка (необов\'язково)' },
+  label_ph:             { ja:'例: 自分のメール',         en:'e.g. My email',     uk:'напр. Моя пошта' },
+  smtp_hint:            { ja:'サーバーの .env に SMTP 設定が必要です。', en:'SMTP settings required in server .env file.', uk:'Потрібні SMTP-налаштування у .env файлі.' },
+  add_btn:              { ja:'追加する',               en:'Add',               uk:'Додати' },
   // QR modal
-  share_title:          { ja:'📲 ダッシュボードを共有',   en:'📲 Share Dashboard' },
-  share_sub:            { ja:'QRコードをスキャンしてアクセス・新規登録', en:'Scan QR code to access or register' },
+  share_title:          { ja:'📲 ダッシュボードを共有',   en:'📲 Share Dashboard', uk:'📲 Поділитися' },
+  share_sub:            { ja:'QRコードをスキャンしてアクセス・新規登録', en:'Scan QR code to access or register', uk:'Скануйте QR-код для доступу або реєстрації' },
   // Columns
-  col_name:             { ja:'物件名',                en:'Name' },
-  col_ward:             { ja:'区・市',                en:'Ward/City' },
-  col_rent:             { ja:'家賃',                 en:'Rent' },
-  col_layout:           { ja:'間取り',                en:'Layout' },
-  col_size:             { ja:'面積',                 en:'Area' },
-  col_station:          { ja:'最寄り駅',              en:'Station' },
-  col_walk:             { ja:'徒歩',                 en:'Walk' },
-  col_first_seen:       { ja:'初回発見',              en:'First Seen' },
-  col_days:             { ja:'掲載日数',              en:'Listed' },
-  col_disappeared:      { ja:'消去日',               en:'Removed' },
-  col_duration:         { ja:'掲載期間',              en:'Duration' },
+  col_name:             { ja:'物件名',                en:'Name',              uk:'Назва' },
+  col_ward:             { ja:'区・市',                en:'Ward/City',         uk:'Район' },
+  col_rent:             { ja:'家賃',                 en:'Rent',              uk:'Оренда' },
+  col_layout:           { ja:'間取り',                en:'Layout',            uk:'Планування' },
+  col_size:             { ja:'面積',                 en:'Area',              uk:'Площа' },
+  col_station:          { ja:'最寄り駅',              en:'Station',           uk:'Станція' },
+  col_walk:             { ja:'徒歩',                 en:'Walk',              uk:'Хода' },
+  col_first_seen:       { ja:'初回発見',              en:'First Seen',        uk:'Знайдено' },
+  col_days:             { ja:'掲載日数',              en:'Listed',            uk:'Днів' },
+  col_disappeared:      { ja:'消去日',               en:'Removed',           uk:'Видалено' },
+  col_duration:         { ja:'掲載期間',              en:'Duration',          uk:'Тривалість' },
   // buildChips labels
-  ward_ku:              { ja:'区部',                 en:'Tokyo Wards' },
-  ward_si:              { ja:'市部（東京）',            en:'Tokyo Cities' },
-  ward_yokohama:        { ja:'横浜市',                en:'Yokohama' },
-  ward_kawasaki:        { ja:'川崎市',                en:'Kawasaki' },
-  ward_sagamihara:      { ja:'相模原市',              en:'Sagamihara' },
+  ward_ku:              { ja:'区部',                 en:'Tokyo Wards',       uk:'Райони Токіо' },
+  ward_si:              { ja:'市部（東京）',            en:'Tokyo Cities',      uk:'Міста Токіо' },
+  ward_yokohama:        { ja:'横浜市',                en:'Yokohama',          uk:'Йокогама' },
+  ward_kawasaki:        { ja:'川崎市',                en:'Kawasaki',          uk:'Кавасакі' },
+  ward_sagamihara:      { ja:'相模原市',              en:'Sagamihara',        uk:'Сагаміхара' },
   // Status / errors
-  no_match:             { ja:'条件に合う物件がありません。', en:'No matching properties.' },
-  no_disappeared:       { ja:'まだ消えた物件はありません。', en:'No removed properties yet.' },
-  server_offline:       { ja:'サーバー未起動 — server.py を再起動してください', en:'Server offline — restart server.py' },
-  no_logs:              { ja:'ログがありません。',       en:'No logs.' },
-  saving:               { ja:'保存中...',              en:'Saving...' },
-  saved:                { ja:'✓ 保存しました',          en:'✓ Saved' },
-  saved_local:          { ja:'✓ 保存しました（ローカル）', en:'✓ Saved (local)' },
-  save_failed:          { ja:'保存失敗',               en:'Save failed' },
-  server_error:         { ja:'サーバーエラー',           en:'Server error' },
-  login_failed:         { ja:'ログイン失敗',             en:'Login failed' },
-  register_failed:      { ja:'登録失敗',               en:'Registration failed' },
-  cannot_connect:       { ja:'サーバーに接続できません',  en:'Cannot connect to server' },
-  pw_updated:           { ja:'✓ 変更しました',          en:'✓ Updated' },
-  pw_failed:            { ja:'失敗',                  en:'Failed' },
+  no_match:             { ja:'条件に合う物件がありません。', en:'No matching properties.', uk:'Немає відповідних об\'єктів.' },
+  no_disappeared:       { ja:'まだ消えた物件はありません。', en:'No removed properties yet.', uk:'Ще немає видалених об\'єктів.' },
+  server_offline:       { ja:'サーバー未起動 — server.py を再起動してください', en:'Server offline — restart server.py', uk:'Сервер офлайн — перезапустіть server.py' },
+  no_logs:              { ja:'ログがありません。',       en:'No logs.',          uk:'Немає журналів.' },
+  saving:               { ja:'保存中...',              en:'Saving...',         uk:'Збереження...' },
+  saved:                { ja:'✓ 保存しました',          en:'✓ Saved',           uk:'✓ Збережено' },
+  saved_local:          { ja:'✓ 保存しました（ローカル）', en:'✓ Saved (local)',  uk:'✓ Збережено (локально)' },
+  save_failed:          { ja:'保存失敗',               en:'Save failed',       uk:'Помилка збереження' },
+  server_error:         { ja:'サーバーエラー',           en:'Server error',      uk:'Помилка сервера' },
+  login_failed:         { ja:'ログイン失敗',             en:'Login failed',      uk:'Помилка входу' },
+  register_failed:      { ja:'登録失敗',               en:'Registration failed',uk:'Помилка реєстрації' },
+  cannot_connect:       { ja:'サーバーに接続できません',  en:'Cannot connect to server', uk:'Не вдається підключитися до сервера' },
+  pw_updated:           { ja:'✓ 変更しました',          en:'✓ Updated',         uk:'✓ Оновлено' },
+  pw_failed:            { ja:'失敗',                  en:'Failed',            uk:'Помилка' },
   // Notifications
-  notif_delete_confirm: { ja:'この通知設定を削除しますか？', en:'Delete this notification?' },
-  notif_add_failed:     { ja:'追加失敗',               en:'Add failed' },
-  notif_enter_target:   { ja:'送信先を入力してください',  en:'Please enter a destination' },
-  notif_del_title:      { ja:'削除',                  en:'Delete' },
+  notif_delete_confirm: { ja:'この通知設定を削除しますか？', en:'Delete this notification?', uk:'Видалити це сповіщення?' },
+  notif_add_failed:     { ja:'追加失敗',               en:'Add failed',        uk:'Помилка додавання' },
+  notif_enter_target:   { ja:'送信先を入力してください',  en:'Please enter a destination', uk:'Введіть адресу' },
+  notif_del_title:      { ja:'削除',                  en:'Delete',            uk:'Видалити' },
   // OAuth
-  generating_url:       { ja:'接続URLを生成中…',        en:'Generating connection URL…' },
-  server_config_req:    { ja:'サーバーで設定が必要です',  en:'Server configuration required' },
-  timeout_msg:          { ja:'タイムアウトしました。もう一度お試しください。', en:'Timed out. Please try again.' },
-  connected:            { ja:'✅ 連携完了！',           en:'✅ Connected!' },
-  waiting_auth:         { ja:'認証完了を待っています…',  en:'Waiting for authentication…' },
-  telegram_desc:        { ja:'QRコードをスキャンしてBotを開き、STARTを押すと自動で連携されます。', en:'Scan the QR code to open the Bot, then press START to link automatically.' },
-  telegram_btn:         { ja:'Telegram で開く →',      en:'Open in Telegram →' },
-  line_desc:            { ja:'QRコードをスキャンするか、ボタンを押してLINEで認証してください。', en:'Scan the QR code or tap the button to authenticate with LINE.' },
-  line_btn:             { ja:'LINE で連携する →',       en:'Connect with LINE →' },
-  slack_desc:           { ja:'QRコードをスキャンするか、ボタンを押してSlackチャンネルを選択してください。', en:'Scan the QR code or tap the button to select a Slack channel.' },
-  slack_btn:            { ja:'Slack に追加する →',      en:'Add to Slack →' },
+  generating_url:       { ja:'接続URLを生成中…',        en:'Generating connection URL…', uk:'Генерація URL…' },
+  server_config_req:    { ja:'サーバーで設定が必要です',  en:'Server configuration required', uk:'Потрібне налаштування сервера' },
+  timeout_msg:          { ja:'タイムアウトしました。もう一度お試しください。', en:'Timed out. Please try again.', uk:'Час вийшов. Спробуйте ще раз.' },
+  connected:            { ja:'✅ 連携完了！',           en:'✅ Connected!',      uk:'✅ Підключено!' },
+  waiting_auth:         { ja:'認証完了を待っています…',  en:'Waiting for authentication…', uk:'Очікування авторизації…' },
+  telegram_desc:        { ja:'QRコードをスキャンしてBotを開き、STARTを押すと自動で連携されます。', en:'Scan the QR code to open the Bot, then press START to link automatically.', uk:'Скануйте QR-код, щоб відкрити бот, і натисніть START.' },
+  telegram_btn:         { ja:'Telegram で開く →',      en:'Open in Telegram →', uk:'Відкрити в Telegram →' },
+  line_desc:            { ja:'QRコードをスキャンするか、ボタンを押してLINEで認証してください。', en:'Scan the QR code or tap the button to authenticate with LINE.', uk:'Скануйте QR-код або натисніть кнопку для автентифікації LINE.' },
+  line_btn:             { ja:'LINE で連携する →',       en:'Connect with LINE →', uk:'Підключити LINE →' },
+  slack_desc:           { ja:'QRコードをスキャンするか、ボタンを押してSlackチャンネルを選択してください。', en:'Scan the QR code or tap the button to select a Slack channel.', uk:'Скануйте QR-код або натисніть кнопку для вибору каналу Slack.' },
+  slack_btn:            { ja:'Slack に追加する →',      en:'Add to Slack →',    uk:'Додати до Slack →' },
   // Property card
-  first_seen_label:     { ja:'初回発見',               en:'First seen' },
-  listed_for:           { ja:'掲載中',                 en:'listed' },
-  open_listing:         { ja:'物件ページを開く →',       en:'Open listing →' },
-  dest_ph:              { ja:'目的地（例: 新宿駅）',     en:'Destination (e.g. Shinjuku)' },
-  route_transit:        { ja:'🚃 電車',                en:'🚃 Train' },
-  route_drive:          { ja:'🚗 車',                  en:'🚗 Drive' },
-  route_walk:           { ja:'🚶 徒歩',                en:'🚶 Walk' },
-  route_bike:           { ja:'🚲 自転車',              en:'🚲 Bike' },
-  route_error:          { ja:'経路を取得できませんでした: ', en:'Could not get route: ' },
-  route_error_hint:     { ja:'\n\n目的地を確認してください（例: 新宿駅、渋谷区役所）', en:'\n\nCheck the destination (e.g. Shinjuku Sta., Shibuya City Hall)' },
+  first_seen_label:     { ja:'初回発見',               en:'First seen',        uk:'Знайдено' },
+  listed_for:           { ja:'掲載中',                 en:'listed',            uk:'в списку' },
+  open_listing:         { ja:'物件ページを開く →',       en:'Open listing →',    uk:'Відкрити →' },
+  dest_ph:              { ja:'目的地（例: 新宿駅）',     en:'Destination (e.g. Shinjuku)', uk:'Пункт призначення (напр. Shinjuku)' },
+  route_transit:        { ja:'🚃 電車',                en:'🚃 Train',           uk:'🚃 Потяг' },
+  route_drive:          { ja:'🚗 車',                  en:'🚗 Drive',           uk:'🚗 Авто' },
+  route_walk:           { ja:'🚶 徒歩',                en:'🚶 Walk',            uk:'🚶 Пішки' },
+  route_bike:           { ja:'🚲 自転車',              en:'🚲 Bike',            uk:'🚲 Велосипед' },
+  route_error:          { ja:'経路を取得できませんでした: ', en:'Could not get route: ', uk:'Не вдалося отримати маршрут: ' },
+  route_error_hint:     { ja:'\n\n目的地を確認してください（例: 新宿駅、渋谷区役所）', en:'\n\nCheck the destination (e.g. Shinjuku Sta., Shibuya City Hall)', uk:'\n\nПеревірте пункт призначення' },
   // Walk string
-  walk_prefix:          { ja:'徒歩',                   en:'' },
-  walk_unit:            { ja:'分',                    en:' min' },
+  walk_prefix:          { ja:'徒歩',                   en:'',                  uk:'' },
+  walk_unit:            { ja:'分',                    en:' min',              uk:' хв' },
   // Duration
-  duration_days:        { ja:(d,h)=>`${d}日 ${h}時間`, en:(d,h)=>`${d}d ${h}h` },
-  duration_hours:       { ja:(h)=>`${h}時間`,          en:(h)=>`${h}h` },
+  duration_days:        { ja:(d,h)=>`${d}日 ${h}時間`, en:(d,h)=>`${d}d ${h}h`, uk:(d,h)=>`${d}д ${h}г` },
+  duration_hours:       { ja:(h)=>`${h}時間`,          en:(h)=>`${h}h`,        uk:(h)=>`${h}г` },
   // Summary bar
-  summary_text:         { ja:(s,t)=>`${s} 件表示中 / ${t} 件`, en:(s,t)=>`${s} / ${t} showing` },
-  geo_pending:          { ja:(n)=>` · 位置情報取得中 (${n} 件)…`, en:(n)=>` · Geocoding (${n})…` },
-  station_pending:      { ja:(n)=>` · 最寄り駅調査中 (${n} 件)…`, en:(n)=>` · Finding stations (${n})…` },
+  summary_text:         { ja:(s,t)=>`${s} 件表示中 / ${t} 件`, en:(s,t)=>`${s} / ${t} showing`, uk:(s,t)=>`${s} / ${t} показано` },
+  geo_pending:          { ja:(n)=>` · 位置情報取得中 (${n} 件)…`, en:(n)=>` · Geocoding (${n})…`, uk:(n)=>` · Геокодування (${n})…` },
+  station_pending:      { ja:(n)=>` · 最寄り駅調査中 (${n} 件)…`, en:(n)=>` · Finding stations (${n})…`, uk:(n)=>` · Пошук станцій (${n})…` },
   // Countdown
-  next_refresh:         { ja:(m,s)=>`次回確認まで ${m}:${s}`, en:(m,s)=>`Next refresh in ${m}:${s}` },
+  next_refresh:         { ja:(m,s)=>`次回確認まで ${m}:${s}`, en:(m,s)=>`Next refresh in ${m}:${s}`, uk:(m,s)=>`Наступне оновлення через ${m}:${s}` },
   // Panel titles
-  panel_filter:         { ja:'フィルター',               en:'Filter' },
-  panel_listings:       { ja:'空室一覧',                en:'Vacancies' },
-  panel_notif:          { ja:'通知設定',                en:'Alerts' },
-  tab_account:          { ja:'アカウント',              en:'Account' },
-  tab_personal_info:    { ja:'個人情報',                en:'Profile' },
-  tab_alerts:           { ja:'通知',                    en:'Alerts' },
+  panel_filter:         { ja:'フィルター',               en:'Filter',            uk:'Фільтр' },
+  panel_listings:       { ja:'空室一覧',                en:'Vacancies',         uk:'Вакансії' },
+  panel_notif:          { ja:'通知設定',                en:'Alerts',            uk:'Сповіщення' },
+  tab_account:          { ja:'アカウント',              en:'Account',           uk:'Акаунт' },
+  tab_personal_info:    { ja:'個人情報',                en:'Profile',           uk:'Профіль' },
+  tab_alerts:           { ja:'通知',                    en:'Alerts',            uk:'Сповіщення' },
 
   // Personal info labels
-  pinfo_purpose:        { ja:'目的',                    en:'Purpose' },
-  pinfo_household:      { ja:'世帯構成',                en:'Household' },
-  pinfo_num_children:   { ja:'子供の人数',              en:'No. of children' },
-  pinfo_age:            { ja:'年代',                    en:'Age group' },
-  pinfo_budget:         { ja:'家賃予算',                en:'Budget' },
-  pinfo_movein:         { ja:'引越し時期',              en:'Move-in' },
-  pinfo_other:          { ja:'その他',                  en:'Other' },
-  pinfo_pets:           { ja:'ペット可',                en:'Pets OK' },
-  pinfo_smoking:        { ja:'喫煙',                    en:'Smoking' },
+  pinfo_purpose:        { ja:'目的',                    en:'Purpose',           uk:'Мета' },
+  pinfo_household:      { ja:'世帯構成',                en:'Household',         uk:'Домогосподарство' },
+  pinfo_num_children:   { ja:'子供の人数',              en:'No. of children',   uk:'Кількість дітей' },
+  pinfo_age:            { ja:'年代',                    en:'Age group',         uk:'Вік' },
+  pinfo_budget:         { ja:'家賃予算',                en:'Budget',            uk:'Бюджет' },
+  pinfo_movein:         { ja:'引越し時期',              en:'Move-in',           uk:'Час заїзду' },
+  pinfo_other:          { ja:'その他',                  en:'Other',             uk:'Інше' },
+  pinfo_pets:           { ja:'ペット可',                en:'Pets OK',           uk:'Тварини' },
+  pinfo_smoking:        { ja:'喫煙',                    en:'Smoking',           uk:'Куріння' },
 
   // Purpose chips
-  p_self:               { ja:'自分用',                  en:'For myself' },
-  p_couple:             { ja:'カップル',                en:'Couple' },
-  p_family:             { ja:'家族',                    en:'Family' },
-  p_research:           { ja:'調査',                    en:'Research' },
+  p_self:               { ja:'自分用',                  en:'For myself',        uk:'Для себе' },
+  p_couple:             { ja:'カップル',                en:'Couple',            uk:'Пара' },
+  p_family:             { ja:'家族',                    en:'Family',            uk:'Родина' },
+  p_research:           { ja:'調査',                    en:'Research',          uk:'Дослідження' },
 
   // Household chips
-  h_single:             { ja:'一人暮らし',              en:'Solo' },
-  h_couple:             { ja:'二人暮らし',              en:'Couple' },
-  h_family:             { ja:'家族（子あり）',          en:'Family (w/ kids)' },
-  h_other:              { ja:'その他',                  en:'Other' },
+  h_single:             { ja:'一人暮らし',              en:'Solo',              uk:'Самотній' },
+  h_couple:             { ja:'二人暮らし',              en:'Couple',            uk:'Пара' },
+  h_family:             { ja:'家族（子あり）',          en:'Family (w/ kids)',  uk:'Родина (з дітьми)' },
+  h_other:              { ja:'その他',                  en:'Other',             uk:'Інше' },
 
   // Children chips
-  c_1:                  { ja:'1人',                     en:'1' },
-  c_2:                  { ja:'2人',                     en:'2' },
-  c_3:                  { ja:'3人',                     en:'3' },
-  c_4:                  { ja:'4人以上',                 en:'4+' },
+  c_1:                  { ja:'1人',                     en:'1',                 uk:'1' },
+  c_2:                  { ja:'2人',                     en:'2',                 uk:'2' },
+  c_3:                  { ja:'3人',                     en:'3',                 uk:'3' },
+  c_4:                  { ja:'4人以上',                 en:'4+',                uk:'4+' },
 
   // Budget chips
-  b_60:                 { ja:'〜6万',                   en:'~¥60k' },
-  b_80:                 { ja:'6〜8万',                  en:'¥60–80k' },
-  b_100:                { ja:'8〜10万',                 en:'¥80–100k' },
-  b_130:                { ja:'10〜13万',                en:'¥100–130k' },
-  b_130p:               { ja:'13万〜',                  en:'¥130k+' },
+  b_60:                 { ja:'〜6万',                   en:'~¥60k',             uk:'до ¥60k' },
+  b_80:                 { ja:'6〜8万',                  en:'¥60–80k',           uk:'¥60–80k' },
+  b_100:                { ja:'8〜10万',                 en:'¥80–100k',          uk:'¥80–100k' },
+  b_130:                { ja:'10〜13万',                en:'¥100–130k',         uk:'¥100–130k' },
+  b_130p:               { ja:'13万〜',                  en:'¥130k+',            uk:'¥130k+' },
 
   // Move-in chips
-  m_asap:               { ja:'すぐにでも',              en:'ASAP' },
-  m_1_3:                { ja:'1〜3ヶ月後',              en:'1–3 months' },
-  m_3_6:                { ja:'3〜6ヶ月後',              en:'3–6 months' },
-  m_undecided:          { ja:'未定',                    en:'Undecided' },
+  m_asap:               { ja:'すぐにでも',              en:'ASAP',              uk:'Якнайшвидше' },
+  m_1_3:                { ja:'1〜3ヶ月後',              en:'1–3 months',        uk:'1–3 місяці' },
+  m_3_6:                { ja:'3〜6ヶ月後',              en:'3–6 months',        uk:'3–6 місяців' },
+  m_undecided:          { ja:'未定',                    en:'Undecided',         uk:'Не вирішив' },
+
+  // Onboarding language card
+  ob_lang_title:        { ja:'言語を選んでください',     en:'Choose your language', uk:'Виберіть мову' },
+  ob_lang_sub:          { ja:'あとで変更できます',       en:'You can change this later', uk:'Це можна змінити пізніше' },
 
   // Onboarding titles/subs/nav
-  ob_purpose_title:     { ja:'ようこそ！何のためにお探しですか？', en:'Welcome! What are you looking for?' },
-  ob_purpose_sub:       { ja:'あなたに合った提案をするために教えてください', en:'Help us personalise your recommendations' },
-  ob_couple:            { ja:'カップル・同棲',          en:'Couple / Partner' },
-  ob_family_for:        { ja:'家族のため',              en:'For my family' },
-  ob_household_title:   { ja:'世帯構成を教えてください', en:'Tell us about your household' },
-  ob_household_sub:     { ja:'物件の広さの参考にします', en:'Helps us suggest the right size' },
-  ob_budget_title:      { ja:'家賃の予算は？',          en:'What is your rent budget?' },
-  ob_budget_sub:        { ja:'おおよそで大丈夫です',    en:'A rough estimate is fine' },
-  ob_movein_title:      { ja:'いつ頃引越し予定ですか？', en:'When are you planning to move?' },
-  ob_area_title:        { ja:'希望エリアは？',           en:'Preferred areas?' },
-  ob_area_sub:          { ja:'複数選択できます（スキップ可）', en:'Multiple selections OK (can skip)' },
-  ob_back:              { ja:'← 戻る',                  en:'← Back' },
-  ob_skip:              { ja:'スキップ',                en:'Skip' },
-  ob_next:              { ja:'次へ →',                  en:'Next →' },
-  ob_done:              { ja:'完了 ✓',                  en:'Done ✓' },
-  panel_account:        { ja:'アカウント',               en:'Account' },
-  panel_layers:         { ja:'地図レイヤー',             en:'Map Layers' },
-  panel_about:          { ja:'セットアップ',             en:'Setup' },
-  panel_favourites:     { ja:'お気に入り',               en:'Favourites' },
-  fav_empty:            { ja:'お気に入りはまだありません。空室一覧の ☆ をクリックして追加できます。', en:'No favourites yet. Click ☆ in the Vacancies list to add one.' },
-  panel_copilot:        { ja:'AI 検索',                 en:'AI Search' },
-  copilot:              { ja:'AI検索',                  en:'AI Search' },
+  ob_purpose_title:     { ja:'ようこそ！何のためにお探しですか？', en:'Welcome! What are you looking for?', uk:'Ласкаво просимо! Що ви шукаєте?' },
+  ob_purpose_sub:       { ja:'あなたに合った提案をするために教えてください', en:'Help us personalise your recommendations', uk:'Допоможіть нам персоналізувати рекомендації' },
+  ob_couple:            { ja:'カップル・同棲',          en:'Couple / Partner',  uk:'Пара / Партнер' },
+  ob_family_for:        { ja:'家族のため',              en:'For my family',     uk:'Для родини' },
+  ob_household_title:   { ja:'世帯構成を教えてください', en:'Tell us about your household', uk:'Розкажіть про своє домогосподарство' },
+  ob_household_sub:     { ja:'物件の広さの参考にします', en:'Helps us suggest the right size', uk:'Допоможе запропонувати правильний розмір' },
+  ob_budget_title:      { ja:'家賃の予算は？',          en:'What is your rent budget?', uk:'Який ваш бюджет на оренду?' },
+  ob_budget_sub:        { ja:'おおよそで大丈夫です',    en:'A rough estimate is fine', uk:'Приблизна сума — цілком добре' },
+  ob_movein_title:      { ja:'いつ頃引越し予定ですか？', en:'When are you planning to move?', uk:'Коли плануєте переїхати?' },
+  ob_area_title:        { ja:'希望エリアは？',           en:'Preferred areas?',  uk:'Бажані райони?' },
+  ob_area_sub:          { ja:'複数選択できます（スキップ可）', en:'Multiple selections OK (can skip)', uk:'Можна вибрати кілька (можна пропустити)' },
+  ob_back:              { ja:'← 戻る',                  en:'← Back',            uk:'← Назад' },
+  ob_skip:              { ja:'スキップ',                en:'Skip',              uk:'Пропустити' },
+  ob_next:              { ja:'次へ →',                  en:'Next →',            uk:'Далі →' },
+  ob_done:              { ja:'完了 ✓',                  en:'Done ✓',            uk:'Готово ✓' },
+  panel_account:        { ja:'アカウント',               en:'Account',           uk:'Акаунт' },
+  panel_layers:         { ja:'地図レイヤー',             en:'Map Layers',        uk:'Шари карти' },
+  panel_about:          { ja:'セットアップ',             en:'Setup',             uk:'Налаштування' },
+  panel_favourites:     { ja:'お気に入り',               en:'Favourites',        uk:'Улюблені' },
+  fav_empty:            { ja:'お気に入りはまだありません。空室一覧の ☆ をクリックして追加できます。', en:'No favourites yet. Click ☆ in the Vacancies list to add one.', uk:'Ще немає улюблених. Натисніть ☆ у списку вакансій.' },
+  panel_copilot:        { ja:'AI 検索',                 en:'AI Search',         uk:'AI Пошук' },
+  copilot:              { ja:'AI検索',                  en:'AI Search',         uk:'AI Пошук' },
   // User menu
-  share_qr:             { ja:'📲 QRコードで共有',        en:'📲 Share via QR' },
+  share_qr:             { ja:'📲 QRコードで共有',        en:'📲 Share via QR',   uk:'📲 Поділитися QR' },
   // Table counts
-  count_items:          { ja:(n)=>`${n} 件`,            en:(n)=>`${n}` },
+  count_items:          { ja:(n)=>`${n} 件`,            en:(n)=>`${n}`,         uk:(n)=>`${n}` },
   // Demographics / registration
-  demo_label:           { ja:'お部屋探しについて（任意）',  en:'About your search (optional)' },
-  demo_household_ph:    { ja:'世帯構成',                 en:'Household type' },
-  demo_single:          { ja:'一人暮らし',               en:'Single' },
-  demo_couple:          { ja:'二人暮らし',               en:'Couple' },
-  demo_family:          { ja:'家族（子あり）',             en:'Family (with children)' },
-  demo_other:           { ja:'その他',                  en:'Other' },
-  demo_age_ph:          { ja:'年代',                    en:'Age range' },
-  demo_income_ph:       { ja:'世帯年収（任意）',           en:'Household income (optional)' },
-  demo_inc1:            { ja:'300万円未満',              en:'Under ¥3M' },
-  demo_inc2:            { ja:'300〜500万円',             en:'¥3M – ¥5M' },
-  demo_inc3:            { ja:'500〜800万円',             en:'¥5M – ¥8M' },
-  demo_inc4:            { ja:'800〜1200万円',            en:'¥8M – ¥12M' },
-  demo_inc5:            { ja:'1200万円以上',             en:'¥12M+' },
+  demo_label:           { ja:'お部屋探しについて（任意）',  en:'About your search (optional)', uk:'Про пошук (необов\'язково)' },
+  demo_household_ph:    { ja:'世帯構成',                 en:'Household type',    uk:'Тип домогосподарства' },
+  demo_single:          { ja:'一人暮らし',               en:'Single',            uk:'Самотній' },
+  demo_couple:          { ja:'二人暮らし',               en:'Couple',            uk:'Пара' },
+  demo_family:          { ja:'家族（子あり）',             en:'Family (with children)', uk:'Родина (з дітьми)' },
+  demo_other:           { ja:'その他',                  en:'Other',             uk:'Інше' },
+  demo_age_ph:          { ja:'年代',                    en:'Age range',         uk:'Вікова група' },
+  demo_income_ph:       { ja:'世帯年収（任意）',           en:'Household income (optional)', uk:'Дохід домогосподарства (необов\'язково)' },
+  demo_inc1:            { ja:'300万円未満',              en:'Under ¥3M',         uk:'До ¥3М' },
+  demo_inc2:            { ja:'300〜500万円',             en:'¥3M – ¥5M',        uk:'¥3М – ¥5М' },
+  demo_inc3:            { ja:'500〜800万円',             en:'¥5M – ¥8M',        uk:'¥5М – ¥8М' },
+  demo_inc4:            { ja:'800〜1200万円',            en:'¥8M – ¥12M',       uk:'¥8М – ¥12М' },
+  demo_inc5:            { ja:'1200万円以上',             en:'¥12M+',            uk:'¥12М+' },
   // Property card
-  save_listing:         { ja:'保存',                    en:'Save' },
-  saved_listing:        { ja:'保存済み',                 en:'Saved' },
-  tab_route:            { ja:'経路',                    en:'Route' },
-  tab_fac:              { ja:'施設',                    en:'Nearby' },
-  tab_photos:           { ja:'写真',                    en:'Photos' },
-  tab_floorplan:        { ja:'間取り',                  en:'Floor Plan' },
-  no_photos:            { ja:'写真なし',                 en:'No photos' },
+  save_listing:         { ja:'保存',                    en:'Save',              uk:'Зберегти' },
+  saved_listing:        { ja:'保存済み',                 en:'Saved',             uk:'Збережено' },
+  tab_route:            { ja:'経路',                    en:'Route',             uk:'Маршрут' },
+  tab_fac:              { ja:'施設',                    en:'Nearby',            uk:'Поруч' },
+  tab_photos:           { ja:'写真',                    en:'Photos',            uk:'Фото' },
+  tab_floorplan:        { ja:'間取り',                  en:'Floor Plan',        uk:'Планування' },
+  no_photos:            { ja:'写真なし',                 en:'No photos',         uk:'Немає фото' },
   // Facility table
-  col_type:             { ja:'種別',                    en:'Type' },
-  col_dist:             { ja:'距離',                    en:'Dist.' },
-  school_label:         { ja:'学校',                    en:'School' },
-  hospital_label:       { ja:'病院',                    en:'Hospital' },
-  doctors_label:        { ja:'診療所',                  en:'Clinic/GP' },
-  pharmacy_label:       { ja:'薬局',                    en:'Pharmacy' },
-  park_label:           { ja:'公園',                    en:'Park' },
-  station_label:        { ja:'駅',                      en:'Station' },
+  col_type:             { ja:'種別',                    en:'Type',              uk:'Тип' },
+  col_dist:             { ja:'距離',                    en:'Dist.',             uk:'Відстань' },
+  school_label:         { ja:'学校',                    en:'School',            uk:'Школа' },
+  hospital_label:       { ja:'病院',                    en:'Hospital',          uk:'Лікарня' },
+  doctors_label:        { ja:'診療所',                  en:'Clinic/GP',         uk:'Клініка' },
+  pharmacy_label:       { ja:'薬局',                    en:'Pharmacy',          uk:'Аптека' },
+  park_label:           { ja:'公園',                    en:'Park',              uk:'Парк' },
+  station_label:        { ja:'駅',                      en:'Station',           uk:'Станція' },
 };
 
 function t(key, ...args) {
@@ -1831,17 +1843,6 @@ function t(key, ...args) {
   if (!s) return key;
   const v = s[_lang] !== undefined ? s[_lang] : s.ja;
   return typeof v === 'function' ? v(...args) : v;
-}
-
-function applyLang() {
-  document.querySelectorAll('[data-i18n]').forEach(el => {
-    el.textContent = t(el.dataset.i18n);
-  });
-  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
-    el.placeholder = t(el.dataset.i18nPh);
-  });
-  document.getElementById('lang-ja')?.classList.toggle('active', _lang === 'ja');
-  document.getElementById('lang-en')?.classList.toggle('active', _lang === 'en');
 }
 
 function applyLang() {
@@ -1855,9 +1856,9 @@ function applyLang() {
     if (typeof v === 'string') el.placeholder = v;
   });
 
-  // Lang toggle active state
-  document.getElementById('lang-ja')?.classList.toggle('active', _lang === 'ja');
-  document.getElementById('lang-en')?.classList.toggle('active', _lang === 'en');
+  // Lang dropdown sync
+  const _langSel = document.getElementById('lang-select');
+  if (_langSel) _langSel.value = _lang;
 
   // Re-render dynamic sections that embed t() strings
   buildChips();
@@ -4104,7 +4105,7 @@ window.addEventListener('message', e => {
 });
 
 // ── Onboarding flash cards ───────────────────────────────────────────────────
-const ONBOARD_CARDS = 5;
+const ONBOARD_CARDS = 6;
 let _onboardStep = 0;
 let _onboardData = {};
 
@@ -4131,6 +4132,10 @@ function showOnboarding() {
   dotsEl.innerHTML = Array.from({length: ONBOARD_CARDS}, (_, i) =>
     `<div class="onboard-dot${i === 0 ? ' active' : ''}" id="odot-${i}"></div>`
   ).join('');
+  // Pre-select current language on card 0
+  document.querySelectorAll('#ocard-0 .onboard-chip[data-field="lang"]').forEach(b => {
+    b.classList.toggle('selected', b.dataset.val === _lang);
+  });
   _onboardRender();
   document.getElementById('onboarding-modal').classList.add('open');
 }
@@ -4155,6 +4160,15 @@ function onboardPick(btn) {
   const field = btn.dataset.field;
   const val   = btn.dataset.val;
   const multi = btn.dataset.multi === '1';
+
+  // Language card: apply immediately and reflect in dropdown
+  if (field === 'lang') {
+    btn.closest('.onboard-choices').querySelectorAll('.onboard-chip').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    setLang(val);
+    return;
+  }
+
   if (multi) {
     const cur = _onboardData[field] || [];
     const idx = cur.indexOf(val);
@@ -4168,7 +4182,7 @@ function onboardPick(btn) {
     btn.classList.add('selected');
     _onboardData[field] = val;
   }
-  // Show children count row when 家族 is selected
+  // Show children count row when family is selected
   if (field === 'household') {
     const row = document.getElementById('onboard-children-row');
     if (row) {
