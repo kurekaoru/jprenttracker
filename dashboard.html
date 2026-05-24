@@ -611,8 +611,8 @@
   .img-modal-counter { font-size: 12px; opacity: 0.55; margin-left: auto; margin-right: 14px; }
   .img-modal-close { background: rgba(255,255,255,0.12); border: none; color: #fff; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 18px; line-height: 32px; text-align: center; transition: background 0.15s; flex-shrink: 0; }
   .img-modal-close:hover { background: rgba(255,255,255,0.25); }
-  .img-modal-main { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; }
-  .img-modal-img { max-width: 100%; max-height: 68vh; object-fit: contain; border-radius: 8px; display: block; }
+  .img-modal-main { position: relative; width: 100%; height: 62vh; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.04); border-radius: 8px; }
+  .img-modal-img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; display: block; }
   .img-modal-type { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.55); color: #fff; font-size: 10px; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
   .img-modal-nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.14); border: none; color: #fff; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 20px; transition: background 0.15s; display: flex; align-items: center; justify-content: center; }
   .img-modal-nav:hover { background: rgba(255,255,255,0.28); }
@@ -1103,7 +1103,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 19:18 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 19:27 JST</p>
       </div>
 
 
@@ -2590,6 +2590,9 @@ function popupHtml(l) {
       </div>
       <div><span class="pin-rent">${rent}</span> · ${escHtml(l.layout || '—')} · ${size}</div>
       ${station ? `<div style="margin-top:3px;">${escHtml(station)}</div>` : ''}
+      ${l.thumbnail_url ? `<div style="margin-top:8px;border-radius:8px;overflow:hidden;cursor:pointer;" onclick="chatSendMsg('show me photos')">
+        <img src="${escHtml(l.thumbnail_url)}" style="width:100%;height:140px;object-fit:cover;display:block;" loading="lazy" onerror="this.parentElement.style.display='none'">
+      </div>` : ''}
       <div class="pin-meta" style="margin-top:3px;">${t('first_seen_label')}: ${fmtDate(l.first_seen)}${daysStr ? ` · ${daysStr}` : ''}</div>
       ${l.url ? `<div style="margin-top:4px;"><a href="${escHtml(l.url)}" target="_blank" rel="noopener">${t('open_listing')}</a></div>` : ''}
       <div class="prop-tabs">
@@ -3320,6 +3323,11 @@ async function chatLoadHistory() {
     document.getElementById('chat-empty')?.remove();
     messages.forEach(m => _chatAppendMsg(m.role, m.content, JSON.parse(m.listing_ids || '[]')));
   } catch (_) {}
+}
+
+function chatSendMsg(msg) {
+  const input = document.getElementById('chat-input');
+  if (input) { input.value = msg; chatSend(); }
 }
 
 async function chatSend() {
