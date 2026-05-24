@@ -1261,7 +1261,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 22:35 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 22:43 JST</p>
       </div>
 
 
@@ -1582,6 +1582,7 @@ const STRINGS = {
   max_rent_label:       { ja:'上限家賃 (円)',        en:'Max Rent (¥)' },
   max_rent_ph:          { ja:'例: 200000 (0=上限なし)', en:'e.g. 200000 (0=no limit)' },
   layout:               { ja:'間取り',              en:'Layout' },
+  layout_4ldkp:         { ja:'4LDK以上',            en:'4LDK+' },
   floor_area:           { ja:'専有面積',             en:'Floor Area' },
   min_area:             { ja:'最低面積 (m²)',        en:'Min Area (m²)' },
   walk_station:         { ja:'駅徒歩',              en:'Walk to Station' },
@@ -2004,7 +2005,7 @@ function buildChips() {
   addGroup(wc, 'ward_kawasaki',   KAWASAKI);
   addGroup(wc, 'ward_sagamihara', SAGAMIHARA);
 
-  LAYOUTS.forEach(l => makeChip(l, selectedLayouts, lc, applyMapFilters));
+  LAYOUTS.forEach(l => makeChip(l, selectedLayouts, lc, applyMapFilters, l === '4LDK以上' ? t('layout_4ldkp') : l));
 
   [['jkk', '🏠 JKK'], ['ur', '🏢 UR']].forEach(([val, lbl]) => {
     const c = document.createElement('div');
