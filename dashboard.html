@@ -57,7 +57,7 @@
   .topbar {
     display: grid;
     grid-template-columns: 38px 1fr;
-    height: 38px;
+    height: 38px; max-height: 38px; overflow: hidden;
     position: sticky;
     top: 0;
     z-index: 16;
@@ -71,22 +71,25 @@
     background: var(--rail-bg);
     border-bottom: 1px solid rgba(255,255,255,0.07);
     display: flex; align-items: center; justify-content: space-between;
-    padding: 0 1.2rem;
+    padding: 0 1.2rem; overflow: hidden; min-width: 0;
   }
   .topbar-legend {
-    display: flex; align-items: center; gap: 10px;
-    font-size: 11px; color: rgba(255,255,255,0.5);
+    display: flex; align-items: center; gap: 10px; flex-shrink: 1; min-width: 0;
+    font-size: 11px; color: rgba(255,255,255,0.5); overflow: hidden;
   }
   .topbar-legend .tl-item {
-    display: flex; align-items: center; gap: 4px;
+    display: flex; align-items: center; gap: 4px; flex-shrink: 0; white-space: nowrap;
   }
   .topbar-legend .tl-dot {
     width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
   }
   .topbar-legend .tl-sep {
-    width: 1px; height: 14px; background: rgba(255,255,255,0.1);
+    width: 1px; height: 14px; background: rgba(255,255,255,0.1); flex-shrink: 0;
   }
-  .topbar-legend #map-summary { color: rgba(255,255,255,0.32); }
+  .topbar-legend #map-summary {
+    color: rgba(255,255,255,0.32); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; min-width: 0;
+  }
   .topbar-refresh-btn {
     background: none; border: 1px solid rgba(255,255,255,0.15);
     border-radius: 10px; padding: 2px 7px; font-size: 10px;
@@ -966,7 +969,7 @@
   <div class="topbar-rail"><div class="dot">J</div></div>
   <div class="topbar-main">
     <span class="topbar-title">JKK Monitor</span>
-    <div style="display:flex;align-items:center;gap:12px;">
+    <div style="display:flex;align-items:center;gap:12px;flex-shrink:0;">
       <div class="topbar-legend">
         <span class="tl-item"><span class="tl-dot" style="background:#dc2626;"></span>JKK</span>
         <span class="tl-item"><span class="tl-dot" style="background:#3a86ff;"></span>UR</span>
@@ -1258,7 +1261,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 23:18 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 23:21 JST</p>
       </div>
 
 
