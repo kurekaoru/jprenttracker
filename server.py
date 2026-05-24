@@ -1517,7 +1517,7 @@ Rules:
 - Use show_listing_images whenever the user asks to see photos, pictures, images, or the floor plan for a property. If a property card is open, use its listing_id directly. Images render inline in the chat — no need to describe them in text.
 - HARD RULE: NEVER say images are "rendering", "displaying", "showing", "loading", or "appearing" in text. NEVER narrate what the tool is doing. Call show_listing_images — that IS the display. If you describe images in text without calling the tool, the user sees nothing.
 - Use batch_commute_filter when the user asks to filter by commute time to a destination. IMPORTANT: if the query is about the user's saved listings ("which of my saved...", "remove saved listings that are...", etc.), pass their listing IDs as listing_ids — this is MUCH faster and avoids timeouts. Only omit listing_ids when the user wants to search ALL properties. After it returns, immediately call save_listings or remove_listings with the matching IDs if the user asked to save/remove them.
-- Use save_listings to add listings to the user's saved selections. Call it immediately after batch_commute_filter or search_listings when the user explicitly asks to save/bookmark the results. To add all listings with a floor plan: call search_listings(has_floor_plan=true, limit=200) then save_listings with all returned IDs.
+- Use save_listings to add listings to the user's saved selections. Call it immediately after batch_commute_filter or search_listings when the user explicitly asks to save/bookmark the results. To add all listings with a floor plan: call search_listings(has_floor_plan=true, limit=200) then save_listings with all returned IDs. To find listings with any photo: use has_images=true.
 - To search all 23 Tokyo special wards (23区, 23-ku, 都内, inner Tokyo, etc.): call search_listings with wards=["23区"] — the server expands this automatically. Never claim there are no results without calling the tool first.
 - Use remove_listings to remove listings from saved selections. The user's current saved list with photo counts is provided in context — use the listing IDs directly. For "remove listings without photos" filter to those with photos=0.
 - HARD RULE: Never end a response with follow-up suggestions, offers to help further, or questions ("Would you like more details?", "Would you like help with anything else?", "Is there anything else I can help you with?" etc.). Answer exactly what was asked, then stop. No trailing questions or offers.
@@ -1528,7 +1528,7 @@ Rules:
 _CHAT_TOOLS = [
     {
         "name": "search_listings",
-        "description": "Search currently available rental properties. Returns up to 20 matches with id, name, ward, rent, layout, size_m2, url, source, nearest_station, walk_min, thumbnail_url. Use has_floor_plan=true to find only listings that have a floor plan image downloaded.",
+        "description": "Search currently available rental properties. Returns up to 20 matches with id, name, ward, rent, layout, size_m2, url, source, nearest_station, walk_min, thumbnail_url. Use has_floor_plan=true for listings with a floor plan; use has_images=true for listings with any downloaded photo.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -1542,6 +1542,7 @@ _CHAT_TOOLS = [
                 "source":        {"type": "string",  "enum": ["jkk","ur"], "description": "jkk=公社 ur=UR"},
                 "max_walk":      {"type": "integer", "description": "Max walk min to nearest station"},
                 "has_floor_plan":{"type": "boolean", "description": "If true, only return listings that have a floor plan image"},
+                "has_images":    {"type": "boolean", "description": "If true, only return listings that have at least one downloaded photo"},
                 "limit":         {"type": "integer", "description": "Max results, default 10, use 200 to get all"},
             },
         },
@@ -1731,6 +1732,8 @@ def _chat_search(params, con):
         conds.append("walk_min IS NOT NULL AND walk_min <= ?"); args.append(params["max_walk"])
     if params.get("has_floor_plan"):
         conds.append("id IN (SELECT DISTINCT listing_id FROM listing_images WHERE image_type='floor_plan' AND local_path IS NOT NULL)")
+    if params.get("has_images"):
+        conds.append("id IN (SELECT DISTINCT listing_id FROM listing_images WHERE local_path IS NOT NULL)")
     limit = min(int(params.get("limit", 10)), 200)
     rows = con.execute(
         f"SELECT id,name,ward,rent,layout,size_m2,url,source,nearest_station,walk_min,thumbnail_url "

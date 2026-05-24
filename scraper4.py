@@ -235,6 +235,7 @@ def _fetch_ur_images_playwright(listing_url, _page=None):
         skip_json = str(list(_UR_IMG_SKIP)).replace("'", '"')
         imgs = _page.evaluate(f"""() => {{
             const skip = {skip_json};
+            const keep = ['img_madori', 'recruit/URSI', 'img_photo/', 'img_room/'];
             return Array.from(document.querySelectorAll('img'))
                 .map(img => ({{
                     src:  img.src,
@@ -243,7 +244,8 @@ def _fetch_ur_images_playwright(listing_url, _page=None):
                     h:    img.naturalHeight
                 }}))
                 .filter(i => i.src && i.w > 80 && i.h > 80
-                          && !skip.some(s => i.src.includes(s)));
+                          && !skip.some(s => i.src.includes(s))
+                          && keep.some(k => i.src.includes(k)));
         }}""")
 
         seen, results = set(), []
