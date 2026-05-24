@@ -1105,7 +1105,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 21:17 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 21:25 JST</p>
       </div>
 
 
@@ -3335,8 +3335,11 @@ function chatUseSuggestion(btn) {
 function _chatListingCard(lid) {
   const l = _allListings?.find(x => x.id === lid && !x.disappeared_at);
   if (!l) return '';
-  const img = l.thumbnail_url
-    ? `<img src="${escHtml(l.thumbnail_url)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=chat-listing-card-no-img>🏠</div>'">`
+  const _thumbSrc = l.thumbnail_url
+    ? (l.thumbnail_url.startsWith('/') ? API.replace(/\/api\/?$/, '') + l.thumbnail_url : l.thumbnail_url)
+    : null;
+  const img = _thumbSrc
+    ? `<img src="${escHtml(_thumbSrc)}" onerror="this.parentElement.innerHTML='<div class=chat-listing-card-no-img>🏠</div>'">`
     : `<div class="chat-listing-card-no-img">🏠</div>`;
   const rent = l.rent ? `¥${Number(l.rent).toLocaleString()}` : '—';
   return `<div class="chat-listing-card" onclick="selectListing('${escHtml(lid)}')">
