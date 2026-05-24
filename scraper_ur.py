@@ -187,16 +187,8 @@ def _parse_room(room, danchi, ward_name):
     link = room.get("roomLinkPc") or ""
     url = (UR_WEB_BASE + link) if link.startswith("/") else (link or UR_WEB_BASE)
 
-    # Try common field names for danchi/room image in the UR API response
+    # thumbnail_url left None — headless scraper will populate listing_images
     thumbnail_url = None
-    for key in ("imgPath", "imgList", "img", "imgUrl", "imageUrl", "danchiImg", "photo"):
-        val = danchi.get(key) or room.get(key)
-        if val:
-            if isinstance(val, list):
-                val = val[0]
-            if isinstance(val, str) and val:
-                thumbnail_url = (UR_WEB_BASE + val) if val.startswith("/") else val
-                break
 
     address = (danchi.get("place") or "").strip()
     return {

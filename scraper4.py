@@ -78,7 +78,8 @@ def listing_id(listing):
     return hashlib.md5(key.encode()).hexdigest()
 
 def init_db():
-    con = sqlite3.connect(DB_FILE)
+    con = sqlite3.connect(DB_FILE, timeout=60)
+    con.execute("PRAGMA journal_mode=WAL")
     con.executescript(
         "CREATE TABLE IF NOT EXISTS listings ("
         "  id TEXT PRIMARY KEY,"
@@ -172,6 +173,201 @@ def upsert_listing(con, lid, listing, notified=False):
 IMG_DIR = "images"
 _IMG_HEADERS = {"User-Agent": "jkktrackr/1.0 (image-collector)"}
 
+_CHROME_ARGS = [
+    "--disable-blink-features=AutomationControlled",
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+]
+_SCRAPER_UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0.0.0 Safari/537.36"
+)
+
+# UR image skip patterns (site-wide UI assets)
+_UR_IMG_SKIP = (
+    '/img/common/', '/img/ogp/', '/img/talent/', 'img_loading',
+    '_photo_s.jpg', '_TF_', 'apple-touch-icon',
+)
+
+
+def _classify_ur_image(src, alt):
+    """Return image_type for a UR image based on alt text and URL, or None to skip."""
+    if '間取' in alt or 'madori' in src.lower():
+        return 'floor_plan'
+    if '交通図' in alt or '_TF_' in src:
+        return None  # transport diagram — not useful
+    if '外観' in alt:
+        return 'exterior'
+    return 'interior'
+
+
+def _fetch_ur_images_playwright(listing_url, _page=None):
+    """
+    Render a UR room page with a headless browser and return all images.
+    If _page is supplied (an open Playwright Page), reuse it instead of
+    creating a new browser — useful for batch backfills.
+    Returns [(url, image_type)] sorted floor_plan first, capped at 20.
+    """
+    owned = _page is None
+    browser = _pw = None
+    try:
+        if owned:
+            _pw = sync_playwright().__enter__()
+            browser = _pw.chromium.launch(headless=True, args=_CHROME_ARGS)
+            _page = browser.new_page(user_agent=_SCRAPER_UA)
+
+        _page.goto(listing_url, timeout=30_000, wait_until="commit")
+        # Wait for actual room photos to appear in DOM (JS-rendered via AJAX).
+        # Covers floor plans (img_madori), interior shots (recruit/URSI), and
+        # common-area photos (img_photo).  Falls back gracefully after 30 s
+        # for listings that genuinely have no photos.
+        try:
+            _page.wait_for_selector(
+                'img[src*="img_madori"], img[src*="recruit/URSI"], img[src*="img_photo/"]',
+                timeout=30_000,
+            )
+        except Exception:
+            pass
+        _page.wait_for_timeout(1_000)
+
+        skip_json = str(list(_UR_IMG_SKIP)).replace("'", '"')
+        imgs = _page.evaluate(f"""() => {{
+            const skip = {skip_json};
+            return Array.from(document.querySelectorAll('img'))
+                .map(img => ({{
+                    src:  img.src,
+                    alt:  img.alt || '',
+                    w:    img.naturalWidth,
+                    h:    img.naturalHeight
+                }}))
+                .filter(i => i.src && i.w > 80 && i.h > 80
+                          && !skip.some(s => i.src.includes(s)));
+        }}""")
+
+        seen, results = set(), []
+        for img in imgs:
+            src = img["src"]
+            if src in seen:
+                continue
+            seen.add(src)
+            img_type = _classify_ur_image(src, img["alt"])
+            if img_type is None:
+                continue
+            results.append((src, img_type))
+
+        results.sort(key=lambda x: (
+            0 if x[1] == "floor_plan" else 1 if x[1] == "exterior" else 2
+        ))
+        return results[:20]
+
+    except Exception as e:
+        log.debug(f"UR headless image fetch failed ({listing_url}): {e}")
+        return []
+    finally:
+        if owned and browser:
+            try:
+                browser.close()
+                _pw.__exit__(None, None, None)
+            except Exception:
+                pass
+
+
+def _save_jkk_images_in_session(ctx, listings):
+    """
+    Download JKK room images using the active browser context (session cookies
+    are required — mz_copyright URLs return 403 otherwise).
+
+    Probes sequences 000–009 for each listing that has a mz_copyright thumbnail
+    and no images yet.  seq 000 is treated as floor_plan; the rest as interior.
+    After download, runs Haiku OCR on seq-000 images to confirm/reclassify.
+    """
+    con = sqlite3.connect(DB_FILE, timeout=60)
+    con.execute("PRAGMA journal_mode=WAL")
+    try:
+        lids_with_images = {
+            row[0] for row in
+            con.execute("SELECT DISTINCT listing_id FROM listing_images").fetchall()
+        }
+        saved = 0
+        for lst in listings:
+            lid = listing_id(lst)
+            if lid in lids_with_images:
+                continue
+            thumb = lst.get("thumbnail_url") or ""
+            m = re.search(r"mz_copyright/mobile/(\d+)/", thumb)
+            if not m:
+                continue
+            mz_id = m.group(1)
+
+            img_dir = os.path.join(IMG_DIR, lid)
+            os.makedirs(img_dir, exist_ok=True)
+
+            imgs_saved = 0
+            first_url = None
+            for seq in range(10):
+                url = f"{JKK_BASE}/mz_copyright/mobile/{mz_id}/{mz_id}{seq:03d}.jpg"
+                try:
+                    resp = ctx.request.get(url, timeout=10_000)
+                    if resp.status != 200:
+                        break
+                    ct = resp.headers.get("content-type", "")
+                    if not ct.startswith("image"):
+                        break
+                    body = resp.body()
+                    img_type = "floor_plan" if seq == 0 else "interior"
+                    con.execute(
+                        "INSERT OR IGNORE INTO listing_images (listing_id, url, image_type) VALUES (?,?,?)",
+                        (lid, url, img_type),
+                    )
+                    con.commit()
+                    row_id = con.execute(
+                        "SELECT id FROM listing_images WHERE listing_id=? AND url=?",
+                        (lid, url),
+                    ).fetchone()[0]
+                    fpath = os.path.join(img_dir, f"{row_id}.jpg")
+                    with open(fpath, "wb") as f:
+                        f.write(body)
+                    ocr_text = None
+                    if img_type == "floor_plan":
+                        ocr_text = _ocr_floor_plan(fpath)
+                        if ocr_text:
+                            log.info(f"JKK OCR {fpath}: {ocr_text[:80]}")
+                        else:
+                            # seq 0 wasn't a floor plan — downgrade
+                            img_type = "interior"
+                            con.execute(
+                                "UPDATE listing_images SET image_type=? WHERE id=?",
+                                (img_type, row_id),
+                            )
+                    con.execute(
+                        "UPDATE listing_images SET local_path=?, downloaded_at=?, ocr_text=? WHERE id=?",
+                        (fpath, datetime.now().isoformat(), ocr_text, row_id),
+                    )
+                    con.commit()
+                    if first_url is None:
+                        first_url = url
+                    imgs_saved += 1
+                except Exception as e:
+                    log.debug(f"JKK img seq {seq} failed ({mz_id}): {e}")
+                    break
+
+            if imgs_saved:
+                if first_url:
+                    con.execute(
+                        "UPDATE listings SET thumbnail_url=? WHERE id=? AND thumbnail_url IS NULL",
+                        (first_url, lid),
+                    )
+                    con.commit()
+                saved += 1
+                log.info(f"JKK images: {imgs_saved} saved for {lst['name']}")
+            lids_with_images.add(lid)  # avoid re-processing same listing
+    finally:
+        con.close()
+    if saved:
+        log.info(f"JKK session image collection: {saved} listing(s) processed.")
+
 def download_pending_images(con, limit=50):
     """Download queued images; run OCR on floor plans."""
     rows = con.execute(
@@ -227,13 +423,22 @@ def _classify_image(url, alt="", parent_text=""):
         return "exterior"
     return "interior"
 
+
 def _fetch_detail_images(listing_url):
     """
     Fetch all images from a listing detail page.
     Returns list of (url, image_type) sorted: floor_plan first.
+
+    For UR listings the site is fully JS-rendered, so we derive the exterior
+    photo directly from the room URL instead of scraping HTML.
     """
     if not listing_url or listing_url.startswith("javascript"):
         return []
+
+    # UR pages are fully JS-rendered — use headless browser for full image set
+    if "ur-net.go.jp" in listing_url:
+        return _fetch_ur_images_playwright(listing_url)
+
     try:
         r = requests.get(listing_url, timeout=15, headers=_DETAIL_HEADERS)
         if r.status_code != 200:
@@ -258,7 +463,7 @@ def _fetch_detail_images(listing_url):
         for img in soup.find_all("img", src=True):
             src = urljoin(listing_url, img["src"])
             alt = img.get("alt", "")
-            parent = " ".join(p.get("class", []) for p in img.parents if hasattr(p, "get"))
+            parent = " ".join(cls for p in img.parents if hasattr(p, "get") for cls in p.get("class", []))
             add(src, _classify_image(src, alt, parent))
 
         # Floor plans first, then others
@@ -309,7 +514,8 @@ def _ocr_floor_plan(image_path):
 def _scrape_images_for_new_listings(new_lids):
     if not new_lids:
         return
-    con = sqlite3.connect(DB_FILE)
+    con = sqlite3.connect(DB_FILE, timeout=60)
+    con.execute("PRAGMA journal_mode=WAL")
     rows = con.execute(
         f"SELECT id, url FROM listings WHERE id IN ({','.join('?'*len(new_lids))})",
         new_lids
@@ -497,6 +703,12 @@ def fetch_listings():
 
                 next_btn.click()
                 wait_stable(popup)
+
+            # Collect JKK images while session cookies are still valid
+            try:
+                _save_jkk_images_in_session(ctx, all_listings)
+            except Exception as e:
+                log.warning(f"JKK in-session image collection failed: {e}")
 
             browser.close()
         ok = True

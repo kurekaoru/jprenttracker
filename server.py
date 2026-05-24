@@ -2,7 +2,7 @@
 Config + read API for the dashboard. Run alongside scraper4.py.
 """
 
-from flask import Flask, jsonify, request, redirect
+from flask import Flask, jsonify, request, redirect, send_file
 from flask_cors import CORS
 from flask_jwt_extended import (
     JWTManager, create_access_token, jwt_required, get_jwt_identity
@@ -795,6 +795,16 @@ def record_view(listing_id):
 
 # ── Listing facilities ────────────────────────────────────────────────────────
 
+@app.route("/api/images/<int:image_id>")
+def serve_listing_image(image_id):
+    con = db()
+    row = con.execute("SELECT local_path FROM listing_images WHERE id=?", (image_id,)).fetchone()
+    con.close()
+    if not row or not row["local_path"] or not os.path.isfile(row["local_path"]):
+        return "", 404
+    return send_file(row["local_path"])
+
+
 @app.route("/api/listings/<listing_id>/facilities")
 def get_listing_facilities(listing_id):
     con  = db()
@@ -1233,6 +1243,10 @@ Rules:
 - Do not use emojis. Keep responses concise and factual.
 - Use find_nearby_place when the user asks about any facility near a property (hospital, school, gym, etc.). Always call the tool — never skip it, never redirect to Google Maps, never guess. If the tool returns an error, report the exact error message and stop — do NOT follow up with guesses or suggestions about what might be nearby. If results come back, immediately call get_commute_time with the nearest place name as destination to give an actual travel time.
 - If a tool returns no results, say so plainly and offer to try different search parameters.
+- Use show_listing_images whenever the user asks to see photos, pictures, images, or the floor plan for a property. If a property card is open, use its listing_id directly. Images render inline in the chat — no need to describe them in text.
+- Use batch_commute_filter when the user asks to filter/select/find ALL properties by commute time to a destination ("within 1hr of X", "reachable from Y in under 45 min", etc.). This checks every geocoded listing server-side. After it returns, immediately call save_listings with the matching listing_ids if the user asked to save/add them to selections.
+- Use save_listings to add listings to the user's saved selections. Call it immediately after batch_commute_filter (if the user asked to save) or after search_listings when the user explicitly asks to save/bookmark the results.
+- HARD RULE: Never end a response with follow-up suggestions, offers to help further, or questions ("Would you like more details?", "Would you like help with anything else?", "Is there anything else I can help you with?" etc.). Answer exactly what was asked, then stop. No trailing questions or offers.
 """
 
 _CHAT_TOOLS = [
@@ -1319,6 +1333,50 @@ _CHAT_TOOLS = [
         },
     },
     {
+        "name": "show_listing_images",
+        "description": "Show photos (floor plan, interiors, exterior) for a specific listing. Renders an image gallery directly in the chat. Use whenever the user asks to see photos, pictures, floor plans, or images for a property.",
+        "input_schema": {
+            "type": "object",
+            "required": ["listing_id"],
+            "properties": {"listing_id": {"type": "string"}},
+        },
+    },
+    {
+        "name": "batch_commute_filter",
+        "description": "Check transit commute time from EVERY active geocoded listing to a destination and return those within the limit. Use when user says 'find all properties within X minutes of Y' or 'select everything reachable from Z in under N min'. Returns matching listing IDs with commute times. Batches all listings in a few API calls.",
+        "input_schema": {
+            "type": "object",
+            "required": ["destination", "max_minutes"],
+            "properties": {
+                "destination": {"type": "string",  "description": "Destination station or address in Japanese, e.g. '目黒駅'"},
+                "max_minutes": {"type": "integer", "description": "Maximum one-way transit commute in minutes"},
+                "source":      {"type": "string",  "enum": ["jkk", "ur"], "description": "Optionally restrict to one source"},
+            },
+        },
+    },
+    {
+        "name": "save_listings",
+        "description": "Add a list of listings to the user's saved selections (bookmarks). Call this after batch_commute_filter or search_listings when the user wants to save/bookmark those results.",
+        "input_schema": {
+            "type": "object",
+            "required": ["listing_ids"],
+            "properties": {
+                "listing_ids": {"type": "array", "items": {"type": "string"}, "description": "IDs to save"},
+            },
+        },
+    },
+    {
+        "name": "get_market_trends",
+        "description": "Historical data on how long listings stayed available before disappearing. Use for questions like 'how fast do listings go?', 'how long do UR listings in Nerima last?', 'which ward has the quickest turnover?'. Returns avg/min/max days active broken down by source and ward.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ward":   {"type": "string", "description": "Filter by ward (partial match), e.g. 練馬区"},
+                "source": {"type": "string", "enum": ["jkk", "ur"], "description": "Filter by source"},
+            },
+        },
+    },
+    {
         "name": "find_nearby_place",
         "description": (
             "Find the nearest places of a given type near a listing using Google Maps Places API. "
@@ -1389,6 +1447,122 @@ def _chat_stats(con):
         "layouts": [dict(r) for r in layouts],
     }
 
+def _chat_show_images(params, con):
+    lid = params.get("listing_id", "")
+    rows = con.execute(
+        "SELECT id, url, image_type, local_path FROM listing_images WHERE listing_id=? "
+        "ORDER BY CASE image_type WHEN 'floor_plan' THEN 0 WHEN 'exterior' THEN 1 ELSE 2 END, id",
+        (lid,),
+    ).fetchall()
+    if not rows:
+        return {"error": "no images found for this listing"}
+    images = []
+    for r in rows:
+        serve_url = f"/api/images/{r['id']}" if r["local_path"] else r["url"]
+        images.append({"url": serve_url, "type": r["image_type"]})
+    _row = con.execute("SELECT name FROM listings WHERE id=?", (lid,)).fetchone()
+    name = _row["name"] if _row else ""
+    return {"count": len(images), "listing_name": name, "images": images}
+
+
+def _chat_batch_commute(params, con):
+    destination = params.get("destination", "")
+    max_minutes = int(params.get("max_minutes", 60))
+    if not destination:
+        return {"error": "destination required"}
+    if not GOOGLE_MAPS_SERVER_KEY:
+        return {"error": "Google Maps API key not configured"}
+
+    conds, args = ["disappeared_at IS NULL", "lat IS NOT NULL", "lng IS NOT NULL"], []
+    if params.get("source"):
+        conds.append("source = ?"); args.append(params["source"])
+    rows = con.execute(
+        f"SELECT id, name, ward, rent, layout, source, lat, lng FROM listings WHERE {' AND '.join(conds)}",
+        args,
+    ).fetchall()
+    if not rows:
+        return {"error": "No geocoded listings found"}
+
+    # Use next weekday 9 AM for representative rush-hour transit
+    now = datetime.now()
+    dep = now.replace(hour=9, minute=0, second=0, microsecond=0)
+    if dep <= now:
+        dep += timedelta(days=1)
+    while dep.weekday() >= 5:
+        dep += timedelta(days=1)
+    dep_ts = int(dep.timestamp())
+
+    matching = []
+    BATCH = 25
+    for i in range(0, len(rows), BATCH):
+        batch = rows[i:i + BATCH]
+        origins = "|".join(f"{r['lat']},{r['lng']}" for r in batch)
+        try:
+            resp = requests.get(
+                "https://maps.googleapis.com/maps/api/distancematrix/json",
+                params={"origins": origins, "destinations": destination,
+                        "mode": "transit", "departure_time": dep_ts,
+                        "language": "ja", "region": "JP",
+                        "key": GOOGLE_MAPS_SERVER_KEY},
+                timeout=30,
+            ).json()
+        except Exception as e:
+            log.warning(f"Distance Matrix batch {i} failed: {e}")
+            continue
+        if resp.get("status") != "OK":
+            log.warning(f"Distance Matrix status: {resp.get('status')}")
+            continue
+        for j, row_data in enumerate(resp.get("rows", [])):
+            el = (row_data.get("elements") or [{}])[0]
+            if el.get("status") == "OK":
+                minutes = round(el["duration"]["value"] / 60)
+                if minutes <= max_minutes:
+                    r = batch[j]
+                    matching.append({
+                        "id": r["id"], "name": r["name"], "ward": r["ward"],
+                        "rent": r["rent"], "layout": r["layout"], "source": r["source"],
+                        "commute_minutes": minutes,
+                    })
+
+    matching.sort(key=lambda x: x["commute_minutes"])
+    return {
+        "count": len(matching),
+        "checked": len(rows),
+        "destination": destination,
+        "max_minutes": max_minutes,
+        "listings": matching,
+    }
+
+
+def _chat_market_trends(params, con):
+    conds, args = ["disappeared_at IS NOT NULL", "first_seen IS NOT NULL"], []
+    if params.get("ward"):
+        conds.append("ward LIKE ?"); args.append(f"%{params['ward']}%")
+    if params.get("source"):
+        conds.append("source = ?"); args.append(params["source"])
+    where = " AND ".join(conds)
+    by_source = con.execute(
+        f"""SELECT source, COUNT(*) n,
+            ROUND(AVG(julianday(disappeared_at)-julianday(first_seen)),1) avg_days,
+            ROUND(MIN(julianday(disappeared_at)-julianday(first_seen)),1) min_days,
+            ROUND(MAX(julianday(disappeared_at)-julianday(first_seen)),1) max_days
+           FROM listings WHERE {where} GROUP BY source ORDER BY source""",
+        args,
+    ).fetchall()
+    by_ward = con.execute(
+        f"""SELECT ward, source, COUNT(*) n,
+            ROUND(AVG(julianday(disappeared_at)-julianday(first_seen)),1) avg_days
+           FROM listings WHERE {where}
+           GROUP BY ward, source ORDER BY n DESC LIMIT 20""",
+        args,
+    ).fetchall()
+    return {
+        "total_historical": sum(r["n"] for r in by_source),
+        "by_source": [dict(r) for r in by_source],
+        "by_ward":   [dict(r) for r in by_ward],
+    }
+
+
 def _chat_details(params, con):
     row = con.execute(
         "SELECT * FROM listings WHERE id=? AND disappeared_at IS NULL",
@@ -1411,7 +1585,7 @@ def _chat_details(params, con):
         result["floor_plan_ocr"] = "\n---\n".join(ocr_texts)
     return result
 
-def _call_claude(history, con, open_listing=None):
+def _call_claude(history, con, open_listing=None, user_id=None):
     if not _anthropic:
         return {"text": "anthropic パッケージが未インストールです: pip install anthropic", "listing_ids": [], "actions": []}
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -1453,6 +1627,34 @@ def _call_claude(history, con, open_listing=None):
                 all_ids.extend(r["id"] for r in result.get("listings", []))
             elif block.name == "get_statistics":
                 result = _chat_stats(con)
+            elif block.name == "show_listing_images":
+                result = _chat_show_images(block.input, con)
+                if "images" in result:
+                    all_actions.append({
+                        "type": "show_images",
+                        "listing_name": result.get("listing_name", ""),
+                        "images": result["images"],
+                    })
+            elif block.name == "batch_commute_filter":
+                result = _chat_batch_commute(block.input, con)
+                all_ids.extend(r["id"] for r in result.get("listings", []))
+            elif block.name == "save_listings":
+                ids = block.input.get("listing_ids", [])
+                if user_id and ids:
+                    now_iso = datetime.now().isoformat()
+                    for lid in ids:
+                        con.execute(
+                            "INSERT OR IGNORE INTO user_saved_listings (user_id, listing_id) VALUES (?,?)",
+                            (user_id, lid),
+                        )
+                    con.commit()
+                    all_actions.append({"type": "save_listings", "listing_ids": ids})
+                    all_ids.extend(ids)
+                    result = {"saved": len(ids)}
+                else:
+                    result = {"error": "not logged in" if not user_id else "no listing_ids provided"}
+            elif block.name == "get_market_trends":
+                result = _chat_market_trends(block.input, con)
             elif block.name == "get_listing_details":
                 result = _chat_details(block.input, con)
                 if "id" in result:
@@ -1629,7 +1831,7 @@ def chat_send():
         if row:
             open_listing = dict(row)
 
-    result = _call_claude(history, con, open_listing=open_listing)
+    result = _call_claude(history, con, open_listing=open_listing, user_id=user_id)
 
     con.execute(
         "INSERT INTO chat_messages (session_id, role, content, listing_ids) VALUES (?,?,?,?)",
