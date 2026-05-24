@@ -596,7 +596,8 @@
   }
   .prop-photos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding-top: 4px; }
   .prop-photos-grid img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 5px; cursor: pointer; background: var(--surface2); display: block; }
-  .prop-photos-grid img[data-type="floor_plan"] { grid-column: 1 / -1; aspect-ratio: 16/9; object-fit: contain; }
+  #prop-floorplan-grid { grid-template-columns: 1fr; }
+  #prop-floorplan-grid img { aspect-ratio: unset; height: auto; object-fit: unset; background: none; }
   .chat-listing-card:hover { border-color: rgba(74,222,128,0.5); }
   .chat-listing-card img { width: 100%; height: 80px; object-fit: cover; display: block; background: var(--surface2); }
   .chat-listing-card-no-img { width: 100%; height: 80px; background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 22px; }
@@ -1104,7 +1105,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 20:27 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 20:36 JST</p>
       </div>
 
 
