@@ -59,17 +59,25 @@ def backfill_ur(limit: int, delay: float):
 
     log.info(f"UR: backfilling {len(rows)} listing(s) with headless browser…")
 
-    # Share a single browser but create a fresh page per listing.
-    # Reusing the same page causes UR's JS to not re-initialize image galleries.
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, args=_CHROME_ARGS)
+    # Recreate the browser every BROWSER_RECYCLE_EVERY listings.
+    # UR bot-detection blocks the session after ~2 pages from the same browser.
+    BROWSER_RECYCLE_EVERY = 3
 
-        scraped = 0
+    scraped = 0
+    p_ctx = sync_playwright().__enter__()
+    browser = p_ctx.chromium.launch(headless=True, args=_CHROME_ARGS)
+
+    try:
         for i, row in enumerate(rows, 1):
             lid, url = row["id"], row["url"]
             log.info(f"[{i}/{len(rows)}] {lid}  {url[:80]}")
 
-            # Fresh page each time so UR's image gallery JS initialises cleanly
+            # Recycle browser to avoid UR bot-detection session blocks
+            if i > 1 and (i - 1) % BROWSER_RECYCLE_EVERY == 0:
+                log.info("  recycling browser…")
+                browser.close()
+                browser = p_ctx.chromium.launch(headless=True, args=_CHROME_ARGS)
+
             page = browser.new_page(user_agent=_SCRAPER_UA)
             try:
                 images = _fetch_ur_images_playwright(url, _page=page)
@@ -96,7 +104,9 @@ def backfill_ur(limit: int, delay: float):
             scraped += 1
             time.sleep(delay)
 
+    finally:
         browser.close()
+        p_ctx.__exit__(None, None, None)
 
     log.info(f"UR: queued images for {scraped}/{len(rows)} listing(s). Downloading…")
 
