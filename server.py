@@ -46,6 +46,11 @@ GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 GOOGLE_REDIRECT_URI  = os.environ.get("GOOGLE_REDIRECT_URI",
                          "https://jkk-monitor.duckdns.org/api/auth/google/callback")
 
+GITHUB_CLIENT_ID     = os.environ.get("GITHUB_CLIENT_ID", "")
+GITHUB_CLIENT_SECRET = os.environ.get("GITHUB_CLIENT_SECRET", "")
+GITHUB_REDIRECT_URI  = os.environ.get("GITHUB_REDIRECT_URI",
+                         "https://jkk-monitor.duckdns.org/api/auth/github/callback")
+
 DASHBOARD_URL = os.environ.get("DASHBOARD_URL", "http://34.72.39.84:5050")
 
 TOKYO_WARDS = [
@@ -241,11 +246,12 @@ def db():
     con.commit()
 
     # users table migrations
-    try:
-        con.execute("ALTER TABLE users ADD COLUMN google_id TEXT")
-        con.commit()
-    except Exception:
-        pass
+    for col in ("google_id", "github_id"):
+        try:
+            con.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT")
+            con.commit()
+        except Exception:
+            pass
 
     # Column migrations (idempotent)
     for col, defn in [
@@ -1161,6 +1167,123 @@ def google_oauth_callback():
 </div><script>
 try{{window.opener&&window.opener.postMessage({{
   type:'google-auth',
+  token:{json.dumps(token)},
+  email:{json.dumps(email)},
+  display_name:{json.dumps(display_name or str(user["display_name"] or ""))},
+  needs_onboarding:{'true' if needs_onboarding else 'false'}
+}},'*');}}catch(e){{}}
+setTimeout(()=>window.close(),600);
+</script></body></html>"""
+
+
+@app.route("/api/auth/github/start")
+def github_oauth_start():
+    if not GITHUB_CLIENT_ID:
+        return _error_page("GITHUB_CLIENT_ID が設定されていません")
+    state = secrets.token_hex(16)
+    con   = db()
+    _store_oauth_state(con, f"github_state_{state}", 0)
+    con.close()
+    url = "https://github.com/login/oauth/authorize?" + urlencode({
+        "client_id":    GITHUB_CLIENT_ID,
+        "redirect_uri": GITHUB_REDIRECT_URI,
+        "scope":        "user:email",
+        "state":        state,
+    })
+    return redirect(url)
+
+
+@app.route("/api/auth/github/callback")
+def github_oauth_callback():
+    code  = request.args.get("code")
+    state = request.args.get("state")
+    if not code or not state:
+        return _error_page("OAuth パラメータが不正です")
+    con = db()
+    stored = con.execute("SELECT value FROM app_config WHERE key=?",
+                         (f"github_state_{state}",)).fetchone()
+    if not stored:
+        con.close()
+        return _error_page("セッションが無効です（再度お試しください）")
+    con.execute("DELETE FROM app_config WHERE key=?", (f"github_state_{state}",))
+    con.commit()
+    try:
+        r = requests.post("https://github.com/login/oauth/access_token", data={
+            "client_id":     GITHUB_CLIENT_ID,
+            "client_secret": GITHUB_CLIENT_SECRET,
+            "code":          code,
+            "redirect_uri":  GITHUB_REDIRECT_URI,
+        }, headers={"Accept": "application/json"}, timeout=10)
+        tokens       = r.json()
+        access_token = tokens.get("access_token")
+        if not access_token:
+            con.close()
+            return _error_page("トークン取得に失敗しました: " + tokens.get("error_description", ""))
+
+        ui       = requests.get("https://api.github.com/user",
+                                headers={"Authorization": f"Bearer {access_token}",
+                                         "Accept": "application/vnd.github+json"}, timeout=10)
+        userinfo    = ui.json()
+        github_id   = str(userinfo.get("id", ""))
+        display_name = userinfo.get("name") or userinfo.get("login", "")
+
+        # GitHub may not expose email; fetch from /user/emails if needed
+        email = userinfo.get("email", "") or ""
+        if not email:
+            er = requests.get("https://api.github.com/user/emails",
+                              headers={"Authorization": f"Bearer {access_token}",
+                                       "Accept": "application/vnd.github+json"}, timeout=10)
+            for e in er.json():
+                if e.get("primary") and e.get("verified"):
+                    email = e["email"].lower()
+                    break
+            if not email and er.json():
+                email = er.json()[0].get("email", "").lower()
+
+        if not github_id:
+            con.close()
+            return _error_page("ユーザー情報の取得に失敗しました")
+        if not email:
+            email = f"github_{github_id}@noemail.local"
+
+        user = con.execute("SELECT * FROM users WHERE github_id=?", (github_id,)).fetchone()
+        if not user:
+            user = con.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+            if user:
+                con.execute("UPDATE users SET github_id=? WHERE id=?", (github_id, user["id"]))
+                con.commit()
+            else:
+                con.execute(
+                    "INSERT INTO users (email, password_hash, display_name, github_id) VALUES (?,?,?,?)",
+                    (email, "", display_name or email.split("@")[0], github_id)
+                )
+                con.commit()
+                user = con.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+                con.execute("INSERT OR IGNORE INTO user_settings (user_id) VALUES (?)", (user["id"],))
+                con.commit()
+
+        pinfo_row = con.execute(
+            "SELECT personal_info FROM user_settings WHERE user_id=?", (user["id"],)
+        ).fetchone()
+        pinfo = json.loads(pinfo_row["personal_info"] or "{}") if pinfo_row else {}
+        needs_onboarding = not pinfo.get("onboarding_done", False)
+
+        token = create_access_token(identity=str(user["id"]))
+        con.close()
+    except Exception as e:
+        try: con.close()
+        except Exception: pass
+        return _error_page(f"認証エラー: {e}")
+
+    return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>body{{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#0d1117;color:#e6edf3}}.box{{text-align:center}}</style>
+</head><body><div class="box">
+<div style="font-size:48px">✅</div>
+<p style="font-size:16px;font-weight:600;margin:8px 0">ログインしました</p>
+<p style="font-size:13px;color:#888">このタブを閉じています…</p>
+</div><script>
+try{{window.opener&&window.opener.postMessage({{
+  type:'github-auth',
   token:{json.dumps(token)},
   email:{json.dumps(email)},
   display_name:{json.dumps(display_name or str(user["display_name"] or ""))},
