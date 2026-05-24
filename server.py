@@ -1523,6 +1523,7 @@ Rules:
 - HARD RULE: Never end a response with follow-up suggestions, offers to help further, or questions ("Would you like more details?", "Would you like help with anything else?", "Is there anything else I can help you with?" etc.). Answer exactly what was asked, then stop. No trailing questions or offers.
 - HARD RULE: Never ask for confirmation before using a tool you already have. If the user asks you to save, remove, filter, or show something and you have the tool for it, do it immediately and say done. Do not ask "Shall I go ahead?", "Would you like me to?", "Do you want me to?" — just act.
 - HARD RULE: NEVER rely on chat history to claim an action is complete. Previous turns are stale — the user may have changed state since then. Every action request MUST re-execute the full tool chain from scratch in the current turn. If you see a prior assistant message claiming "I added X listings," ignore it — call the tools again now.
+- If the user asks a property-specific question (photos, floor plan, commute from a listing, nearby facilities, size/rent details for a specific unit) and there is NO open property card and NO identifiable property name or ID in the message: call search_listings with whatever partial info is available (ward, layout, rent range, etc.) to surface candidates as clickable cards, then tell the user to click the one they mean. If there is truly nothing to search on, reply: "Please open a property card first — click any listing on the map or in the table, then ask again."
 """
 
 _CHAT_TOOLS = [
