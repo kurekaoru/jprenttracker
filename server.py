@@ -1616,12 +1616,49 @@ def _chat_details(params, con):
         result["floor_plan_ocr"] = "\n---\n".join(ocr_texts)
     return result
 
+import re as _re
+_PHOTO_RE = _re.compile(
+    r'(show|see|view|display|open|get|fetch|load|give|表示|見せ|見たい|みたい|写真|画像|間取り|フロアプラン|floor\s*plan|photo|image|picture|gallery)',
+    _re.IGNORECASE,
+)
+
+def _is_photo_request(history):
+    """Return (True, image_type_filter) if the last user message is a photo/floor-plan request."""
+    last = next((m for m in reversed(history) if m["role"] == "user"), None)
+    if not last:
+        return False, None
+    txt = last["content"] if isinstance(last["content"], str) else ""
+    if not _PHOTO_RE.search(txt):
+        return False, None
+    lower = txt.lower()
+    if any(w in lower for w in ("floor plan", "間取り", "フロアプラン", "floor_plan")):
+        return True, "floor_plan"
+    if any(w in lower for w in ("exterior", "外観", "外装")):
+        return True, "exterior"
+    if any(w in lower for w in ("interior", "室内", "内装")):
+        return True, "interior"
+    return True, None
+
 def _call_claude(history, con, open_listing=None, user_id=None):
     if not _anthropic:
         return {"text": "anthropic パッケージが未インストールです: pip install anthropic", "listing_ids": [], "actions": []}
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
         return {"text": "ANTHROPIC_API_KEY が .env に設定されていません。", "listing_ids": [], "actions": []}
+
+    # Fast path: if user is asking for photos and a listing is open, skip the LLM
+    is_photo, photo_type = _is_photo_request(history)
+    if is_photo and open_listing:
+        params = {"listing_id": open_listing["id"]}
+        if photo_type:
+            params["image_type"] = photo_type
+        result = _chat_show_images(params, con)
+        if "images" in result:
+            return {
+                "text": "",
+                "listing_ids": [],
+                "actions": [{"type": "show_images", "listing_name": result["listing_name"], "images": result["images"]}],
+            }
 
     client = _anthropic.Anthropic(api_key=api_key)
     messages = [{"role": m["role"], "content": m["content"]} for m in history]
