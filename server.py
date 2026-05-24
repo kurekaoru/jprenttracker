@@ -1701,7 +1701,7 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
 
     for _ in range(10):
         resp = client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             max_tokens=1024,
             system=CHAT_SYSTEM.format(date=datetime.now().strftime("%Y-%m-%d"), open_listing_context=open_ctx),
             tools=_CHAT_TOOLS,
