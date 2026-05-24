@@ -1647,6 +1647,9 @@ def _call_claude(history, con, open_listing=None, user_id=None):
         )
         if resp.stop_reason != "tool_use":
             text = "".join(b.text for b in resp.content if hasattr(b, "text"))
+            # Images are self-displaying — suppress AI text narration when photos were shown
+            if any(a.get("type") == "show_images" for a in all_actions):
+                text = ""
             return {"text": text, "listing_ids": all_ids, "actions": all_actions}
 
         tool_results = []
