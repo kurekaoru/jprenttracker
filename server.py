@@ -1524,6 +1524,7 @@ Rules:
 - HARD RULE: Never ask for confirmation before using a tool you already have. If the user asks you to save, remove, filter, or show something and you have the tool for it, do it immediately and say done. Do not ask "Shall I go ahead?", "Would you like me to?", "Do you want me to?" — just act.
 - HARD RULE: NEVER rely on chat history to claim an action is complete. Previous turns are stale — the user may have changed state since then. Every action request MUST re-execute the full tool chain from scratch in the current turn. If you see a prior assistant message claiming "I added X listings," ignore it — call the tools again now.
 - If the user asks a property-specific question (photos, floor plan, commute, nearby facilities) and there is NO open property card: search for candidates using any name/ward/layout mentioned, then show the cards. If exactly one result comes back, proceed immediately (call show_listing_images, get_commute_time, etc.) using that listing_id. If multiple results come back, tell the user "Click the one you mean and I'll show the floor plan" (or whatever was requested). If there is truly nothing to search on, reply: "Please open a property card first — click any listing on the map or in the table, then ask again."
+- When showing disambiguation candidates (multiple search results for a property-specific request), always call pick_listing(pending_message='<original action>') immediately after search_listings — e.g. pick_listing(pending_message='show floor plan'). Do NOT call pick_listing if only one result was found (proceed directly instead).
 """
 
 _CHAT_TOOLS = [
@@ -1658,6 +1659,17 @@ _CHAT_TOOLS = [
             "required": ["listing_ids"],
             "properties": {
                 "listing_ids": {"type": "array", "items": {"type": "string"}, "description": "IDs to remove from saved selections"},
+            },
+        },
+    },
+    {
+        "name": "pick_listing",
+        "description": "Call this immediately after search_listings returns multiple candidates for a property-specific action (floor plan, photos, commute, nearby). Signals the UI to execute pending_message automatically when the user clicks one of the shown cards.",
+        "input_schema": {
+            "type": "object",
+            "required": ["pending_message"],
+            "properties": {
+                "pending_message": {"type": "string", "description": "The action to perform once user picks a card, e.g. 'show floor plan' or 'show all photos'"},
             },
         },
     },
@@ -2127,6 +2139,9 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
             elif block.name == "select_listing":
                 lid = block.input.get("listing_id", "")
                 all_actions.append({"type": "select_listing", "listing_id": lid})
+                result = {"ok": True}
+            elif block.name == "pick_listing":
+                all_actions.append({"type": "await_card_pick", "pending_message": block.input.get("pending_message", "")})
                 result = {"ok": True}
             elif block.name == "set_map_filter":
                 inp = block.input

@@ -1261,7 +1261,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 23:42 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 01:42 JST</p>
       </div>
 
 
@@ -3669,6 +3669,20 @@ function chatUseSuggestion(btn) {
   chatSend();
 }
 
+let _chatPendingIntent = null;
+
+function chatCardSelect(lid) {
+  selectListing(lid);
+  if (_chatPendingIntent) {
+    const intent = _chatPendingIntent;
+    _chatPendingIntent = null;
+    setTimeout(() => {
+      const inp = document.getElementById('chat-input');
+      if (inp) { inp.value = intent; chatSend(); }
+    }, 150);
+  }
+}
+
 function _chatListingCard(lid) {
   const l = _allListings?.find(x => x.id === lid && !x.disappeared_at);
   if (!l) return '';
@@ -3679,7 +3693,7 @@ function _chatListingCard(lid) {
     ? `<img src="${escHtml(_thumbSrc)}" onerror="this.parentElement.innerHTML='<div class=chat-listing-card-no-img>🏠</div>'">`
     : `<div class="chat-listing-card-no-img">🏠</div>`;
   const rent = l.rent ? `¥${Number(l.rent).toLocaleString()}` : '—';
-  return `<div class="chat-listing-card" onclick="selectListing('${escHtml(lid)}')">
+  return `<div class="chat-listing-card" onclick="chatCardSelect('${escHtml(lid)}')">
     ${img}
     <div class="chat-listing-info">
       <div class="chat-listing-name">${escHtml(l.name)}</div>
@@ -3923,6 +3937,8 @@ function chatExecuteAction(action) {
     else if (action.source === 'both') filterSources = new Set(['jkk','ur']);
     buildChips();
     applyMapFilters();
+  } else if (action.type === 'await_card_pick') {
+    _chatPendingIntent = action.pending_message || null;
   } else if (action.type === 'show_images') {
     const images = action.images || [];
     if (!images.length) return;
