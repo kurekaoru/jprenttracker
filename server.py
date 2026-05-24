@@ -1257,6 +1257,7 @@ Rules:
 - Use find_nearby_place when the user asks about any facility near a property (hospital, school, gym, etc.). Always call the tool — never skip it, never redirect to Google Maps, never guess. If the tool returns an error, report the exact error message and stop — do NOT follow up with guesses or suggestions about what might be nearby. If results come back, immediately call get_commute_time with the nearest place name as destination to give an actual travel time.
 - If a tool returns no results, say so plainly and offer to try different search parameters.
 - Use show_listing_images whenever the user asks to see photos, pictures, images, or the floor plan for a property. If a property card is open, use its listing_id directly. Images render inline in the chat — no need to describe them in text.
+- HARD RULE: NEVER say images are "rendering", "displaying", "showing", "loading", or "appearing" in text. NEVER narrate what the tool is doing. Call show_listing_images — that IS the display. If you describe images in text without calling the tool, the user sees nothing.
 - Use batch_commute_filter when the user asks to filter/select/find ALL properties by commute time to a destination ("within 1hr of X", "reachable from Y in under 45 min", etc.). This checks every geocoded listing server-side. After it returns, immediately call save_listings with the matching listing_ids if the user asked to save/add them to selections.
 - Use save_listings to add listings to the user's saved selections. Call it immediately after batch_commute_filter (if the user asked to save) or after search_listings when the user explicitly asks to save/bookmark the results.
 - HARD RULE: Never end a response with follow-up suggestions, offers to help further, or questions ("Would you like more details?", "Would you like help with anything else?", "Is there anything else I can help you with?" etc.). Answer exactly what was asked, then stop. No trailing questions or offers.
@@ -1486,7 +1487,13 @@ def _chat_show_images(params, con):
         images.append({"url": serve_url, "type": r["image_type"]})
     _row = con.execute("SELECT name FROM listings WHERE id=?", (lid,)).fetchone()
     name = _row["name"] if _row else ""
-    return {"count": len(images), "listing_name": name, "images": images}
+    return {
+        "count": len(images),
+        "listing_name": name,
+        "images": images,
+        "rendered": True,
+        "instruction": "Images are now displayed in the chat UI. Do NOT describe, list, or narrate them in your text response. Say only the listing name if needed, then stop.",
+    }
 
 
 def _chat_batch_commute(params, con):
