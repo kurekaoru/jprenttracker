@@ -1347,11 +1347,14 @@ _CHAT_TOOLS = [
     },
     {
         "name": "show_listing_images",
-        "description": "Show photos (floor plan, interiors, exterior) for a specific listing. Renders an image gallery directly in the chat. Use whenever the user asks to see photos, pictures, floor plans, or images for a property.",
+        "description": "Show photos for a specific listing. Renders an image gallery directly in the chat. Use whenever the user asks to see photos, pictures, floor plans, or images for a property. Pass image_type='floor_plan' when the user specifically asks for the floor plan only, 'exterior' for exterior shots only, 'interior' for interior shots only. Omit image_type to show all images.",
         "input_schema": {
             "type": "object",
             "required": ["listing_id"],
-            "properties": {"listing_id": {"type": "string"}},
+            "properties": {
+                "listing_id": {"type": "string"},
+                "image_type": {"type": "string", "enum": ["floor_plan", "exterior", "interior"], "description": "Filter to only this image type. Omit to show all."},
+            },
         },
     },
     {
@@ -1462,13 +1465,21 @@ def _chat_stats(con):
 
 def _chat_show_images(params, con):
     lid = params.get("listing_id", "")
-    rows = con.execute(
-        "SELECT id, url, image_type, local_path FROM listing_images WHERE listing_id=? "
-        "ORDER BY CASE image_type WHEN 'floor_plan' THEN 0 WHEN 'exterior' THEN 1 ELSE 2 END, id",
-        (lid,),
-    ).fetchall()
+    filter_type = params.get("image_type", "")
+    if filter_type:
+        rows = con.execute(
+            "SELECT id, url, image_type, local_path FROM listing_images "
+            "WHERE listing_id=? AND image_type=? ORDER BY id",
+            (lid, filter_type),
+        ).fetchall()
+    else:
+        rows = con.execute(
+            "SELECT id, url, image_type, local_path FROM listing_images WHERE listing_id=? "
+            "ORDER BY CASE image_type WHEN 'floor_plan' THEN 0 WHEN 'exterior' THEN 1 ELSE 2 END, id",
+            (lid,),
+        ).fetchall()
     if not rows:
-        return {"error": "no images found for this listing"}
+        return {"error": f"no {''+filter_type+' ' if filter_type else ''}images found for this listing"}
     images = []
     for r in rows:
         serve_url = f"/api/images/{r['id']}" if r["local_path"] else r["url"]
