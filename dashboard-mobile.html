@@ -172,6 +172,7 @@ html[data-theme="light"] ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,0
 
 /* ── Property sheet ── */
 #prop-sheet{height:72dvh;padding-bottom:calc(var(--nav-h) + var(--safe-b));}
+#ps-thumb-wrap{flex-shrink:0;}
 .prop-sheet-head{
   display:flex;align-items:flex-start;gap:10px;
   padding:12px 16px 10px;flex-shrink:0;
@@ -267,7 +268,7 @@ html[data-theme="light"] ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,0
 .m-listing-card{
   background:var(--surface);border:1px solid var(--border);border-radius:14px;
   overflow:hidden;cursor:pointer;display:flex;align-items:stretch;
-  transition:border-color .15s;
+  transition:border-color .15s;min-height:80px;width:100%;
 }
 .m-listing-card:active{border-color:var(--accent);}
 .m-card-thumb{width:88px;flex-shrink:0;background:var(--surface2);position:relative;min-height:80px;}
