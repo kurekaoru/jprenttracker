@@ -1105,7 +1105,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 21:10 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 21:16 JST</p>
       </div>
 
 
@@ -3603,12 +3603,12 @@ function chatExecuteAction(action) {
     (action.listing_ids || []).forEach(id => _savedListings.add(id));
     renderAvailableTable();
     renderFavouritesTable();
-    updateMarkers();
+    applyMapFilters();
   } else if (action.type === 'remove_listings') {
     (action.listing_ids || []).forEach(id => _savedListings.delete(id));
     renderAvailableTable();
     renderFavouritesTable();
-    updateMarkers();
+    applyMapFilters();
   } else if (action.type === 'show_driving_route') {
     if (!map || !directionsService) return;
     clearTransitPolylines();
