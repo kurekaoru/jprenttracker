@@ -1105,7 +1105,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 20:53 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-24 20:56 JST</p>
       </div>
 
 
@@ -2595,8 +2595,8 @@ function popupHtml(l) {
       </div>
       <div><span class="pin-rent">${rent}</span> · ${escHtml(l.layout || '—')} · ${size}</div>
       ${station ? `<div style="margin-top:3px;">${escHtml(station)}</div>` : ''}
-      ${l.thumbnail_url ? `<div style="margin-top:8px;border-radius:8px;overflow:hidden;cursor:pointer;" onclick="chatSendMsg('show me photos')">
-        <img src="${escHtml(l.thumbnail_url)}" style="width:100%;height:140px;object-fit:cover;display:block;" loading="lazy" onerror="this.parentElement.style.display='none'">
+      ${l.thumbnail_url ? `<div style="margin-top:8px;border-radius:8px;overflow:hidden;cursor:pointer;" onclick="switchPropTab('photos')">
+        <img src="${escHtml(l.thumbnail_url.startsWith('/') ? API.replace(/\/api\/?$/,'') + l.thumbnail_url : l.thumbnail_url)}" style="width:100%;height:140px;object-fit:cover;display:block;" onerror="this.parentElement.style.display='none'">
       </div>` : ''}
       <div class="pin-meta" style="margin-top:3px;">${t('first_seen_label')}: ${fmtDate(l.first_seen)}${daysStr ? ` · ${daysStr}` : ''}</div>
       ${l.url ? `<div style="margin-top:4px;"><a href="${escHtml(l.url)}" target="_blank" rel="noopener">${t('open_listing')}</a></div>` : ''}
