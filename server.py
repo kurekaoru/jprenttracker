@@ -1518,6 +1518,7 @@ Rules:
 - HARD RULE: NEVER say images are "rendering", "displaying", "showing", "loading", or "appearing" in text. NEVER narrate what the tool is doing. Call show_listing_images — that IS the display. If you describe images in text without calling the tool, the user sees nothing.
 - Use batch_commute_filter when the user asks to filter/select/find ALL properties by commute time to a destination ("within 1hr of X", "reachable from Y in under 45 min", etc.). This checks every geocoded listing server-side. After it returns, immediately call save_listings with the matching listing_ids if the user asked to save/add them to selections.
 - Use save_listings to add listings to the user's saved selections. Call it immediately after batch_commute_filter or search_listings when the user explicitly asks to save/bookmark the results. To add all listings with a floor plan: call search_listings(has_floor_plan=true, limit=200) then save_listings with all returned IDs.
+- To search all 23 Tokyo special wards (23区, 23-ku, 都内, inner Tokyo, etc.): call search_listings with wards=["23区"] — the server expands this automatically. Never claim there are no results without calling the tool first.
 - Use remove_listings to remove listings from saved selections. The user's current saved list with photo counts is provided in context — use the listing IDs directly. For "remove listings without photos" filter to those with photos=0.
 - HARD RULE: Never end a response with follow-up suggestions, offers to help further, or questions ("Would you like more details?", "Would you like help with anything else?", "Is there anything else I can help you with?" etc.). Answer exactly what was asked, then stop. No trailing questions or offers.
 - HARD RULE: Never ask for confirmation before using a tool you already have. If the user asks you to save, remove, filter, or show something and you have the tool for it, do it immediately and say done. Do not ask "Shall I go ahead?", "Would you like me to?", "Do you want me to?" — just act.
@@ -1531,7 +1532,8 @@ _CHAT_TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "ward":          {"type": "string",  "description": "Ward/city (partial OK), e.g. 新宿区 or 新宿"},
+                "ward":          {"type": "string",  "description": "Single ward/city, e.g. 新宿区. For multiple wards use 'wards' array instead."},
+                "wards":         {"type": "array", "items": {"type": "string"}, "description": "List of wards/cities. Use '23区' as a single element to match all 23 Tokyo special wards at once."},
                 "layout":        {"type": "string",  "description": "Floor plan exact, e.g. 1LDK, 2DK"},
                 "min_rent":      {"type": "integer", "description": "Min monthly rent JPY"},
                 "max_rent":      {"type": "integer", "description": "Max monthly rent JPY"},
@@ -1687,11 +1689,31 @@ _CHAT_TOOLS = [
     },
 ]
 
+_23KU = [
+    "千代田区","中央区","港区","新宿区","文京区","台東区","墨田区","江東区",
+    "品川区","目黒区","大田区","世田谷区","渋谷区","中野区","杉並区","豊島区",
+    "北区","荒川区","板橋区","練馬区","足立区","葛飾区","江戸川区",
+]
+
+def _expand_ward_alias(ward: str):
+    """Return list of ward strings for known group aliases, else [ward]."""
+    lower = ward.strip().lower().replace("-", "").replace("ー", "").replace("　", "")
+    if lower in ("23区", "23ku", "23wards", "23区内", "東京23区", "特別区", "都内23区"):
+        return _23KU
+    return [ward]
+
 def _chat_search(params, con):
     cutoff = (datetime.now() - timedelta(minutes=90)).isoformat()
     conds, args = ["disappeared_at IS NULL", "last_seen >= ?"], [cutoff]
-    if params.get("ward"):
-        conds.append("ward LIKE ?"); args.append(f"%{params['ward']}%")
+    # Support single ward string or wards array; expand group aliases like 23区
+    raw_wards = params.get("wards") or ([params["ward"]] if params.get("ward") else [])
+    expanded = []
+    for w in raw_wards:
+        expanded.extend(_expand_ward_alias(w))
+    if expanded:
+        placeholders = ",".join("?" * len(expanded))
+        conds.append(f"ward IN ({placeholders})")
+        args.extend(expanded)
     if params.get("layout"):
         conds.append("layout = ?"); args.append(params["layout"])
     if params.get("min_rent"):
