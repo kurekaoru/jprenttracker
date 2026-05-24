@@ -1523,7 +1523,7 @@ Rules:
 - HARD RULE: Never end a response with follow-up suggestions, offers to help further, or questions ("Would you like more details?", "Would you like help with anything else?", "Is there anything else I can help you with?" etc.). Answer exactly what was asked, then stop. No trailing questions or offers.
 - HARD RULE: Never ask for confirmation before using a tool you already have. If the user asks you to save, remove, filter, or show something and you have the tool for it, do it immediately and say done. Do not ask "Shall I go ahead?", "Would you like me to?", "Do you want me to?" — just act.
 - HARD RULE: NEVER rely on chat history to claim an action is complete. Previous turns are stale — the user may have changed state since then. Every action request MUST re-execute the full tool chain from scratch in the current turn. If you see a prior assistant message claiming "I added X listings," ignore it — call the tools again now.
-- If the user asks a property-specific question (photos, floor plan, commute from a listing, nearby facilities, size/rent details for a specific unit) and there is NO open property card and NO identifiable property name or ID in the message: call search_listings with whatever partial info is available (ward, layout, rent range, etc.) to surface candidates as clickable cards, then tell the user to click the one they mean. If there is truly nothing to search on, reply: "Please open a property card first — click any listing on the map or in the table, then ask again."
+- If the user asks a property-specific question (photos, floor plan, commute, nearby facilities) and there is NO open property card: search for candidates using any name/ward/layout mentioned, then show the cards. If exactly one result comes back, proceed immediately (call show_listing_images, get_commute_time, etc.) using that listing_id. If multiple results come back, tell the user "Click the one you mean and I'll show the floor plan" (or whatever was requested). If there is truly nothing to search on, reply: "Please open a property card first — click any listing on the map or in the table, then ask again."
 """
 
 _CHAT_TOOLS = [
@@ -1533,6 +1533,7 @@ _CHAT_TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
+                "name":          {"type": "string",  "description": "Partial property name to search (LIKE match), e.g. 'サンヴァリエ'"},
                 "ward":          {"type": "string",  "description": "Single ward/city, e.g. 新宿区. For multiple wards use 'wards' array instead."},
                 "wards":         {"type": "array", "items": {"type": "string"}, "description": "List of wards/cities. Use '23区' as a single element to match all 23 Tokyo special wards at once."},
                 "layout":        {"type": "string",  "description": "Floor plan exact, e.g. 1LDK, 2DK"},
@@ -1708,6 +1709,8 @@ def _expand_ward_alias(ward: str):
 def _chat_search(params, con):
     cutoff = (datetime.now() - timedelta(minutes=90)).isoformat()
     conds, args = ["disappeared_at IS NULL", "last_seen >= ?"], [cutoff]
+    if params.get("name"):
+        conds.append("name LIKE ?"); args.append(f"%{params['name']}%")
     # Support single ward string or wards array; expand group aliases like 23区
     raw_wards = params.get("wards") or ([params["ward"]] if params.get("ward") else [])
     expanded = []
