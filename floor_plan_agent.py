@@ -42,7 +42,7 @@ PROMPT = """Analyze this Japanese apartment floor plan image.
   boundary is measured separately from the room it adjoins.
 • ALWAYS prefer dimension-line calculations over 約X畳 tatami annotations.
   Use tatami only when NO dimension lines are visible for that room.
-  (1畳 ≈ 1.62 m²)
+  UR/JKK public housing uses 団地間 (公団間): 1畳 = 1.44 m² — use 1.44, NOT 1.62.
 
 === BALCONY / VERANDA WIDTH RULE ===
 バルコニー/ベランダ almost always spans the FULL building width at the bottom of
@@ -61,18 +61,40 @@ dimension of a sub-section is not labeled. In those cases:
    Write the estimate as "~X.XX (px)" in dim_calc, e.g. "(2.775+3.075) × 1.300 + 3.075 × ~0.45(px)".
 3. Sum all sub-rectangles to get the total area.
 
+For バルコニー depth when unlabeled: compare the balcony's visible pixel depth
+to the nearest labeled vertical dimension (e.g. if envelope height = 7.600 m and
+the balcony depth appears to be about 10% of the total plan height, estimate
+depth = 7.600 × 0.10 = 0.76 m). Use pixel proportion — do not default to 0.35 m.
+
 === EXCLUSIONS ===
 • The strip labelled 共用廊下 (shared corridor) at the top is NOT part of the
   apartment. Exclude it entirely — do not measure it or count it as a room.
 • Do NOT include the external staircase (階段室) area as part of the apartment
   unless it is clearly inside the unit boundary.
 
-=== PIXEL FRACTION FALLBACK ===
-For EVERY room — even those you calculate from dimension lines — output a field
-"pixel_fraction_of_ld": your best visual estimate of how large this room is
-relative to the リビング・ダイニング (LD/LDK). This fraction is used as a
-fallback when area_m2 is null, and as a cross-check when it is known.
-  Examples: LD itself → 1.0, WC (~1.2 m²) → ~0.08, UB (~2.5 m²) → ~0.17.
+=== CALIBRATION AND PIXEL FRACTION ===
+Choose the best calibration reference for this specific floor plan:
+
+  CASE A — individual room dimension lines exist for the main rooms:
+    Use the LD/LDK area (computed from dimension lines) as the reference.
+    "pixel_fraction_of_ld" = this room's visual area ÷ LD visual area.
+
+  CASE B — only overall envelope dimensions are labeled (total width × total height):
+    Use the TOTAL INTERIOR ENVELOPE as the reference.
+    Compute: envelope_area = total_width × total_height.
+    For every room, output "pixel_fraction_of_ld" = this room's visual area ÷
+    TOTAL interior floor plan area. Then: room_area ≈ fraction × envelope_area.
+    In this case LD's own pixel_fraction_of_ld will be less than 1.0.
+
+For EVERY room output "pixel_fraction_of_ld" (always a number, never null).
+This fraction is used as a fallback when area_m2 is null.
+
+=== COMPLETENESS CHECK ===
+After listing all rooms, verify:
+  sum(all indoor room areas) + sum(outdoor areas) ≈ envelope_area (W × H).
+If there is a gap larger than ~5% of the envelope, you have missed a space.
+Common missed spaces: 廊下 (hallway connecting rooms), 玄関 (entrance recess),
+corridor strips between rooms. Add them with area estimated from pixel fraction.
 
 === ROOMS TO EXTRACT ===
 Extract EVERY distinct space inside the apartment boundary, including:
@@ -90,10 +112,20 @@ For each room output:
 • pixel_fraction_of_ld — visual area fraction vs LD (always a number, never null)
 
 Also compute these summary fields:
-• living_area_m2   — area_m2 of the LD/LDK (the main living space)
-• kitchen_open     — true if kitchen shares an open boundary with the living/dining area
-• toilet_count     — number of WC/トイレ rooms
-• bathroom_count   — number of UB/浴室 units
+• living_area_m2    — area_m2 of the LD/LDK (the main living space)
+• kitchen_open      — true if kitchen shares an open boundary with the living/dining area
+• toilet_count      — number of WC/トイレ rooms
+• bathroom_count    — number of UB/浴室 units
+• envelope_width_m  — the labeled total building width (e.g. 3.700); null if not labeled
+• envelope_height_m — the labeled total building height (e.g. 7.600); null if not labeled
+
+=== MANDATORY: ENVELOPE DIMENSIONS ===
+You MUST output envelope_width_m and envelope_height_m as top-level JSON fields.
+These are the overall dimension labels of the floor plan boundary — typically one
+large number along the bottom edge (width) and one large number along the right or
+left edge (height). Even if you only find one of them, output it.
+DO NOT embed these values only inside dim_calc strings. They must appear as
+"envelope_width_m": <number> and "envelope_height_m": <number> at the top level.
 
 Respond ONLY with valid JSON (no markdown fences, no explanation):
 {
@@ -118,7 +150,9 @@ Respond ONLY with valid JSON (no markdown fences, no explanation):
   "living_area_m2": 14.45,
   "kitchen_open": true,
   "toilet_count": 1,
-  "bathroom_count": 1
+  "bathroom_count": 1,
+  "envelope_width_m": 3.700,
+  "envelope_height_m": 7.600
 }"""
 
 MEDIA_TYPES = {
@@ -151,6 +185,8 @@ class FloorPlanResult:
     kitchen_open: Optional[bool] = None
     toilet_count: int = 0
     bathroom_count: int = 0
+    envelope_width_m: Optional[float] = None
+    envelope_height_m: Optional[float] = None
     analyzed_at: str = ""
     model: str = ""
     total_area_m2: Optional[float] = None   # listing's stated area (from DB)
@@ -204,7 +240,7 @@ class FloorPlanAgent:
         client = self._client_lazy()
         msg = client.messages.create(
             model=self.model,
-            max_tokens=2048,
+            max_tokens=4096,
             system=SYSTEM,
             messages=[{
                 "role": "user",
@@ -231,33 +267,43 @@ class FloorPlanAgent:
     # ── Phase 2: pixel-ratio fill-in ─────────────────────────────────────────
 
     @staticmethod
-    def _apply_pixel_ratio(rooms: list[Room]) -> list[str]:
+    def _apply_pixel_ratio(rooms: list[Room], envelope_area: float | None = None) -> list[str]:
         """
-        For rooms with area_m2=None, infer area from pixel_fraction_of_ld
-        and the LD's known area.  Returns list of room labels that were inferred.
+        Fill null area_m2 values from pixel_fraction_of_ld.
+
+        Calibration selection (Case A vs B):
+          Case A — LD/LDK has known area AND its own pixel_fraction ≈ 1.0
+            → scale = ld.area_m2 / ld.pixel_fraction_of_ld  (should ≈ ld.area_m2)
+          Case B — LD pixel_fraction << 1.0 (envelope-relative mode) OR no LD with known area
+            → use envelope_area as the scale reference (all fractions sum to ~1.0)
         """
-        # Find the best calibration anchor: prefer the LD/LDK with known area
+        # Find LD/LDK with a known area
         ld = next(
             (r for r in rooms if r.area_m2 is not None and any(
-                kw in r.label for kw in ("LDK", "LD", "リビング", "Living")
+                kw in r.label for kw in ("LDK", "LD", "リビング", "Living", "洋室", "和室")
             )),
             None,
         )
-        if ld is None:
-            # Fall back to largest room with known area
-            ld = max(
-                (r for r in rooms if r.area_m2 is not None),
-                key=lambda r: r.area_m2,
-                default=None,
-            )
-        if ld is None or ld.pixel_fraction_of_ld == 0:
+
+        # Decide calibration mode
+        if (ld is not None
+                and ld.pixel_fraction_of_ld is not None
+                and ld.pixel_fraction_of_ld >= 0.5):
+            # Case A: LD fraction is close to 1.0 — LD-relative mode
+            scale = ld.area_m2 / ld.pixel_fraction_of_ld
+        elif envelope_area is not None:
+            # Case B: fractions are envelope-relative
+            scale = envelope_area
+        elif ld is not None and ld.area_m2:
+            # Fallback: use LD area as rough scale
+            scale = ld.area_m2 / max(ld.pixel_fraction_of_ld or 1.0, 0.01)
+        else:
             return []
 
-        ld_area = ld.area_m2
         inferred = []
         for r in rooms:
-            if r.area_m2 is None and r.pixel_fraction_of_ld > 0:
-                r.inferred_area_m2 = round(ld_area * r.pixel_fraction_of_ld, 2)
+            if r.area_m2 is None and r.pixel_fraction_of_ld and r.pixel_fraction_of_ld > 0:
+                r.inferred_area_m2 = round(scale * r.pixel_fraction_of_ld, 2)
                 inferred.append(r.label)
         return inferred
 
@@ -280,18 +326,40 @@ class FloorPlanAgent:
                 pixel_fraction_of_ld = float(rd.get("pixel_fraction_of_ld") or 0),
             ))
 
-        inferred = self._apply_pixel_ratio(rooms)
+        # Compute envelope from labeled dimensions if available
+        envelope_w = _float_or_none(raw.get("envelope_width_m"))
+        envelope_h = _float_or_none(raw.get("envelope_height_m"))
+
+        # Fallback: extract envelope dims from dim_calc strings when model omits JSON fields
+        if not (envelope_w and envelope_h):
+            raw_str = json.dumps(raw)
+            for pattern in [
+                r"envelope\s+(\d+\.?\d*)\s*[×x\*]\s*(\d+\.?\d*)",
+                r"(\d+\.?\d*)\s*[×x]\s*(\d+\.?\d*)\s*(?:envelope|全体|外形)",
+            ]:
+                m = re.search(pattern, raw_str, re.IGNORECASE)
+                if m:
+                    envelope_w = envelope_w or _float_or_none(m.group(1))
+                    envelope_h = envelope_h or _float_or_none(m.group(2))
+                    log.debug(f"Envelope extracted from dim_calc fallback: {envelope_w}×{envelope_h}")
+                    break
+
+        envelope_area = round(envelope_w * envelope_h, 2) if (envelope_w and envelope_h) else None
+
+        inferred = self._apply_pixel_ratio(rooms, envelope_area=envelope_area)
 
         result = FloorPlanResult(
-            rooms          = rooms,
-            living_area_m2 = _float_or_none(raw.get("living_area_m2")),
-            kitchen_open   = raw.get("kitchen_open"),
-            toilet_count   = int(raw.get("toilet_count") or 0),
-            bathroom_count = int(raw.get("bathroom_count") or 0),
-            analyzed_at    = datetime.now().isoformat(),
-            model          = self.model,
-            total_area_m2  = total_area_m2,
-            inferred_rooms = inferred,
+            rooms            = rooms,
+            living_area_m2   = _float_or_none(raw.get("living_area_m2")),
+            kitchen_open     = raw.get("kitchen_open"),
+            toilet_count     = int(raw.get("toilet_count") or 0),
+            bathroom_count   = int(raw.get("bathroom_count") or 0),
+            envelope_width_m = envelope_w,
+            envelope_height_m= envelope_h,
+            analyzed_at      = datetime.now().isoformat(),
+            model            = self.model,
+            total_area_m2    = total_area_m2,
+            inferred_rooms   = inferred,
         )
         return result
 
