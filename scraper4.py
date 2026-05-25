@@ -370,43 +370,256 @@ def _save_jkk_images_in_session(ctx, listings):
     if saved:
         log.info(f"JKK session image collection: {saved} listing(s) processed.")
 
+def _run_floor_plan_analysis(lid, con):
+    """Run Claude vision floor plan analysis for a listing and persist result."""
+    fp_row = con.execute(
+        "SELECT local_path FROM listing_images "
+        "WHERE listing_id=? AND image_type='floor_plan' AND local_path IS NOT NULL "
+        "ORDER BY id LIMIT 1",
+        (lid,),
+    ).fetchone()
+    if not fp_row or not os.path.exists(fp_row[0]):
+        return
+    try:
+        from floor_plan_agent import FloorPlanAgent
+        size_row = con.execute("SELECT size_m2 FROM listings WHERE id=?", (lid,)).fetchone()
+        agent = FloorPlanAgent()
+        result = agent.analyze(fp_row[0], total_area_m2=size_row[0] if size_row else None)
+        con.execute(
+            "UPDATE listings SET floor_plan_data=? WHERE id=?",
+            (json.dumps(result.to_dict(), ensure_ascii=False), lid),
+        )
+        con.commit()
+        log.info(f"Floor plan analysed for {lid}: {len(result.rooms)} rooms, living={result.living_area_m2}m²")
+    except Exception as e:
+        log.warning(f"Floor plan analysis failed for {lid}: {e}")
+
+
+def _download_image(url, row_id, lid, img_type, con):
+    """
+    Download one image to disk, run OCR if floor plan.
+    Returns local file path on success, None on failure.
+    """
+    if not url or url.startswith("file://"):
+        return None
+    img_dir = os.path.join(IMG_DIR, lid)
+    os.makedirs(img_dir, exist_ok=True)
+    try:
+        r = requests.get(url, timeout=15, headers=_IMG_HEADERS)
+        ct = r.headers.get("content-type", "")
+        if r.status_code != 200 or not ct.startswith("image"):
+            log.debug(f"Skip non-image {url} ({r.status_code} {ct})")
+            return None
+        ext = url.rsplit(".", 1)[-1].split("?")[0].lower()
+        if ext not in ("jpg", "jpeg", "png", "webp", "gif"):
+            ext = "jpg"
+        fpath = os.path.join(img_dir, f"{row_id}.{ext}")
+        with open(fpath, "wb") as f:
+            f.write(r.content)
+        ocr_text = None
+        if img_type == "floor_plan":
+            ocr_text = _ocr_floor_plan(fpath)
+            if ocr_text:
+                log.info(f"OCR floor plan {fpath}: {ocr_text[:80]}")
+        con.execute(
+            "UPDATE listing_images SET local_path=?, downloaded_at=?, ocr_text=? WHERE id=?",
+            (fpath, datetime.now().isoformat(), ocr_text, row_id),
+        )
+        log.debug(f"Saved {fpath}")
+        return fpath
+    except Exception as e:
+        log.warning(f"Image download failed ({url}): {e}")
+        return None
+
+
+# Thumbnail priority: lower = preferred
+_THUMB_PRIORITY = {"exterior": 0, "interior": 1, "floor_plan": 2}
+
+
+def _process_listing_images(lid, listing_url, con, pw_page=None):
+    """
+    Full coordinated image pipeline for one listing:
+      1. Scrape image URLs + classify (exterior / interior / floor_plan)
+      2. Upsert each URL into listing_images
+      3. Download every image to disk
+      4. Set thumbnail (exterior > interior > floor_plan priority)
+      5. Run Claude floor plan analysis if a floor plan was downloaded
+
+    pw_page: an open Playwright Page to reuse for UR listings (avoids
+             creating a new browser per listing).
+
+    Returns number of images successfully downloaded.
+    """
+    # ── 1. Scrape ──────────────────────────────────────────────────────────────
+    if "ur-net.go.jp" in (listing_url or ""):
+        images = _fetch_ur_images_playwright(listing_url, _page=pw_page)
+    else:
+        images = _fetch_detail_images(listing_url)
+
+    # Filter out any file:// artefacts that may have crept in
+    images = [(u, t) for u, t in images if u and u.startswith("http")]
+    if not images:
+        return 0
+
+    # ── 2. Upsert URLs ────────────────────────────────────────────────────────
+    for img_url, img_type in images:
+        con.execute(
+            "INSERT OR IGNORE INTO listing_images (listing_id, url, image_type) VALUES (?,?,?)",
+            (lid, img_url, img_type),
+        )
+    con.commit()
+
+    # ── 3 + 4. Download + pick thumbnail ─────────────────────────────────────
+    best_thumb: tuple | None = None  # (priority, url)
+    ok = 0
+    ran_fp_analysis = False
+
+    for img_url, img_type in images:
+        row = con.execute(
+            "SELECT id, local_path FROM listing_images WHERE listing_id=? AND url=?",
+            (lid, img_url),
+        ).fetchone()
+        if not row:
+            continue
+        row_id, existing_path = row
+
+        # Skip already-downloaded files
+        if existing_path and os.path.exists(existing_path):
+            prio = _THUMB_PRIORITY.get(img_type, 99)
+            if best_thumb is None or prio < best_thumb[0]:
+                best_thumb = (prio, img_url)
+            ok += 1
+            continue
+
+        fpath = _download_image(img_url, row_id, lid, img_type, con)
+        if fpath:
+            ok += 1
+            prio = _THUMB_PRIORITY.get(img_type, 99)
+            if best_thumb is None or prio < best_thumb[0]:
+                best_thumb = (prio, img_url)
+
+    if best_thumb:
+        con.execute("UPDATE listings SET thumbnail_url=? WHERE id=?", (best_thumb[1], lid))
+    con.commit()
+
+    # ── 5. Floor plan analysis ────────────────────────────────────────────────
+    if ok > 0:
+        _run_floor_plan_analysis(lid, con)
+
+    return ok
+
+
+def backfill_images(limit=50, listing_ids=None):
+    """
+    Re-process UR listings that have incomplete image data:
+      - No images at all, OR
+      - file:// URLs (bad source URL, need re-scrape), OR
+      - Missing local files
+
+    Cleans up unrecoverable file:// rows first, then runs the full
+    _process_listing_images pipeline for each affected listing.
+    """
+    _reset_asyncio_loop()
+    con = sqlite3.connect(DB_FILE, timeout=60)
+    con.execute("PRAGMA journal_mode=WAL")
+    con.row_factory = sqlite3.Row
+
+    # 1. Delete unrecoverable file:// image records
+    deleted = con.execute("DELETE FROM listing_images WHERE url LIKE 'file://%'").rowcount
+    # Clear thumbnails that pointed to file:// or to missing files
+    con.execute(
+        "UPDATE listings SET thumbnail_url=NULL "
+        "WHERE thumbnail_url LIKE 'file://%'"
+    )
+    con.commit()
+    if deleted:
+        log.info(f"Backfill: removed {deleted} unrecoverable file:// image records")
+
+    # 2. Find listings that need re-processing
+    if listing_ids:
+        placeholders = ",".join("?" * len(listing_ids))
+        rows = con.execute(
+            f"SELECT id, url FROM listings WHERE id IN ({placeholders}) AND disappeared_at IS NULL",
+            listing_ids,
+        ).fetchall()
+    else:
+        rows = con.execute(
+            """SELECT DISTINCT l.id, l.url FROM listings l
+               WHERE l.disappeared_at IS NULL AND l.source = 'ur'
+                 AND (
+                   -- no images at all
+                   NOT EXISTS (SELECT 1 FROM listing_images li WHERE li.listing_id = l.id)
+                   OR
+                   -- has images but all files missing
+                   NOT EXISTS (SELECT 1 FROM listing_images li
+                               WHERE li.listing_id = l.id AND li.local_path IS NOT NULL
+                                 AND li.local_path != '')
+                 )
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+
+    if not rows:
+        log.info("Backfill: nothing to process")
+        con.close()
+        return
+
+    log.info(f"Backfill: processing {len(rows)} listing(s)...")
+    try:
+        _pw = sync_playwright().__enter__()
+        browser = _pw.chromium.launch(headless=True, args=_CHROME_ARGS)
+        page = browser.new_page(user_agent=_SCRAPER_UA)
+        ok_count = 0
+        for row in rows:
+            lid, url = row["id"], row["url"]
+            if not url or "ur-net.go.jp" not in url:
+                continue
+            try:
+                n = _process_listing_images(lid, url, con, pw_page=page)
+                if n:
+                    ok_count += 1
+                    log.info(f"  ✓ {lid[:8]} — {n} image(s)")
+                else:
+                    log.warning(f"  ✗ {lid[:8]} — no images scraped from {url}")
+                time.sleep(0.5)
+            except Exception as e:
+                log.error(f"  ✗ {lid[:8]} failed: {e}")
+        browser.close()
+        _pw.__exit__(None, None, None)
+        log.info(f"Backfill done: {ok_count}/{len(rows)} listings updated")
+    except Exception as e:
+        log.error(f"Backfill playwright session failed: {e}")
+    finally:
+        con.close()
+
+
 def download_pending_images(con, limit=50):
-    """Download queued images; run OCR on floor plans."""
+    """
+    Catch-up downloader: re-tries images whose HTTP URL is known but file is
+    missing from disk.  Does NOT run floor plan analysis (that is handled
+    inside _process_listing_images for new listings, or via backfill_images).
+    """
     rows = con.execute(
         "SELECT id, listing_id, url, image_type FROM listing_images "
-        "WHERE local_path IS NULL ORDER BY id LIMIT ?", (limit,)
+        "WHERE url NOT LIKE 'file://%' "
+        "  AND (local_path IS NULL OR local_path NOT IN (SELECT local_path FROM listing_images WHERE local_path IS NOT NULL))"
+        "ORDER BY id LIMIT ?",
+        (limit,),
     ).fetchall()
-    if not rows:
+    # Simpler: just get rows where file is actually missing
+    rows = con.execute(
+        "SELECT id, listing_id, url, image_type, local_path FROM listing_images "
+        "WHERE url NOT LIKE 'file://%' ORDER BY id LIMIT ?",
+        (limit * 4,),
+    ).fetchall()
+    to_retry = [(r[0], r[1], r[2], r[3]) for r in rows
+                if not r[4] or not os.path.exists(r[4])][:limit]
+    if not to_retry:
         return
-    log.info(f"Downloading {len(rows)} queued image(s)...")
-    for row_id, lid, url, img_type in rows:
-        img_dir = os.path.join(IMG_DIR, lid)
-        os.makedirs(img_dir, exist_ok=True)
-        try:
-            r = requests.get(url, timeout=15, headers=_IMG_HEADERS)
-            ct = r.headers.get("content-type", "")
-            if r.status_code != 200 or not ct.startswith("image"):
-                log.debug(f"Skip non-image response for {url} ({r.status_code} {ct})")
-                continue
-            ext = url.rsplit(".", 1)[-1].split("?")[0].lower()
-            if ext not in ("jpg", "jpeg", "png", "webp", "gif"):
-                ext = "jpg"
-            fpath = os.path.join(img_dir, f"{row_id}.{ext}")
-            with open(fpath, "wb") as f:
-                f.write(r.content)
-            ocr_text = None
-            if img_type == "floor_plan":
-                ocr_text = _ocr_floor_plan(fpath)
-                if ocr_text:
-                    log.info(f"OCR floor plan {fpath}: {ocr_text[:80]}")
-            con.execute(
-                "UPDATE listing_images SET local_path=?, downloaded_at=?, ocr_text=? WHERE id=?",
-                (fpath, datetime.now().isoformat(), ocr_text, row_id)
-            )
-            con.commit()
-            log.debug(f"Saved {fpath}")
-        except Exception as e:
-            log.warning(f"Image download failed ({url}): {e}")
+    log.info(f"Re-downloading {len(to_retry)} missing image(s)...")
+    for row_id, lid, url, img_type in to_retry:
+        _download_image(url, row_id, lid, img_type, con)
+        con.commit()
 
 _DETAIL_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -514,22 +727,23 @@ def _ocr_floor_plan(image_path):
 
 
 def _scrape_images_for_new_listings(new_lids):
+    """Full image pipeline (scrape → download → thumbnail → floor plan) for new listings."""
     if not new_lids:
         return
     _reset_asyncio_loop()
     con = sqlite3.connect(DB_FILE, timeout=60)
     con.execute("PRAGMA journal_mode=WAL")
+    con.row_factory = sqlite3.Row
     rows = con.execute(
         f"SELECT id, url FROM listings WHERE id IN ({','.join('?'*len(new_lids))})",
-        new_lids
+        new_lids,
     ).fetchall()
+
+    ur_rows  = [(r["id"], r["url"]) for r in rows if "ur-net.go.jp" in (r["url"] or "")]
+    jkk_rows = [(r["id"], r["url"]) for r in rows if "ur-net.go.jp" not in (r["url"] or "")]
     ok = 0
 
-    ur_rows  = [(lid, url) for lid, url in rows if "ur-net.go.jp" in (url or "")]
-    jkk_rows = [(lid, url) for lid, url in rows if "ur-net.go.jp" not in (url or "")]
-
-    # UR: open a single Playwright session for all UR listings to avoid
-    # the "sync API inside asyncio loop" error caused by create/destroy per listing.
+    # UR: single Playwright session for the whole batch
     if ur_rows:
         try:
             _pw = sync_playwright().__enter__()
@@ -537,46 +751,30 @@ def _scrape_images_for_new_listings(new_lids):
             page = browser.new_page(user_agent=_SCRAPER_UA)
             for lid, listing_url in ur_rows:
                 try:
-                    images = _fetch_ur_images_playwright(listing_url, _page=page)
+                    n = _process_listing_images(lid, listing_url, con, pw_page=page)
+                    if n:
+                        ok += 1
+                    time.sleep(0.5)
                 except Exception as e:
-                    log.debug(f"UR headless image fetch failed ({listing_url}): {e}")
-                    images = []
-                if not images:
-                    time.sleep(0.4)
-                    continue
-                con.execute("UPDATE listings SET thumbnail_url=? WHERE id=?", (images[0][0], lid))
-                for img_url, img_type in images:
-                    con.execute(
-                        "INSERT OR IGNORE INTO listing_images (listing_id, url, image_type) VALUES (?,?,?)",
-                        (lid, img_url, img_type)
-                    )
-                con.commit()
-                ok += 1
-                time.sleep(0.5)
+                    log.error(f"UR image pipeline failed ({listing_url}): {e}")
             browser.close()
             _pw.__exit__(None, None, None)
         except Exception as e:
             log.error(f"UR image batch session failed: {e}")
 
-    # JKK: plain HTTP scraping, no Playwright
+    # JKK: plain HTTP, no Playwright needed
     for lid, listing_url in jkk_rows:
-        images = _fetch_detail_images(listing_url)
-        if not images:
-            time.sleep(0.4)
-            continue
-        con.execute("UPDATE listings SET thumbnail_url=? WHERE id=?", (images[0][0], lid))
-        for img_url, img_type in images:
-            con.execute(
-                "INSERT OR IGNORE INTO listing_images (listing_id, url, image_type) VALUES (?,?,?)",
-                (lid, img_url, img_type)
-            )
-        con.commit()
-        ok += 1
-        time.sleep(0.5)
+        try:
+            n = _process_listing_images(lid, listing_url, con)
+            if n:
+                ok += 1
+            time.sleep(0.5)
+        except Exception as e:
+            log.error(f"JKK image pipeline failed ({listing_url}): {e}")
 
     con.close()
     if ok:
-        log.info(f"Detail images scraped for {ok}/{len(rows)} new listing(s).")
+        log.info(f"Image pipeline complete: {ok}/{len(rows)} new listing(s) processed.")
 
 
 def wait_stable(page, timeout=30_000):

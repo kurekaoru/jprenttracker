@@ -862,6 +862,36 @@ def get_listing_images(listing_id):
     return jsonify([{"url": f"/api/images/{r['id']}", "type": r["image_type"]} for r in rows])
 
 
+@app.route("/api/listings/<listing_id>/reprocess-images", methods=["POST"])
+def reprocess_listing_images(listing_id):
+    """Trigger the full image pipeline (scrape→download→thumbnail→floor plan) for one listing."""
+    import threading, sys
+    sys.path.insert(0, os.path.dirname(__file__))
+    def _run():
+        try:
+            from scraper4 import backfill_images
+            backfill_images(listing_ids=[listing_id])
+        except Exception as e:
+            import logging; logging.getLogger(__name__).error(f"reprocess-images failed: {e}")
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({"queued": True, "listing_id": listing_id})
+
+
+@app.route("/api/images/backfill", methods=["POST"])
+def trigger_image_backfill():
+    """Trigger full image backfill for all UR listings with missing/bad images."""
+    import threading, sys
+    limit = int(request.json.get("limit", 50)) if request.is_json else 50
+    def _run():
+        try:
+            from scraper4 import backfill_images
+            backfill_images(limit=limit)
+        except Exception as e:
+            import logging; logging.getLogger(__name__).error(f"image backfill failed: {e}")
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({"queued": True, "limit": limit})
+
+
 @app.route("/api/listings/<listing_id>/floor_plan_analysis")
 def get_floor_plan_analysis(listing_id):
     con = db()
