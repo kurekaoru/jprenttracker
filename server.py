@@ -1559,6 +1559,7 @@ Rules:
 - If the user asks a property-specific question (photos, floor plan, commute, nearby facilities) and there is NO open property card: search for candidates using any name/ward/layout mentioned, then show the cards. If exactly one result comes back, proceed immediately (call show_listing_images, get_commute_time, etc.) using that listing_id. If multiple results come back, tell the user "Click the one you mean and I'll show the floor plan" (or whatever was requested). If there is truly nothing to search on, reply: "Please open a property card first — click any listing on the map or in the table, then ask again."
 - When showing disambiguation candidates (multiple search results for a property-specific request), always call pick_listing(pending_message='<original action>') immediately after search_listings — e.g. pick_listing(pending_message='show floor plan'). Do NOT call pick_listing if only one result was found (proceed directly instead).
 - HARD RULE: For ANY query using relative size language about living space ("大きいリビング", "huge living room", "spacious", "広いLDK", "large kitchen", "open plan", etc.): call get_room_stats FIRST to get the actual distribution from analyzed floor plans. Then use the p75 value as min_living_area_m2 for "large/spacious" and p90 for "huge/very large". Never hardcode a size threshold — always derive it from the stats tool. If get_room_stats returns no data yet, say so clearly and search without the filter.
+- HARD RULE: For ANY superlative query ("biggest", "largest", "smallest", "cheapest", "most expensive", "highest", "lowest", or Japanese equivalents like "最大", "一番広い", "一番安い"): ALWAYS call search_listings with the appropriate sort_by value (living_area_desc for biggest living room, size_desc for largest apartment, rent_asc for cheapest, rent_desc for most expensive) so the UI renders clickable property cards. NEVER answer superlative questions with text alone — the user must be able to click on the result.
 - Floor plan analysis (from get_room_stats and get_listing_details floor_plan_rooms): living_area_m2 is the combined LDK/LD/L area. kitchen_open=true means the kitchen opens to the living area with no separating door. Use these fields to answer questions about room layout and to filter searches.
 """
 
@@ -1582,6 +1583,7 @@ _CHAT_TOOLS = [
                 "has_floor_plan":       {"type": "boolean", "description": "If true, only return listings that have a floor plan image"},
                 "has_images":          {"type": "boolean", "description": "If true, only return listings that have at least one downloaded photo"},
                 "min_living_area_m2":  {"type": "number",  "description": "Min living/dining/kitchen (LDK/LD/L) area in m² from floor plan analysis. Requires floor plan data — call get_room_stats first to pick an evidence-based threshold."},
+                "sort_by":             {"type": "string",  "enum": ["rent_asc","rent_desc","living_area_desc","size_desc"], "description": "Sort order. Default rent_asc. Use living_area_desc for 'biggest living room', size_desc for 'largest apartment'."},
                 "limit":               {"type": "integer", "description": "Max results, default 10, use 200 to get all"},
             },
         },
@@ -1798,9 +1800,16 @@ def _chat_search(params, con):
         )
         args.append(float(params["min_living_area_m2"]))
     limit = min(int(params.get("limit", 10)), 200)
+    sort_map = {
+        "rent_asc":         "rent ASC",
+        "rent_desc":        "rent DESC",
+        "living_area_desc": "CAST(json_extract(floor_plan_data,'$.living_area_m2') AS REAL) DESC NULLS LAST",
+        "size_desc":        "size_m2 DESC",
+    }
+    order = sort_map.get(params.get("sort_by", "rent_asc"), "rent ASC")
     rows = con.execute(
         f"SELECT id,name,ward,rent,layout,size_m2,url,source,nearest_station,walk_min,thumbnail_url "
-        f"FROM listings WHERE {' AND '.join(conds)} ORDER BY rent ASC LIMIT ?",
+        f"FROM listings WHERE {' AND '.join(conds)} ORDER BY {order} LIMIT ?",
         args + [limit]
     ).fetchall()
     return {"count": len(rows), "listings": [dict(r) for r in rows]}
