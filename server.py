@@ -1523,6 +1523,7 @@ Rules:
 - HARD RULE: Never end a response with follow-up suggestions, offers to help further, or questions ("Would you like more details?", "Would you like help with anything else?", "Is there anything else I can help you with?" etc.). Answer exactly what was asked, then stop. No trailing questions or offers.
 - HARD RULE: Never ask for confirmation before using a tool you already have. If the user asks you to save, remove, filter, or show something and you have the tool for it, do it immediately and say done. Do not ask "Shall I go ahead?", "Would you like me to?", "Do you want me to?" — just act.
 - HARD RULE: NEVER rely on chat history to claim an action is complete. Previous turns are stale — the user may have changed state since then. Every action request MUST re-execute the full tool chain from scratch in the current turn. If you see a prior assistant message claiming "I added X listings," ignore it — call the tools again now.
+- HARD RULE: NEVER answer count or stats questions ("how many", "how many listings", "how many floor plans", "how many saved", etc.) from memory or prior messages. Database counts change constantly. Always call search_listings (or the appropriate tool) to get a live count, even if you answered the same question moments ago.
 - If the user asks a property-specific question (photos, floor plan, commute, nearby facilities) and there is NO open property card: search for candidates using any name/ward/layout mentioned, then show the cards. If exactly one result comes back, proceed immediately (call show_listing_images, get_commute_time, etc.) using that listing_id. If multiple results come back, tell the user "Click the one you mean and I'll show the floor plan" (or whatever was requested). If there is truly nothing to search on, reply: "Please open a property card first — click any listing on the map or in the table, then ask again."
 - When showing disambiguation candidates (multiple search results for a property-specific request), always call pick_listing(pending_message='<original action>') immediately after search_listings — e.g. pick_listing(pending_message='show floor plan'). Do NOT call pick_listing if only one result was found (proceed directly instead).
 """
@@ -1748,7 +1749,7 @@ def _chat_search(params, con):
     if params.get("max_walk"):
         conds.append("walk_min IS NOT NULL AND walk_min <= ?"); args.append(params["max_walk"])
     if params.get("has_floor_plan"):
-        conds.append("id IN (SELECT DISTINCT listing_id FROM listing_images WHERE image_type='floor_plan' AND local_path IS NOT NULL)")
+        conds.append("id IN (SELECT DISTINCT listing_id FROM listing_images WHERE image_type='floor_plan')")
     if params.get("has_images"):
         conds.append("id IN (SELECT DISTINCT listing_id FROM listing_images WHERE local_path IS NOT NULL)")
     limit = min(int(params.get("limit", 10)), 200)
