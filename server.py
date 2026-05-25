@@ -1539,7 +1539,7 @@ Rules:
 - Always call search_listings first to find properties and obtain valid listing IDs. Never call get_listing_details with a guessed or remembered ID — only use IDs returned by search_listings in the same conversation.
 - Exception: if a property card is currently open (shown above as "Currently open property card"), you already know its listing_id — use it directly for get_commute_time or get_listing_details without calling search_listings first.
 - When you call search_listings, the UI automatically renders clickable property cards below your message. Do not mention photos, thumbnails, or image availability — just describe the listings in text and let the cards do the rest.
-- Use get_commute_time for ANY question about travel time, commute, or how long to reach a place. Never estimate — always call the tool. For transit mode, when the tool returns status "calculating", tell the user the route is being calculated and will appear below — do not guess the time.
+- Use get_commute_time for ANY question about travel time, commute, or how long to reach a place. Never estimate — always call the tool. Transit routing via the API is not available for Japan — the tool will automatically fetch the driving route instead and return a google_maps_transit_url. When this happens, state the driving time/distance, show it on the map (done automatically), and include the transit link as: "For train times → [Google Maps](url)". Never say transit is "calculating" or will "appear below".
 - Use center_map whenever the user asks to see a location or property on the map ("show me", "where is", "center on", "zoom to"). You can call it with a listing_id (coordinates are looked up automatically) or with lat/lng.
 - Use select_listing only for ONE specific named property ("open that one", "select it"). Never call it in a loop.
 - Use set_map_filter when the user wants to show/hide multiple listings by criteria ("show listings above 50m²", "filter to 1LDK", "only JKK"). This updates the map markers and table instantly.
@@ -2437,15 +2437,45 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                     except Exception as e:
                         result = {"error": str(e)}
                 else:
-                    # Transit: Japan transit data unavailable server-side — delegate to client Maps JS API
-                    all_actions.append({
-                        "type":         "get_commute_client",
-                        "lat":          row["lat"],
-                        "lng":          row["lng"],
-                        "destination":  dest,
-                        "listing_name": row["name"],
-                    })
-                    result = {"status": "calculating", "message": "Transit route is being fetched by the map — result will appear in chat momentarily."}
+                    # Transit: Japan transit data is not available via the server-side API.
+                    # Show driving route on map as a proxy, and return a Google Maps transit deep-link.
+                    from urllib.parse import quote as _urlquote
+                    gmaps_transit = (
+                        f"https://www.google.com/maps/dir/?api=1"
+                        f"&origin={row['lat']},{row['lng']}"
+                        f"&destination={_urlquote(dest)}"
+                        f"&travelmode=transit"
+                    )
+                    driving = None
+                    if GOOGLE_MAPS_SERVER_KEY:
+                        try:
+                            gm = requests.get(
+                                "https://maps.googleapis.com/maps/api/directions/json",
+                                params={"origin": f"{row['lat']},{row['lng']}", "destination": dest,
+                                        "mode": "driving", "language": "ja", "region": "JP",
+                                        "key": GOOGLE_MAPS_SERVER_KEY},
+                                timeout=10,
+                            ).json()
+                            if gm.get("status") == "OK":
+                                leg = gm["routes"][0]["legs"][0]
+                                driving = {
+                                    "duration": leg["duration"]["text"],
+                                    "duration_minutes": round(leg["duration"]["value"] / 60),
+                                    "distance": leg["distance"]["text"],
+                                }
+                                all_actions.append({
+                                    "type":        "show_driving_route",
+                                    "lat":         row["lat"], "lng": row["lng"],
+                                    "destination": dest,
+                                    "mode":        "DRIVING",
+                                })
+                        except Exception:
+                            pass
+                    result = {
+                        "transit_api_unavailable": True,
+                        "google_maps_transit_url": gmaps_transit,
+                        "driving": driving,
+                    }
             elif block.name == "center_map":
                 inp = block.input
                 lat, lng = inp.get("lat"), inp.get("lng")
