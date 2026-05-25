@@ -256,12 +256,15 @@ class FloorPlanAgent:
         # Strip markdown fences if present
         raw = re.sub(r"^```[a-z]*\n?", "", raw)
         raw = re.sub(r"\n?```$", "", raw.strip())
+        # Remove trailing commas before ] or } (common LLM JSON mistake)
+        raw = re.sub(r",\s*([}\]])", r"\1", raw)
         try:
             return json.loads(raw)
         except json.JSONDecodeError:
             m = re.search(r"\{.*\}", raw, re.DOTALL)
             if m:
-                return json.loads(m.group())
+                cleaned = re.sub(r",\s*([}\]])", r"\1", m.group())
+                return json.loads(cleaned)
             raise
 
     # ── Phase 2: pixel-ratio fill-in ─────────────────────────────────────────
