@@ -9,14 +9,19 @@ API flow per ward:
      same body plus shisya/danchi/shikibetu identifiers
      → list of currently-vacant rooms in that complex.
 
-Each room becomes one listing dict, shaped like JKK listings so that
-scraper4.run() can process JKK and UR results uniformly.
+Images are fetched post-session using a headless browser (UR pages are JS-rendered).
 """
 
-import re
+import re, time, random, sqlite3, logging
 import html as html_lib
-import logging
 import requests
+from playwright.sync_api import sync_playwright
+
+from scraper_base import BaseScraper
+from image_pipeline import (
+    CHROME_ARGS, SCRAPER_UA, reset_asyncio_loop,
+    save_images_for_listing, classify_image_heuristic,
+)
 
 log = logging.getLogger(__name__)
 
@@ -204,11 +209,8 @@ def _parse_room(room, danchi, ward_name):
     }
 
 
-def fetch_ur_listings(config):
-    """
-    Pull all current UR vacancies across Tokyo and Kanagawa.
-    Returns a list of listing dicts shaped like JKK listings.
-    """
+def _fetch_all_ur_listings():
+    """Pull all current UR vacancies. Returns list of listing dicts."""
     listings = []
     for tdfk, block, area_codes in UR_REGIONS:
         region_label = "東京" if tdfk == "13" else "神奈川"
@@ -221,8 +223,7 @@ def fetch_ur_listings(config):
                 continue
             if not danchi_list:
                 continue
-
-            active = [d for d in danchi_list if str(d.get("roomCount", "0")) not in ("0", "")]
+            active    = [d for d in danchi_list if str(d.get("roomCount", "0")) not in ("0", "")]
             ward_count = 0
             for d in active:
                 try:
@@ -238,16 +239,234 @@ def fetch_ur_listings(config):
             if ward_count:
                 log.info(f"UR: {ward_name} ({skcs}) → {ward_count} room(s) across "
                          f"{len(active)}/{len(danchi_list)} complex(es) with vacancies")
-
     log.info(f"UR: total {len(listings)} listing(s) fetched.")
     return listings
+
+
+# Keep old name for any external callers
+def fetch_ur_listings(config):
+    return _fetch_all_ur_listings()
+
+
+# ── UR image scraping ─────────────────────────────────────────────────────────
+
+_UR_IMG_SKIP = (
+    '/img/common/', '/img/ogp/', '/img/talent/', 'img_loading',
+    '_photo_s.jpg', '_TF_', 'apple-touch-icon',
+)
+
+
+def _classify_ur_image(src: str, alt: str) -> str | None:
+    """Return image_type for a UR image, or None to skip entirely."""
+    if '間取' in alt or 'madori' in src.lower():
+        return 'floor_plan'
+    if '交通図' in alt or '_TF_' in src:
+        return None  # transport diagram
+    if '外観' in alt:
+        return 'exterior'
+    return 'interior'
+
+
+def _fetch_ur_image_urls(listing_url: str, page=None) -> list[tuple[str, str]]:
+    """
+    Render a UR room page with a headless browser and return image URLs.
+    If `page` is given (open Playwright Page), reuse it.
+    Returns [(url, image_type), …] sorted floor_plan first, capped at 20.
+    """
+    owned   = page is None
+    browser = _pw_cm = _pw_obj = None
+    try:
+        if owned:
+            reset_asyncio_loop()
+            _pw_cm  = sync_playwright()
+            _pw_obj = _pw_cm.__enter__()
+            browser = _pw_obj.chromium.launch(headless=True, args=CHROME_ARGS)
+            page    = browser.new_page(user_agent=SCRAPER_UA)
+
+        page.goto(listing_url, timeout=30_000, wait_until="commit")
+        try:
+            page.wait_for_selector(
+                'img[src*="img_madori"], img[src*="recruit/URSI"], img[src*="img_photo/"]',
+                timeout=30_000,
+            )
+        except Exception:
+            pass
+        page.wait_for_timeout(1_000)
+
+        skip_json = str(list(_UR_IMG_SKIP)).replace("'", '"')
+        imgs = page.evaluate(f"""() => {{
+            const skip = {skip_json};
+            const keep = ['img_madori', 'recruit/URSI', 'img_photo/', 'img_room/'];
+            return Array.from(document.querySelectorAll('img'))
+                .map(img => ({{ src: img.src, alt: img.alt || '',
+                               w: img.naturalWidth, h: img.naturalHeight }}))
+                .filter(i => i.src && i.w > 80 && i.h > 80
+                          && !skip.some(s => i.src.includes(s))
+                          && keep.some(k => i.src.includes(k)));
+        }}""")
+
+        seen, results = set(), []
+        for img in imgs:
+            src = img["src"]
+            if src in seen:
+                continue
+            seen.add(src)
+            img_type = _classify_ur_image(src, img["alt"])
+            if img_type is None:
+                continue
+            results.append((src, img_type))
+
+        results.sort(key=lambda x: 0 if x[1] == "exterior" else 1 if x[1] == "interior" else 2)
+        return results[:20]
+
+    except Exception as e:
+        log.debug(f"UR headless image fetch failed ({listing_url}): {e}")
+        return []
+    finally:
+        if owned and browser:
+            try:
+                browser.close()
+                if _pw_cm:
+                    _pw_cm.__exit__(None, None, None)
+            except Exception:
+                pass
+
+
+# ── URScraper class ───────────────────────────────────────────────────────────
+
+class URScraper(BaseScraper):
+    source = "ur"
+
+    def fetch_listings(self, config: dict) -> tuple[list[dict], bool]:
+        try:
+            return _fetch_all_ur_listings(), True
+        except Exception as e:
+            log.error(f"UR fetch failed: {e}")
+            return [], False
+
+    def fetch_images_batch(self, new_lids: list[str]) -> int:
+        """Fetch images for new UR listings using a single Playwright session."""
+        if not new_lids:
+            return 0
+        reset_asyncio_loop()
+        con = sqlite3.connect(self.db_file, timeout=60)
+        con.execute("PRAGMA journal_mode=WAL")
+        con.row_factory = sqlite3.Row
+        rows = con.execute(
+            f"SELECT id, url FROM listings WHERE id IN ({','.join('?'*len(new_lids))})",
+            new_lids,
+        ).fetchall()
+        ur_rows = [(r["id"], r["url"]) for r in rows if "ur-net.go.jp" in (r["url"] or "")]
+        if not ur_rows:
+            con.close()
+            return 0
+
+        ok = 0
+        try:
+            _pw_cm  = sync_playwright()
+            _pw_obj = _pw_cm.__enter__()
+            browser = _pw_obj.chromium.launch(headless=True, args=CHROME_ARGS)
+            page    = browser.new_page(user_agent=SCRAPER_UA)
+            for lid, listing_url in ur_rows:
+                try:
+                    images = _fetch_ur_image_urls(listing_url, page)
+                    n = save_images_for_listing(lid, images, con)
+                    if n:
+                        ok += 1
+                        log.info(f"UR images: {n} saved for {lid[:8]}")
+                except Exception as e:
+                    log.error(f"UR image pipeline failed ({listing_url}): {e}")
+                delay = random.uniform(60, 120)
+                log.debug(f"UR image: waiting {delay:.0f}s")
+                time.sleep(delay)
+            browser.close()
+            _pw_cm.__exit__(None, None, None)
+        except Exception as e:
+            log.error(f"UR image batch session failed: {e}")
+        finally:
+            con.close()
+        return ok
+
+    def backfill_images(self, listing_ids: list[str] | None = None,
+                        limit: int = 50) -> None:
+        """Re-scrape images for UR listings with missing image data."""
+        reset_asyncio_loop()
+        con = sqlite3.connect(self.db_file, timeout=60)
+        con.execute("PRAGMA journal_mode=WAL")
+        con.row_factory = sqlite3.Row
+
+        # Clean unrecoverable file:// records
+        deleted = con.execute("DELETE FROM listing_images WHERE url LIKE 'file://%'").rowcount
+        con.execute("UPDATE listings SET thumbnail_url=NULL WHERE thumbnail_url LIKE 'file://%'")
+        con.commit()
+        if deleted:
+            log.info(f"Backfill: removed {deleted} unrecoverable file:// record(s)")
+
+        if listing_ids:
+            placeholders = ",".join("?" * len(listing_ids))
+            rows = con.execute(
+                f"SELECT id, url FROM listings "
+                f"WHERE id IN ({placeholders}) AND disappeared_at IS NULL",
+                listing_ids,
+            ).fetchall()
+        else:
+            rows = con.execute(
+                """SELECT DISTINCT l.id, l.url FROM listings l
+                   WHERE l.disappeared_at IS NULL AND l.source = 'ur'
+                     AND (
+                       NOT EXISTS (SELECT 1 FROM listing_images li WHERE li.listing_id = l.id)
+                       OR
+                       NOT EXISTS (SELECT 1 FROM listing_images li
+                                   WHERE li.listing_id = l.id AND li.local_path IS NOT NULL
+                                     AND li.local_path != '')
+                     )
+                   LIMIT ?""",
+                (limit,),
+            ).fetchall()
+
+        if not rows:
+            log.info("Backfill: nothing to process")
+            con.close()
+            return
+
+        log.info(f"Backfill: processing {len(rows)} listing(s)…")
+        ok = 0
+        try:
+            _pw_cm  = sync_playwright()
+            _pw_obj = _pw_cm.__enter__()
+            browser = _pw_obj.chromium.launch(headless=True, args=CHROME_ARGS)
+            page    = browser.new_page(user_agent=SCRAPER_UA)
+            for row in rows:
+                lid, url = row["id"], row["url"]
+                if not url or "ur-net.go.jp" not in url:
+                    continue
+                try:
+                    images = _fetch_ur_image_urls(url, page)
+                    n = save_images_for_listing(lid, images, con)
+                    if n:
+                        ok += 1
+                        log.info(f"  ✓ {lid[:8]} — {n} image(s)")
+                    else:
+                        log.warning(f"  ✗ {lid[:8]} — no images from {url}")
+                except Exception as e:
+                    log.error(f"  ✗ {lid[:8]} failed: {e}")
+                delay = random.uniform(60, 120)
+                log.debug(f"Backfill: waiting {delay:.0f}s")
+                time.sleep(delay)
+            browser.close()
+            _pw_cm.__exit__(None, None, None)
+            log.info(f"Backfill done: {ok}/{len(rows)} listings updated")
+        except Exception as e:
+            log.error(f"Backfill Playwright session failed: {e}")
+        finally:
+            con.close()
 
 
 if __name__ == "__main__":
     import json, sys
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     ward = sys.argv[1] if len(sys.argv) > 1 else "横浜市港北区"
-    rows = fetch_ur_listings({})
+    rows = _fetch_all_ur_listings()
     filtered = [r for r in rows if r["ward"] == ward]
     print(json.dumps(filtered, ensure_ascii=False, indent=2))
     print(f"\n{len(filtered)} listings in {ward} (total: {len(rows)})")

@@ -1310,7 +1310,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 15:38 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 18:55 JST</p>
       </div>
 
 
@@ -3023,6 +3023,7 @@ function popupHtml(l) {
       <div class="pin-meta" style="margin-top:3px;">${t('first_seen_label')}: ${fmtDate(l.first_seen)}${daysStr ? ` · ${daysStr}` : ''}</div>
       ${l.priority ? `<div style="margin-top:4px;font-size:11px;color:var(--accent);font-weight:600;">${escHtml(l.priority)}</div>` : ''}
       ${l.building_type ? `<div style="margin-top:2px;font-size:11px;color:var(--muted);">${escHtml(l.building_type)}</div>` : ''}
+      ${l.appliances ? `<div style="margin-top:4px;font-size:11px;color:var(--muted);">🔌 ${escHtml(l.appliances)}</div>` : ''}
       <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
         ${l.source === 'ur' && l.url ? `<a href="${escHtml(l.url)}" target="_blank" rel="noopener">${t('open_listing')}</a>` : ''}
         ${l.source === 'jkk' ? `<span style="font-size:11px;color:var(--muted);">JKK listings must be searched manually on the JKK website</span>` : ''}
