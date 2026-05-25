@@ -15,7 +15,7 @@ Setup:
     python scraper.py
 """
 
-import json, time, os, re, hashlib, requests, sqlite3, threading
+import json, time, os, re, hashlib, requests, sqlite3, threading, random
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
@@ -581,7 +581,9 @@ def backfill_images(limit=50, listing_ids=None):
                     log.info(f"  ✓ {lid[:8]} — {n} image(s)")
                 else:
                     log.warning(f"  ✗ {lid[:8]} — no images scraped from {url}")
-                time.sleep(3)  # UR rate-limits aggressive batches
+                delay = random.uniform(60, 120)
+                log.debug(f"Backfill: waiting {delay:.0f}s before next listing")
+                time.sleep(delay)
             except Exception as e:
                 log.error(f"  ✗ {lid[:8]} failed: {e}")
         browser.close()
@@ -754,7 +756,9 @@ def _scrape_images_for_new_listings(new_lids):
                     n = _process_listing_images(lid, listing_url, con, pw_page=page)
                     if n:
                         ok += 1
-                    time.sleep(0.5)
+                    delay = random.uniform(60, 120)
+                    log.debug(f"UR image: waiting {delay:.0f}s before next listing")
+                    time.sleep(delay)
                 except Exception as e:
                     log.error(f"UR image pipeline failed ({listing_url}): {e}")
             browser.close()
