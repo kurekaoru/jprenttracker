@@ -1559,12 +1559,12 @@ Rules:
 - If the user asks a property-specific question (photos, floor plan, commute, nearby facilities) and there is NO open property card: search for candidates using any name/ward/layout mentioned, then show the cards. If exactly one result comes back, proceed immediately (call show_listing_images, get_commute_time, etc.) using that listing_id. If multiple results come back, tell the user "Click the one you mean and I'll show the floor plan" (or whatever was requested). If there is truly nothing to search on, reply: "Please open a property card first — click any listing on the map or in the table, then ask again."
 - When showing disambiguation candidates (multiple search results for a property-specific request), always call pick_listing(pending_message='<original action>') immediately after search_listings — e.g. pick_listing(pending_message='show floor plan'). Do NOT call pick_listing if only one result was found (proceed directly instead).
 - HARD RULE: For ANY query using relative size language about living space ("大きいリビング", "huge living room", "spacious", "広いLDK", "large kitchen", "open plan", etc.): call get_room_stats FIRST to get the actual distribution from analyzed floor plans. Then use the p75 value as min_living_area_m2 for "large/spacious" and p90 for "huge/very large". Never hardcode a size threshold — always derive it from the stats tool. If get_room_stats returns no data yet, say so clearly and search without the filter.
-- HARD RULE: Any answer that identifies a specific property or a small set (≤ ~5 listings) MUST surface those listings as clickable cards — never answer with property names or numbers in plain text alone. This applies to ALL question types that resolve to identifiable properties, including but not limited to:
-  • Superlatives: "biggest", "largest", "cheapest", "most expensive", "smallest", "highest", "lowest", "最大", "一番広い", "一番安い", etc. → call search_listings with the matching sort_by (living_area_desc / size_desc / rent_asc / rent_desc).
-  • Facility-count extremes: "most kindergartens nearby", "most konbini", "most parks within 500m", etc. → call find_nearby_place for each candidate then surface the winner via select_listing or search_listings(name=…).
-  • Threshold filters that yield a handful of results: "listings with more than 5 supermarkets nearby", "only listings within 3 min walk", etc. → call search_listings or batch_commute_filter as appropriate, then show results as cards.
-  • Any question where you know the answer is a named property: call select_listing (single result) or search_listings(name=…) (multiple) so the card renders.
-  The rule is simple: if you can name it, you must show it. Text-only answers for identifiable properties are never acceptable.
+- HARD RULE: Any answer that resolves to a specific property or a small set (≤ ~5 listings) MUST render clickable cards — never answer with property names in plain text alone. How to render:
+  • Superlatives (biggest living room, cheapest, largest, etc.): call search_listings with sort_by (living_area_desc / size_desc / rent_asc / rent_desc) — cards render automatically from the results.
+  • Multi-step queries where the winner is found via intermediate tools (facility counts, custom ranking, floor plan comparison, etc.): call show_listings(listing_ids=[…]) with the identified IDs at the end.
+  • Single known property: call show_listings(listing_ids=[id]) — do NOT call select_listing just to render a card, show_listings is lighter.
+  The rule: if you can name it, you must show it. Text-only answers for identifiable properties are never acceptable.
+  Do NOT call show_listings for operational context: commute calculation in progress, save/remove confirmation, image display.
 - Floor plan analysis (from get_room_stats and get_listing_details floor_plan_rooms): living_area_m2 is the combined LDK/LD/L area. kitchen_open=true means the kitchen opens to the living area with no separating door. Use these fields to answer questions about room layout and to filter searches.
 """
 
@@ -1590,6 +1590,17 @@ _CHAT_TOOLS = [
                 "min_living_area_m2":  {"type": "number",  "description": "Min living/dining/kitchen (LDK/LD/L) area in m² from floor plan analysis. Requires floor plan data — call get_room_stats first to pick an evidence-based threshold."},
                 "sort_by":             {"type": "string",  "enum": ["rent_asc","rent_desc","living_area_desc","size_desc"], "description": "Sort order. Default rent_asc. Use living_area_desc for 'biggest living room', size_desc for 'largest apartment'."},
                 "limit":               {"type": "integer", "description": "Max results, default 10, use 200 to get all"},
+            },
+        },
+    },
+    {
+        "name": "show_listings",
+        "description": "Render one or more property listing cards for the user to click on. Call this when your response has identified specific properties through multi-step reasoning, facility comparisons, floor plan analysis, or any path other than search_listings. Also use for a single known property instead of select_listing.",
+        "input_schema": {
+            "type": "object",
+            "required": ["listing_ids"],
+            "properties": {
+                "listing_ids": {"type": "array", "items": {"type": "string"}, "description": "IDs of the listings to render as clickable cards"},
             },
         },
     },
@@ -2191,10 +2202,17 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                     result = {"error": "not logged in" if not user_id else "no listing_ids provided"}
             elif block.name == "get_market_trends":
                 result = _chat_market_trends(block.input, con)
+            elif block.name == "show_listings":
+                ids = block.input.get("listing_ids", [])
+                placeholders = ",".join("?" * len(ids)) if ids else "NULL"
+                rows = con.execute(
+                    f"SELECT id FROM listings WHERE id IN ({placeholders})", ids
+                ).fetchall() if ids else []
+                valid = [r["id"] for r in rows]
+                all_ids.extend(valid)
+                result = {"rendered": len(valid)}
             elif block.name == "get_listing_details":
                 result = _chat_details(block.input, con)
-                if "id" in result:
-                    all_ids.append(result["id"])
             elif block.name == "get_commute_time":
                 inp  = block.input
                 lid  = inp.get("listing_id", "")
