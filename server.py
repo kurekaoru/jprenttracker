@@ -1552,6 +1552,7 @@ Rules:
 - Use save_listings to add listings to the user's saved selections. Call it immediately after batch_commute_filter or search_listings when the user explicitly asks to save/bookmark the results. To add all listings with a floor plan: call search_listings(has_floor_plan=true, limit=200) then save_listings with all returned IDs. To find listings with any photo: use has_images=true.
 - To search all 23 Tokyo special wards (23区, 23-ku, 都内, inner Tokyo, etc.): call search_listings with wards=["23区"] — the server expands this automatically. Never claim there are no results without calling the tool first.
 - Use remove_listings to remove listings from saved selections. The user's current saved list with photo counts is provided in context — use the listing IDs directly. For "remove listings without photos" filter to those with photos=0.
+- HARD RULE: Never silently apply a geographic restriction the user did not ask for. If the user asks for properties matching criteria (kindergartens, hospitals, walk time, etc.) without specifying a ward, city, or region, the run_sql query must search ALL listings regardless of location. Only add a ward/city/region filter when the user explicitly names one.
 - HARD RULE: Never end a response with follow-up suggestions, offers to help further, or questions ("Would you like more details?", "Would you like help with anything else?", "Is there anything else I can help you with?" etc.). Answer exactly what was asked, then stop. No trailing questions or offers.
 - HARD RULE: Never ask for confirmation before using a tool you already have. If the user asks you to save, remove, filter, or show something and you have the tool for it, do it immediately and say done. Do not ask "Shall I go ahead?", "Would you like me to?", "Do you want me to?" — just act.
 - HARD RULE: NEVER rely on chat history to claim an action is complete. Previous turns are stale — the user may have changed state since then. Every action request MUST re-execute the full tool chain from scratch in the current turn. If you see a prior assistant message claiming "I added X listings," ignore it — call the tools again now.
@@ -1566,8 +1567,9 @@ Rules:
   • Single known property: call show_listings(listing_ids=[id]).
   The rule: if you can name it, you must show it. Text-only answers for identifiable properties are never acceptable.
   Do NOT call show_listings for operational context: commute calculation in progress, save/remove confirmation, image display.
-- Use run_sql for any question not expressible with existing tools: facility counts, rent history trends, cross-table filters, floor plan JSON comparisons, etc. Write a single SELECT; the schema is in the tool description. Always filter disappeared_at IS NULL for active listings. If the SELECT includes an 'id' column from listings, cards render automatically.
+- Use run_sql for any question not expressible with existing tools: facility counts, rent history trends, cross-table filters, floor plan JSON comparisons, etc. Write a single SELECT; the schema is in the tool description. Always filter disappeared_at IS NULL for active listings. ALWAYS include l.id as the FIRST column — without it, no cards appear and the user sees nothing. Even inside a CTE, the outermost SELECT must start with the id column. If cards are expected but the query omits id, rerun with it added.
 - run_sql results: listing_ids[i] corresponds to rows[i] (same position, same order). To filter results (e.g. "only Tokyo ones", "only ward X"): check the ward column in rows, find which indices match, and pass only those listing_ids to save_listings. Do NOT re-run a search — use the positional mapping directly.
+- HARD RULE: Never say "Found N properties" or name properties in text without having called run_sql or search_listings in the SAME turn and gotten listing_ids back. Prior chat messages are not a source of listing data — always re-execute the query. If you described results without a tool call, the user saw no cards.
 - Floor plan analysis (from get_room_stats and get_listing_details floor_plan_rooms): living_area_m2 is the combined LDK/LD/L area. kitchen_open=true means the kitchen opens to the living area with no separating door. Use these fields to answer questions about room layout and to filter searches.
 """
 
@@ -2293,6 +2295,12 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                                   "columns": other_cols,
                                   "rows": [[r[i] for i, c in enumerate(cols) if c not in ("id","listing_id")]
                                            for r in result["rows"]]}
+                    else:
+                        # No id column — cards cannot render; tell the model explicitly
+                        result["warning"] = (
+                            "NO CARDS RENDERED: query missing 'id' column. "
+                            "Re-run with l.id as the first SELECT column to show cards."
+                        )
             elif block.name == "get_market_trends":
                 result = _chat_market_trends(block.input, con)
             elif block.name == "show_listings":
