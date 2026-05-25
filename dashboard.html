@@ -1310,7 +1310,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 18:55 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 22:22 JST</p>
       </div>
 
 
@@ -2625,33 +2625,67 @@ function clearPoiMarkers(layer) {
   _poiMarkers[layer] = [];
 }
 
+const _POI_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+function _poiCacheKey(layer, boundsKey) {
+  return `poi:${layer}:${boundsKey}`;
+}
+
+function _renderPoiResults(layer, results) {
+  const color = (_facilityIconDefs[layer] || {}).color || '#888888';
+  _poiMarkers[layer] = results.map(place => {
+    const pos = typeof place.lat === 'number'
+      ? new google.maps.LatLng(place.lat, place.lng)
+      : place.geometry.location;
+    const marker = new google.maps.Marker({
+      position: pos, map, icon: facilityMarkerIcon(layer),
+      title: place.name, zIndex: 5,
+    });
+    marker.addListener('click', () => {
+      _facPopup.setContent(_facPopupHtml(color, place.name, facilityTypeLabel(layer), null));
+      _facPopup.open({ map, anchor: marker });
+      const ll = pos.lat ? pos : new google.maps.LatLng(place.lat, place.lng);
+      showFacilityRoute(ll.lat(), ll.lng());
+    });
+    return marker;
+  });
+  _applyZoomVisibility();
+}
+
 function fetchPoiMarkers(layer) {
   if (!_placesService || !map?.getBounds()) return;
   const cfg = _poiConfig[layer];
   if (!cfg) return;
+
+  const c = map.getCenter();
+  const boundsKey = `${c.lat().toFixed(3)},${c.lng().toFixed(3)},${map.getZoom()}`;
+  const cacheKey = _poiCacheKey(layer, boundsKey);
+
+  // Check sessionStorage cache
+  try {
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      const { ts, data } = JSON.parse(cached);
+      if (Date.now() - ts < _POI_CACHE_TTL_MS) {
+        _renderPoiResults(layer, data);
+        return;
+      }
+      sessionStorage.removeItem(cacheKey);
+    }
+  } catch (e) {}
+
   const req = { bounds: map.getBounds(), type: cfg.type };
   if (cfg.keyword) req.keyword = cfg.keyword;
   _placesService.nearbySearch(req, (results, status) => {
     if (status !== google.maps.places.PlacesServiceStatus.OK &&
         status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) return;
-    _poiMarkers[layer] = (results || []).map(place => {
-      const marker = new google.maps.Marker({
-        position: place.geometry.location,
-        map,
-        icon: facilityMarkerIcon(layer),
-        title: place.name,
-        zIndex: 5,
-      });
-      const color = (_facilityIconDefs[layer] || {}).color || '#888888';
-      marker.addListener('click', () => {
-        _facPopup.setContent(_facPopupHtml(color, place.name, facilityTypeLabel(layer), null));
-        _facPopup.open({ map, anchor: marker });
-        const pos = place.geometry.location;
-        showFacilityRoute(pos.lat(), pos.lng());
-      });
-      return marker;
-    });
-    _applyZoomVisibility();
+    const items = (results || []).map(p => ({
+      name: p.name,
+      lat: p.geometry.location.lat(),
+      lng: p.geometry.location.lng(),
+    }));
+    try { sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: items })); } catch (e) {}
+    _renderPoiResults(layer, items);
   });
 }
 
@@ -2909,11 +2943,17 @@ function initMap() {
   _facPopup = new google.maps.InfoWindow({ disableAutoPan: true, maxWidth: 220 });
   window._closeFacPopup = () => { _facPopup.close(); clearDirections(); };
 
+  let _lastPoiBoundsKey = null;
   map.addListener('idle', () => {
     if (!Object.values(_poiLayers).some(Boolean)) return;
     if (map.getZoom() < POI_ZOOM_THRESHOLD) return;
+    // Only re-fetch if the map centre moved by more than ~300m
+    const c = map.getCenter();
+    const boundsKey = `${c.lat().toFixed(3)},${c.lng().toFixed(3)},${map.getZoom()}`;
+    if (boundsKey === _lastPoiBoundsKey) return;
     clearTimeout(_poiRefetchTimeout);
     _poiRefetchTimeout = setTimeout(() => {
+      _lastPoiBoundsKey = boundsKey;
       Object.keys(_poiLayers).filter(k => _poiLayers[k]).forEach(layer => {
         clearPoiMarkers(layer);
         fetchPoiMarkers(layer);
