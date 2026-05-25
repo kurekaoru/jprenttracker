@@ -80,11 +80,9 @@ def ocr_floor_plan(image_path: str) -> str | None:
     if not api_key:
         return None
     try:
+        mime = _detect_media_type(image_path)
         with open(image_path, "rb") as f:
             data = base64.standard_b64encode(f.read()).decode()
-        ext  = image_path.rsplit(".", 1)[-1].lower()
-        mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg",
-                "png": "image/png",  "webp": "image/webp"}.get(ext, "image/jpeg")
         client = Anthropic(api_key=api_key)
         resp = client.messages.create(
             model="claude-haiku-4-5-20251001",
@@ -276,6 +274,23 @@ def classify_image_heuristic(url: str, alt: str = "", parent_text: str = "") -> 
 
 _VALID_TYPES = frozenset(("floor_plan", "interior", "exterior", "facilities", "appliances", "skip"))
 
+
+def _detect_media_type(image_path: str) -> str:
+    """Detect actual image media type from magic bytes, ignoring file extension."""
+    try:
+        with open(image_path, "rb") as f:
+            header = f.read(12)
+        if header[:3] == b'GIF':
+            return "image/gif"
+        if header[:8] == b'\x89PNG\r\n\x1a\n':
+            return "image/png"
+        if header[:4] == b'RIFF' and header[8:12] == b'WEBP':
+            return "image/webp"
+    except Exception:
+        pass
+    return "image/jpeg"
+
+
 def classify_image_ai(image_path: str) -> str:
     """
     Use Claude Haiku to classify a downloaded image.
@@ -299,14 +314,9 @@ def classify_image_ai(image_path: str) -> str:
     if not api_key:
         return "interior"
     try:
-        ext = image_path.rsplit(".", 1)[-1].lower()
-        if ext == "gif":
-            # Claude vision doesn't support GIF; GIFs on rental sites are always site chrome
-            return "skip"
+        mime = _detect_media_type(image_path)
         with open(image_path, "rb") as f:
             data = base64.standard_b64encode(f.read()).decode()
-        mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg",
-                "png": "image/png",  "webp": "image/webp"}.get(ext, "image/jpeg")
         client = Anthropic(api_key=api_key)
         resp = client.messages.create(
             model="claude-haiku-4-5-20251001",
@@ -349,13 +359,9 @@ def extract_appliances(image_path: str) -> list[str]:
     if not api_key:
         return []
     try:
-        ext = image_path.rsplit(".", 1)[-1].lower()
-        if ext == "gif":
-            return []
+        mime = _detect_media_type(image_path)
         with open(image_path, "rb") as f:
             data = base64.standard_b64encode(f.read()).decode()
-        mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg",
-                "png": "image/png",  "webp": "image/webp"}.get(ext, "image/jpeg")
         client = Anthropic(api_key=api_key)
         resp = client.messages.create(
             model="claude-haiku-4-5-20251001",

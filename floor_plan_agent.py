@@ -231,9 +231,24 @@ class FloorPlanAgent:
 
     # ── Phase 1: vision call ──────────────────────────────────────────────────
 
-    def _call_vision(self, image_path: str) -> dict:
+    @staticmethod
+    def _detect_media_type(image_path: str) -> str:
+        try:
+            with open(image_path, "rb") as f:
+                header = f.read(12)
+            if header[:3] == b'GIF':
+                return "image/gif"
+            if header[:8] == b'\x89PNG\r\n\x1a\n':
+                return "image/png"
+            if header[:4] == b'RIFF' and header[8:12] == b'WEBP':
+                return "image/webp"
+        except Exception:
+            pass
         ext = Path(image_path).suffix.lower()
-        media_type = MEDIA_TYPES.get(ext, "image/jpeg")
+        return MEDIA_TYPES.get(ext, "image/jpeg")
+
+    def _call_vision(self, image_path: str) -> dict:
+        media_type = self._detect_media_type(image_path)
         with open(image_path, "rb") as f:
             img_b64 = base64.standard_b64encode(f.read()).decode()
 
