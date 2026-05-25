@@ -33,11 +33,33 @@ PROMPT = """Analyze this Japanese apartment floor plan image.
   edges of each room — they are wall lengths, NOT areas.
 • Compute area_m2 = width_m × depth_m for each room.
   If a room spans multiple bays, sum the segments (e.g. 1.500+1.575 = 3.075).
-• Some rooms extend into storage (物入れ, 押入れ, クローゼット). A dashed/dotted
-  shared boundary means storage is counted as part of the room; a solid wall
-  with a door means it is separate.
-• 約X畳 annotations are secondary — use them only as a sanity-check, not as the
-  primary area source.  (1畳 ≈ 1.62 m²)
+• Each labeled dimension belongs to EXACTLY ONE space. Dimension labels on the
+  same wall are stacked independently — never subtract one from another.
+  Example: if the left wall shows 3.700 (和室) then 1.000 (押入れ) below/above it,
+  the room is 2.775 × 3.700 and the closet is 2.775 × 1.000 — do NOT compute
+  2.775 × (3.700 − 1.000).
+• Storage (物入れ, 押入れ, WIC, SIC, クローゼット) with a dashed or open shared
+  boundary is measured separately from the room it adjoins.
+• ALWAYS prefer dimension-line calculations over 約X畳 tatami annotations.
+  Use tatami only when NO dimension lines are visible for that room.
+  (1畳 ≈ 1.62 m²)
+
+=== BALCONY / VERANDA WIDTH RULE ===
+バルコニー/ベランダ almost always spans the FULL building width at the bottom of
+the floor plan. Use the TOTAL of all horizontal dimension segments at the bottom
+of the floor plan as the balcony width — never just one segment.
+Example: if the bottom shows 2.775 + 3.075 with a combined label of 5.850, the
+balcony width is 5.850 m, not 2.775 m.
+
+=== IRREGULAR SHAPES AND MISSING DIMENSIONS ===
+Some rooms have irregular (L-shaped, T-shaped, or notched) outlines, or one
+dimension of a sub-section is not labeled. In those cases:
+1. Decompose the shape into simple rectangles.
+2. For each rectangle where one dimension IS labeled and the other is NOT:
+   estimate the missing dimension by pixel proportion relative to the nearest
+   labeled dimension of the same orientation in the image.
+   Write the estimate as "~X.XX (px)" in dim_calc, e.g. "(2.775+3.075) × 1.300 + 3.075 × ~0.45(px)".
+3. Sum all sub-rectangles to get the total area.
 
 === EXCLUSIONS ===
 • The strip labelled 共用廊下 (shared corridor) at the top is NOT part of the
@@ -61,7 +83,8 @@ Extract EVERY distinct space inside the apartment boundary, including:
 For each room output:
 • label        — the text label shown in the image
 • area_m2      — calculated from dimension lines (null if no lines visible)
-• dim_calc     — the calculation string, e.g. "2.775 × 3.150" (null if not computed)
+• dim_calc     — full calculation string including any pixel-estimated segments,
+                 e.g. "(2.775+3.075) × 1.300 + 3.075 × ~0.45(px)"
 • has_window   — true if the room touches the exterior boundary (bold outer wall)
 • is_outdoor   — true only for バルコニー/ベランダ (default false)
 • pixel_fraction_of_ld — visual area fraction vs LD (always a number, never null)
