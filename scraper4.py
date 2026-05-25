@@ -581,7 +581,7 @@ def backfill_images(limit=50, listing_ids=None):
                     log.info(f"  ✓ {lid[:8]} — {n} image(s)")
                 else:
                     log.warning(f"  ✗ {lid[:8]} — no images scraped from {url}")
-                time.sleep(0.5)
+                time.sleep(3)  # UR rate-limits aggressive batches
             except Exception as e:
                 log.error(f"  ✗ {lid[:8]} failed: {e}")
         browser.close()
