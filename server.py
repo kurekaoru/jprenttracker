@@ -245,6 +245,13 @@ def db():
     """)
     con.commit()
 
+    # listings floor_plan_data column
+    try:
+        con.execute("ALTER TABLE listings ADD COLUMN floor_plan_data TEXT")
+        con.commit()
+    except Exception:
+        pass
+
     # users table migrations
     for col in ("google_id", "github_id", "avatar_url"):
         try:
@@ -1538,6 +1545,8 @@ Rules:
 - HARD RULE: NEVER answer count or stats questions ("how many", "how many listings", "how many floor plans", "how many saved", etc.) from memory or prior messages. Database counts change constantly. Always call search_listings (or the appropriate tool) to get a live count, even if you answered the same question moments ago.
 - If the user asks a property-specific question (photos, floor plan, commute, nearby facilities) and there is NO open property card: search for candidates using any name/ward/layout mentioned, then show the cards. If exactly one result comes back, proceed immediately (call show_listing_images, get_commute_time, etc.) using that listing_id. If multiple results come back, tell the user "Click the one you mean and I'll show the floor plan" (or whatever was requested). If there is truly nothing to search on, reply: "Please open a property card first — click any listing on the map or in the table, then ask again."
 - When showing disambiguation candidates (multiple search results for a property-specific request), always call pick_listing(pending_message='<original action>') immediately after search_listings — e.g. pick_listing(pending_message='show floor plan'). Do NOT call pick_listing if only one result was found (proceed directly instead).
+- HARD RULE: For ANY query using relative size language about living space ("大きいリビング", "huge living room", "spacious", "広いLDK", "large kitchen", "open plan", etc.): call get_room_stats FIRST to get the actual distribution from analyzed floor plans. Then use the p75 value as min_living_area_m2 for "large/spacious" and p90 for "huge/very large". Never hardcode a size threshold — always derive it from the stats tool. If get_room_stats returns no data yet, say so clearly and search without the filter.
+- Floor plan analysis (from get_room_stats and get_listing_details floor_plan_rooms): living_area_m2 is the combined LDK/LD/L area. kitchen_open=true means the kitchen opens to the living area with no separating door. Use these fields to answer questions about room layout and to filter searches.
 """
 
 _CHAT_TOOLS = [
@@ -1557,15 +1566,21 @@ _CHAT_TOOLS = [
                 "max_size":      {"type": "number",  "description": "Max floor area m²"},
                 "source":        {"type": "string",  "enum": ["jkk","ur"], "description": "jkk=公社 ur=UR"},
                 "max_walk":      {"type": "integer", "description": "Max walk min to nearest station"},
-                "has_floor_plan":{"type": "boolean", "description": "If true, only return listings that have a floor plan image"},
-                "has_images":    {"type": "boolean", "description": "If true, only return listings that have at least one downloaded photo"},
-                "limit":         {"type": "integer", "description": "Max results, default 10, use 200 to get all"},
+                "has_floor_plan":       {"type": "boolean", "description": "If true, only return listings that have a floor plan image"},
+                "has_images":          {"type": "boolean", "description": "If true, only return listings that have at least one downloaded photo"},
+                "min_living_area_m2":  {"type": "number",  "description": "Min living/dining/kitchen (LDK/LD/L) area in m² from floor plan analysis. Requires floor plan data — call get_room_stats first to pick an evidence-based threshold."},
+                "limit":               {"type": "integer", "description": "Max results, default 10, use 200 to get all"},
             },
         },
     },
     {
         "name": "get_statistics",
         "description": "Summary stats: total available, counts by source/ward, rent range, layout breakdown.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "get_room_stats",
+        "description": "Distribution statistics for living-area size (m²) and other room features (toilet count, open kitchen %) extracted from floor plan analysis. Call this BEFORE searching for 'large', 'huge', 'spacious', 'wide' living rooms — use the p75 value as min_living_area_m2 for 'large' and p90 for 'huge/very large'. Never guess a size threshold from training data.",
         "input_schema": {"type": "object", "properties": {}},
     },
     {
@@ -1764,6 +1779,11 @@ def _chat_search(params, con):
         conds.append("id IN (SELECT DISTINCT listing_id FROM listing_images WHERE image_type='floor_plan')")
     if params.get("has_images"):
         conds.append("id IN (SELECT DISTINCT listing_id FROM listing_images WHERE local_path IS NOT NULL)")
+    if params.get("min_living_area_m2"):
+        conds.append(
+            "CAST(json_extract(floor_plan_data, '$.living_area_m2') AS REAL) >= ?"
+        )
+        args.append(float(params["min_living_area_m2"]))
     limit = min(int(params.get("limit", 10)), 200)
     rows = con.execute(
         f"SELECT id,name,ward,rent,layout,size_m2,url,source,nearest_station,walk_min,thumbnail_url "
@@ -1794,6 +1814,58 @@ def _chat_stats(con):
         "rent": dict(rent), "top_wards": [dict(r) for r in wards],
         "layouts": [dict(r) for r in layouts],
     }
+
+def _chat_room_stats(con):
+    """Return percentile distribution of living area and common room metrics."""
+    import json as _json
+    rows = con.execute(
+        "SELECT floor_plan_data FROM listings WHERE floor_plan_data IS NOT NULL AND disappeared_at IS NULL"
+    ).fetchall()
+    living, toilets, bathrooms, kitchens_open = [], [], [], []
+    for r in rows:
+        try:
+            d = _json.loads(r["floor_plan_data"])
+            if d.get("living_area_m2") is not None:
+                living.append(float(d["living_area_m2"]))
+            if d.get("toilet_count") is not None:
+                toilets.append(int(d["toilet_count"]))
+            if d.get("bathroom_count") is not None:
+                bathrooms.append(int(d["bathroom_count"]))
+            if d.get("kitchen_open") is not None:
+                kitchens_open.append(bool(d["kitchen_open"]))
+        except Exception:
+            pass
+    if not living:
+        total_analyzed = len(rows)
+        total_fp = con.execute(
+            "SELECT COUNT(DISTINCT listing_id) FROM listing_images WHERE image_type='floor_plan'"
+        ).fetchone()[0]
+        return {
+            "message": "No room analysis data yet. Run analyze_floor_plans.py to populate.",
+            "floor_plans_in_db": total_fp,
+            "analyzed": total_analyzed,
+        }
+    living.sort()
+    n = len(living)
+    def pct(arr, p):
+        idx = min(int(len(arr) * p / 100), len(arr) - 1)
+        return round(arr[idx], 1)
+    return {
+        "analyzed_count": n,
+        "living_area_m2": {
+            "min":    round(min(living), 1),
+            "p25":    pct(living, 25),
+            "median": pct(living, 50),
+            "p75":    pct(living, 75),
+            "p90":    pct(living, 90),
+            "max":    round(max(living), 1),
+            "note": "Use p75 as threshold for 'large', p90 for 'very large/huge' living rooms",
+        },
+        "toilet_count_distribution": {str(k): toilets.count(k) for k in sorted(set(toilets))},
+        "bathroom_count_distribution": {str(k): bathrooms.count(k) for k in sorted(set(bathrooms))},
+        "open_kitchen_pct": round(100 * sum(kitchens_open) / len(kitchens_open)) if kitchens_open else None,
+    }
+
 
 def _chat_show_images(params, con):
     lid = params.get("listing_id", "")
@@ -1950,6 +2022,12 @@ def _chat_details(params, con):
     result = {**dict(row), "facilities": [dict(f) for f in facs]}
     if ocr_texts:
         result["floor_plan_ocr"] = "\n---\n".join(ocr_texts)
+    if row["floor_plan_data"]:
+        try:
+            import json as _json
+            result["floor_plan_rooms"] = _json.loads(row["floor_plan_data"])
+        except Exception:
+            pass
     return result
 
 import re as _re
@@ -2043,6 +2121,8 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                 all_ids.extend(r["id"] for r in result.get("listings", []))
             elif block.name == "get_statistics":
                 result = _chat_stats(con)
+            elif block.name == "get_room_stats":
+                result = _chat_room_stats(con)
             elif block.name == "show_listing_images":
                 result = _chat_show_images(block.input, con)
                 if "images" in result:
