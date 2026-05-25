@@ -30,51 +30,65 @@ TARGET  = sys.argv[1] if len(sys.argv) > 1 else "74518b2a1878216f161b75d6db3b10b
 
 
 def collect_detail_images(ctx, page, lid: str, con: sqlite3.Connection) -> int:
-    """Extract all images from the current detail page and classify them."""
+    """Extract images from the detail page using DOM selectors and classify them."""
     img_dir = os.path.join(IMG_DIR, lid)
     os.makedirs(img_dir, exist_ok=True)
 
-    # Remove stale placeholder records
     con.execute("DELETE FROM listing_images WHERE listing_id=? AND local_path IS NULL", (lid,))
     con.commit()
 
-    html = page.content()
-    with open("/tmp/jkk_detail_debug.html", "w", encoding="utf-8") as f:
-        f.write(html)
-    log.info("  Saved detail page HTML to /tmp/jkk_detail_debug.html")
+    # Wait for the slider to finish rendering
+    try:
+        page.wait_for_selector(".sp-slide", timeout=10_000)
+    except Exception:
+        log.warning("  Slider not found on detail page")
 
-    # Find all img src values on the page
-    srcs = re.findall(r'<img[^>]+src=["\']([^"\']+)["\']', html, re.IGNORECASE)
-    log.info(f"  Found {len(srcs)} img tags on detail page")
+    # Photos: pull unique URLs from the rendered slider
+    photo_urls = page.evaluate("""
+        () => [...new Set(
+            [...document.querySelectorAll('img.sp-image')]
+                .map(img => img.getAttribute('data-default') || img.src)
+                .filter(src => src && src.startsWith('http'))
+        )]
+    """)
 
-    # Also look for any URL containing mz_copyright or .jpg/.png patterns in scripts/data
-    extra = re.findall(
-        r'https?://[^\s"\'<>]+(?:\.jpg|\.jpeg|\.png|\.gif)',
-        html, re.IGNORECASE
-    )
-    all_srcs = list(dict.fromkeys(srcs + extra))  # deduplicate, preserve order
-    log.info(f"  {len(all_srcs)} unique image URLs (including inline)")
+    # Floor plan: the openMzFile anchor href
+    fp_url = page.evaluate("""
+        () => {
+            const a = document.querySelector('a[onclick*="openMzFile"]');
+            return a ? a.href : null;
+        }
+    """)
+
+    log.info(f"  {len(photo_urls)} photo(s) in slider, floor_plan: {fp_url and os.path.basename(fp_url)}")
+
+    # Detail text — get text from info table (Data_cell / Title_cell_conf)
+    detail_text = page.evaluate("""
+        () => {
+            const cells = [...document.querySelectorAll('td.Data_cell, td.Title_cell_conf')];
+            if (cells.length > 0) return cells.map(c => c.innerText.trim()).filter(Boolean).join('\\n');
+            const el = document.querySelector('td[width="685"]') || document.body;
+            return el ? el.innerText : '';
+        }
+    """)
+    if detail_text and detail_text.strip():
+        lines = [l.strip() for l in detail_text.split("\n") if l.strip()]
+        detail_text = "\n".join(lines)
+        con.execute("UPDATE listings SET detail_text=? WHERE id=?", (detail_text, lid))
+        con.commit()
+        log.info(f"  detail_text saved ({len(detail_text)} chars)")
+
+    # (url, hint_type) — hint overridden by AI classifier
+    all_urls = [(u, "interior") for u in photo_urls]
+    if fp_url:
+        all_urls.append((fp_url, "floor_plan"))
 
     saved = 0
     best_thumb: tuple | None = None
 
-    for src in all_srcs:
-        url = src if src.startswith("http") else (
-            JKK_BASE + src if src.startswith("/") else None
-        )
-        if not url:
+    for url, hint_type in all_urls:
+        if not url or not url.startswith("http"):
             continue
-
-        # Skip tiny icons, spacers, style images
-        if any(x in url for x in ["/styles/", "/images/btn_", "/common/", "spacer", "logo",
-                                   "btn_", "ico_", "icon", "arrow", "header", "footer", "nav"]):
-            log.debug(f"  Skipping UI asset: {url}")
-            continue
-
-        ext = url.rsplit(".", 1)[-1].lower()
-        if ext not in ("jpg", "jpeg", "png", "gif"):
-            continue
-
         try:
             resp = ctx.request.get(url, timeout=10_000)
             if resp.status != 200:
@@ -82,16 +96,14 @@ def collect_detail_images(ctx, page, lid: str, con: sqlite3.Connection) -> int:
                 continue
             ct = resp.headers.get("content-type", "")
             if not ct.startswith("image"):
-                log.debug(f"  {url}: non-image content-type {ct}")
                 continue
             body = resp.body()
             if len(body) < 2048:
-                log.debug(f"  {url}: too small ({len(body)} bytes) — skipping")
                 continue
 
             con.execute(
                 "INSERT OR IGNORE INTO listing_images (listing_id, url, image_type) VALUES (?,?,?)",
-                (lid, url, "interior"),
+                (lid, url, hint_type),
             )
             con.commit()
             row_id = con.execute(

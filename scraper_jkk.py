@@ -129,39 +129,55 @@ class JKKScraper(BaseScraper):
                 total_expected = int(total_m.group(1)) if total_m else 0
                 log.info(f"Total expected: {total_expected} listings")
 
-                # Paginate
+                # Open DB for image + detail collection during pagination
+                from scraper4 import listing_id as lid_fn
+                con = sqlite3.connect(self.db_file, timeout=60)
+                con.execute("PRAGMA journal_mode=WAL")
+                lids_done = {
+                    row[0] for row in
+                    con.execute("SELECT DISTINCT listing_id FROM listing_images").fetchall()
+                }
+
+                # Paginate — process detail pages inline
                 page_num = 0
-                while True:
-                    page_num += 1
-                    html = popup.content()
-
-                    if "owabi" in html or "おわび" in html:
-                        log.warning("Got error page — stopping")
-                        break
-
-                    new = self._parse_results(html, popup.url)
-                    all_listings.extend(new)
-                    log.info(f"Page {page_num}: {len(new)} listings (total: {len(all_listings)})")
-
-                    if total_expected > 0 and len(all_listings) >= total_expected:
-                        break
-                    if page_num >= 50:
-                        log.warning("Hit 50-page safety cap.")
-                        break
-
-                    next_btn = popup.locator("a[onclick*='afterPage']").first
-                    if next_btn.count() == 0 or not next_btn.is_visible():
-                        log.info("No more pages.")
-                        break
-
-                    next_btn.click()
-                    self._wait_stable(popup)
-
-                # Collect images while session is still alive
                 try:
-                    self._save_images_in_session(ctx, all_listings)
-                except Exception as e:
-                    log.warning(f"JKK in-session image collection failed: {e}")
+                    while True:
+                        page_num += 1
+                        html = popup.content()
+
+                        if "owabi" in html or "おわび" in html:
+                            log.warning("Got error page — stopping")
+                            break
+
+                        new = self._parse_results(html, popup.url)
+                        all_listings.extend(new)
+                        log.info(f"Page {page_num}: {len(new)} listings (total: {len(all_listings)})")
+
+                        # Collect images + detail text for new listings on this page
+                        for lst in new:
+                            lid = lid_fn(lst)
+                            if lid not in lids_done:
+                                try:
+                                    self._process_listing_detail(popup, ctx, lid, lst, con)
+                                    lids_done.add(lid)
+                                except Exception as e:
+                                    log.warning(f"Detail scrape failed for {lst.get('name')}: {e}")
+
+                        if total_expected > 0 and len(all_listings) >= total_expected:
+                            break
+                        if page_num >= 50:
+                            log.warning("Hit 50-page safety cap.")
+                            break
+
+                        next_btn = popup.locator("a[onclick*='afterPage']").first
+                        if next_btn.count() == 0 or not next_btn.is_visible():
+                            log.info("No more pages.")
+                            break
+
+                        next_btn.click(timeout=60_000)
+                        self._wait_stable(popup)
+                finally:
+                    con.close()
 
                 browser.close()
             ok = True
@@ -283,112 +299,166 @@ class JKKScraper(BaseScraper):
             "priority": priority_text, "building_type": building_type,
         }
 
-    def _save_images_in_session(self, ctx, listings: list[dict]) -> None:
+    def _process_listing_detail(self, popup, ctx, lid: str, lst: dict,
+                                con: sqlite3.Connection) -> None:
         """
-        Download mz_copyright images while session cookies are still valid.
-        Probes sequences 000–029 per listing; runs AI classification + OCR.
+        Click a listing row on the current results page → navigate to its detail page
+        → extract images + detail text → navigate back.
         """
-        con = sqlite3.connect(self.db_file, timeout=60)
-        con.execute("PRAGMA journal_mode=WAL")
+        thumb = lst.get("thumbnail_url") or ""
+        m = re.search(r"mz_copyright/mobile/(\d+)/", thumb)
+        if not m:
+            return
+        mz_id = m.group(1)
+
+        row_el = popup.locator(f"[onclick*='{mz_id}']").first
+        if row_el.count() == 0:
+            log.debug(f"No clickable row found for mz_id={mz_id}")
+            return
+
+        log.info(f"  → detail: {lst.get('name')} (mz_id={mz_id})")
+        row_el.click(timeout=60_000)
+        self._wait_stable(popup)
+
         try:
-            from scraper4 import listing_id  # avoid circular import at module level
-            lids_done = {
-                row[0] for row in
-                con.execute("SELECT DISTINCT listing_id FROM listing_images").fetchall()
+            popup.wait_for_selector(".sp-slide", timeout=15_000)
+        except Exception:
+            pass
+
+        self._save_detail_images(popup, ctx, lid, con)
+
+        back_btn = popup.locator("a[onclick*='akiyaBackRef']").first
+        try:
+            if back_btn.count() > 0:
+                back_btn.click(timeout=60_000)
+            else:
+                popup.go_back()
+            self._wait_stable(popup)
+        except Exception as e:
+            log.warning(f"  Back navigation failed: {e} — trying go_back()")
+            try:
+                popup.go_back()
+                self._wait_stable(popup)
+            except Exception:
+                pass
+
+    def _save_detail_images(self, page, ctx, lid: str, con: sqlite3.Connection) -> int:
+        """Extract photos (slider DOM) + floor plan (openMzFile) + detail text from detail page."""
+        from image_pipeline import extract_appliances, _merge_appliances
+
+        img_dir = os.path.join(IMG_DIR, lid)
+        os.makedirs(img_dir, exist_ok=True)
+
+        # Photos from the slider
+        photo_urls: list[str] = page.evaluate("""
+            () => [...new Set(
+                [...document.querySelectorAll('img.sp-image')]
+                    .map(img => img.getAttribute('data-default') || img.src)
+                    .filter(src => src && src.startsWith('http'))
+            )]
+        """)
+
+        # Floor plan link
+        fp_url: str | None = page.evaluate("""
+            () => {
+                const a = document.querySelector('a[onclick*="openMzFile"]');
+                return a ? a.href : null;
             }
-            saved = 0
-            for lst in listings:
-                lid = listing_id(lst)
-                if lid in lids_done:
+        """)
+
+        # Detail text from info table cells
+        detail_text: str = page.evaluate("""
+            () => {
+                const cells = [...document.querySelectorAll('td.Data_cell, td.Title_cell_conf')];
+                if (cells.length > 0) return cells.map(c => c.innerText.trim()).filter(Boolean).join('\\n');
+                const el = document.querySelector('td[width="685"]') || document.body;
+                return el ? el.innerText : '';
+            }
+        """)
+        if detail_text and detail_text.strip():
+            lines = [l.strip() for l in detail_text.split("\n") if l.strip()]
+            con.execute("UPDATE listings SET detail_text=? WHERE id=?",
+                        ("\n".join(lines), lid))
+            con.commit()
+
+        all_urls = [(u, "interior") for u in photo_urls]
+        if fp_url:
+            all_urls.append((fp_url, "floor_plan"))
+
+        saved = 0
+        best_thumb: tuple | None = None
+
+        for url, hint_type in all_urls:
+            if not url or not url.startswith("http"):
+                continue
+            try:
+                resp = ctx.request.get(url, timeout=10_000)
+                if resp.status != 200:
                     continue
-                thumb = lst.get("thumbnail_url") or ""
-                m = re.search(r"mz_copyright/mobile/(\d+)/", thumb)
-                if not m:
+                ct = resp.headers.get("content-type", "")
+                if not ct.startswith("image"):
                     continue
-                mz_id = m.group(1)
+                body = resp.body()
+                if len(body) < 2048:
+                    continue
 
-                img_dir = os.path.join(IMG_DIR, lid)
-                os.makedirs(img_dir, exist_ok=True)
+                con.execute(
+                    "INSERT OR IGNORE INTO listing_images (listing_id, url, image_type) VALUES (?,?,?)",
+                    (lid, url, hint_type),
+                )
+                con.commit()
+                row_id = con.execute(
+                    "SELECT id FROM listing_images WHERE listing_id=? AND url=?", (lid, url)
+                ).fetchone()[0]
 
-                imgs_saved = 0
-                first_url  = None
-                best_thumb: tuple | None = None  # (priority, url)
+                fpath = os.path.join(img_dir, f"{row_id}.jpg")
+                with open(fpath, "wb") as f:
+                    f.write(body)
 
-                for seq in range(30):
-                    url = f"{JKK_BASE}/mz_copyright/mobile/{mz_id}/{mz_id}{seq:03d}.jpg"
-                    try:
-                        resp = ctx.request.get(url, timeout=10_000)
-                        if resp.status != 200:
-                            break
-                        if not resp.headers.get("content-type", "").startswith("image"):
-                            break
-                        body = resp.body()
-
-                        # Insert placeholder
-                        con.execute(
-                            "INSERT OR IGNORE INTO listing_images "
-                            "(listing_id, url, image_type) VALUES (?,?,?)",
-                            (lid, url, "interior"),
-                        )
-                        con.commit()
-                        row_id = con.execute(
-                            "SELECT id FROM listing_images WHERE listing_id=? AND url=?",
-                            (lid, url),
-                        ).fetchone()[0]
-
-                        fpath = os.path.join(img_dir, f"{row_id}.jpg")
-                        with open(fpath, "wb") as f:
-                            f.write(body)
-
-                        # AI classification
-                        img_type = classify_image_ai(fpath)
-                        if img_type == "skip":
-                            os.remove(fpath)
-                            con.execute("DELETE FROM listing_images WHERE id=?", (row_id,))
-                            con.commit()
-                            log.debug(f"JKK skipped junk seq {seq} ({mz_id})")
-                            continue
-
-                        ocr_text = None
-                        if img_type == "floor_plan":
-                            ocr_text = ocr_floor_plan(fpath)
-                            if ocr_text:
-                                log.info(f"JKK OCR {fpath}: {ocr_text[:80]}")
-                            else:
-                                img_type = "exterior"
-
-                        con.execute(
-                            "UPDATE listing_images "
-                            "SET image_type=?, local_path=?, downloaded_at=?, ocr_text=? "
-                            "WHERE id=?",
-                            (img_type, fpath, datetime.now().isoformat(), ocr_text, row_id),
-                        )
-                        con.commit()
-
-                        prio = THUMB_PRIORITY.get(img_type, 99)
-                        if best_thumb is None or prio < best_thumb[0]:
-                            best_thumb = (prio, url)
-                        if first_url is None:
-                            first_url = url
-                        imgs_saved += 1
-
-                    except Exception as e:
-                        log.debug(f"JKK img seq {seq} failed ({mz_id}): {e}")
-                        break
-
-                if imgs_saved:
-                    if best_thumb:
-                        con.execute(
-                            "UPDATE listings SET thumbnail_url=? WHERE id=?",
-                            (best_thumb[1], lid),
-                        )
+                img_type = classify_image_ai(fpath)
+                if img_type == "skip":
+                    os.remove(fpath)
+                    con.execute("DELETE FROM listing_images WHERE id=?", (row_id,))
                     con.commit()
-                    saved += 1
-                    log.info(f"JKK images: {imgs_saved} saved for {lst['name']}")
-                    run_floor_plan_analysis(lid, con)
+                    continue
 
-                lids_done.add(lid)
-        finally:
-            con.close()
+                ocr_text = None
+                if img_type == "floor_plan":
+                    ocr_text = ocr_floor_plan(fpath)
+                    if ocr_text:
+                        log.info(f"    OCR {lid[:8]}: {ocr_text[:80]}")
+                    else:
+                        img_type = "exterior"
+                elif img_type == "appliances":
+                    items = extract_appliances(fpath)
+                    if items:
+                        ocr_text = ", ".join(items)
+                        _merge_appliances(lid, items, con)
+
+                con.execute(
+                    "UPDATE listing_images SET image_type=?, local_path=?, downloaded_at=?, ocr_text=? WHERE id=?",
+                    (img_type, fpath, datetime.now().isoformat(), ocr_text, row_id),
+                )
+                con.commit()
+
+                prio = THUMB_PRIORITY.get(img_type, 99)
+                if best_thumb is None or prio < best_thumb[0]:
+                    best_thumb = (prio, url)
+                saved += 1
+
+            except Exception as e:
+                log.warning(f"  Image download failed {url}: {e}")
+
         if saved:
-            log.info(f"JKK session images: {saved} listing(s) processed.")
+            if best_thumb:
+                url_to_id = dict(con.execute(
+                    "SELECT url, id FROM listing_images WHERE listing_id=?", (lid,)
+                ).fetchall())
+                img_id = url_to_id.get(best_thumb[1])
+                thumb = f"/api/images/{img_id}" if img_id else best_thumb[1]
+                con.execute("UPDATE listings SET thumbnail_url=? WHERE id=?", (thumb, lid))
+            con.commit()
+            log.info(f"    {saved} image(s) saved for {lid[:8]}")
+            run_floor_plan_analysis(lid, con)
+
+        return saved

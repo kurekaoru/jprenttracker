@@ -113,6 +113,7 @@ def init_db() -> sqlite3.Connection:
         ("priority",        "TEXT"),
         ("building_type",   "TEXT"),
         ("appliances",      "TEXT"),
+        ("detail_text",     "TEXT"),
     ]:
         if col not in cols:
             con.execute(f"ALTER TABLE listings ADD COLUMN {col} {defn}")
