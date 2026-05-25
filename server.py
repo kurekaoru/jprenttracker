@@ -2257,9 +2257,18 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                     result = {"error": "not logged in" if not user_id else "no listing_ids provided"}
             elif block.name == "run_sql":
                 result = _chat_run_sql(block.input, con)
-                if "columns" in result and "id" in result["columns"]:
-                    id_idx = result["columns"].index("id")
-                    all_ids.extend(r[id_idx] for r in result["rows"] if r[id_idx])
+                if "columns" in result:
+                    cols = result["columns"]
+                    id_col = next((c for c in cols if c in ("id", "listing_id")), None)
+                    if id_col:
+                        id_idx = cols.index(id_col)
+                        rendered = [r[id_idx] for r in result["rows"] if r[id_idx]]
+                        all_ids.extend(rendered)
+                        # Don't echo rows back — just tell the model how many cards rendered
+                        other_cols = [c for c in cols if c not in ("id", "listing_id")]
+                        result = {"rendered_cards": len(rendered), "columns": other_cols,
+                                  "sample": [[r[i] for i, c in enumerate(cols) if c not in ("id","listing_id")]
+                                             for r in result["rows"][:3]]}
             elif block.name == "get_market_trends":
                 result = _chat_market_trends(block.input, con)
             elif block.name == "show_listings":
