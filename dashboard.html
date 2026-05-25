@@ -1293,7 +1293,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 10:10 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 10:34 JST</p>
       </div>
 
 
@@ -3068,31 +3068,41 @@ async function loadFloorPlanAnalysis(listingId) {
 
 function _renderFloorPlanAnalysis(d) {
   if (!d || !d.rooms || !d.rooms.length) return '';
-  const windowSymbol = v => v === true ? '◎' : v === false ? '—' : '?';
-  const rows = d.rooms.map(r =>
-    `<tr>
+  const winSym = v => v === true ? '◎' : '';
+  const rows = d.rooms.map(r => {
+    const area = r.best_area_m2 ?? r.area_m2;
+    const areaStr = area != null ? area.toFixed(2) + ' m²' : '—';
+    const inferred = r.area_m2 == null && r.inferred_area_m2 != null;
+    const infTag  = inferred ? `<span style="color:var(--muted);font-size:9px;" title="pixel-ratio estimate">~</span>` : '';
+    const dimStr  = r.dim_calc
+      ? `<span style="color:var(--muted);font-size:10px;">${escHtml(r.dim_calc)}</span>` : '';
+    return `<tr${r.is_outdoor ? ' style="opacity:.6"' : ''}>
       <td>${escHtml(r.label)}</td>
-      <td class="r">${r.area_m2 != null ? r.area_m2 + ' m²' : '—'}</td>
-      <td class="c" style="color:var(--accent)">${windowSymbol(r.has_window)}</td>
-    </tr>`
-  ).join('');
+      <td class="r">${infTag}${areaStr}</td>
+      <td style="font-size:10px;padding-left:4px;">${dimStr}</td>
+      <td class="c" style="color:var(--accent);font-size:11px;">${winSym(r.has_window)}</td>
+    </tr>`;
+  }).join('');
   const kitchenLabel = d.kitchen_open === true ? 'open' : d.kitchen_open === false ? 'closed' : '—';
   const dateStr = d.analyzed_at ? new Date(d.analyzed_at).toLocaleDateString() : '';
+  const inferredCount = (d.inferred_rooms || []).length;
+  const inferredNote = inferredCount
+    ? `<span style="color:var(--muted)"> · ${inferredCount} pixel-inferred</span>` : '';
   return `
     <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">Floor Plan Analysis</div>
     <table class="fp-analysis-table">
       <thead><tr>
-        <th>Room</th><th class="r">Area</th><th class="c" title="Exterior window">Win</th>
+        <th>Room</th><th class="r">Area</th><th>Calc</th><th class="c" title="Exterior window">☀</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
     <div class="fp-analysis-summary">
-      <span>LDK area: <b>${d.living_area_m2 != null ? d.living_area_m2 + ' m²' : '—'}</b></span>
+      <span>LDK: <b>${d.living_area_m2 != null ? d.living_area_m2 + ' m²' : '—'}</b></span>
       <span>Kitchen: <b>${kitchenLabel}</b></span>
       <span>WC: <b>${d.toilet_count ?? '—'}</b></span>
       <span>Bath: <b>${d.bathroom_count ?? '—'}</b></span>
     </div>
-    <div class="fp-analysis-footer">${dateStr ? `Analyzed ${dateStr} · ` : ''}${escHtml(d.model || '')}</div>`;
+    <div class="fp-analysis-footer">${dateStr ? `Analyzed ${dateStr} · ` : ''}${escHtml(d.model || '')}${inferredNote}</div>`;
 }
 
 function _openGridPhotoAt(gridId, idx) {
