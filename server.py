@@ -1566,7 +1566,7 @@ Rules:
   • Single known property: call show_listings(listing_ids=[id]).
   The rule: if you can name it, you must show it. Text-only answers for identifiable properties are never acceptable.
   Do NOT call show_listings for operational context: commute calculation in progress, save/remove confirmation, image display.
-- Use run_sql for any question not expressible with existing tools: facility counts, rent history trends, cross-table filters, floor plan JSON comparisons, etc. Write a single SELECT; the schema is in the tool description. Always filter disappeared_at IS NULL for active listings. After getting listing IDs from the result, call show_listings with them so cards render.
+- Use run_sql for any question not expressible with existing tools: facility counts, rent history trends, cross-table filters, floor plan JSON comparisons, etc. Write a single SELECT; the schema is in the tool description. Always filter disappeared_at IS NULL for active listings. If the SELECT includes an 'id' column from listings, cards render automatically.
 - Floor plan analysis (from get_room_stats and get_listing_details floor_plan_rooms): living_area_m2 is the combined LDK/LD/L area. kitchen_open=true means the kitchen opens to the living area with no separating door. Use these fields to answer questions about room layout and to filter searches.
 """
 
@@ -1783,7 +1783,8 @@ _CHAT_TOOLS = [
             "listing_images(listing_id, image_type TEXT ['floor_plan'|'exterior'|'interior'])\n\n"
             "snapshots(listing_id, rent INT, seen_at TEXT)  -- rent history\n\n"
             "RULES: SELECT only. Always filter disappeared_at IS NULL for active listings. "
-            "Max 50 rows returned. After getting listing IDs, call show_listings with them."
+            "Max 200 rows returned. If your SELECT includes an 'id' column from listings, "
+            "those listings are automatically rendered as clickable cards — no need to call show_listings."
         ),
         "input_schema": {
             "type": "object",
@@ -2055,11 +2056,11 @@ def _chat_run_sql(params, con):
         if _re.search(rf'\b{t}\b', lower):
             return {"error": f"access to table '{t}' is not allowed"}
     if "limit" not in lower:
-        sql = f"{sql} LIMIT 50"
+        sql = f"{sql} LIMIT 200"
     try:
         cur = con.execute(sql)
         cols = [d[0] for d in cur.description]
-        rows = cur.fetchmany(50)
+        rows = cur.fetchmany(200)
         return {"columns": cols, "rows": [list(r) for r in rows], "count": len(rows)}
     except Exception as e:
         return {"error": str(e)}
@@ -2256,6 +2257,9 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                     result = {"error": "not logged in" if not user_id else "no listing_ids provided"}
             elif block.name == "run_sql":
                 result = _chat_run_sql(block.input, con)
+                if "columns" in result and "id" in result["columns"]:
+                    id_idx = result["columns"].index("id")
+                    all_ids.extend(r[id_idx] for r in result["rows"] if r[id_idx])
             elif block.name == "get_market_trends":
                 result = _chat_market_trends(block.input, con)
             elif block.name == "show_listings":
