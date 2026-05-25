@@ -1310,7 +1310,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 12:38 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 13:23 JST</p>
       </div>
 
 
@@ -3860,6 +3860,22 @@ function _chatListingCard(lid) {
   </div>`;
 }
 
+function _renderChatMarkdown(text) {
+  // Render a safe subset of markdown for assistant bubbles:
+  // [label](url) links, **bold**, *italic*, newlines → <br>
+  return escHtml(text)
+    // Undo escaping for markdown constructs we handle ourselves
+    // Links: [label](url)
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (_, label, url) =>
+      `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline;">${label}</a>`)
+    // Bold: **text**
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    // Italic: *text* (not preceded by another *)
+    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>')
+    // Newlines
+    .replace(/\n/g, '<br>');
+}
+
 function _chatAppendMsg(role, text, listingIds) {
   const thread = document.getElementById('chat-thread');
   document.getElementById('chat-empty')?.remove();
@@ -3870,7 +3886,8 @@ function _chatAppendMsg(role, text, listingIds) {
 
   const div = document.createElement('div');
   div.className = `chat-msg chat-msg--${role}`;
-  div.innerHTML = `<div class="chat-bubble chat-bubble--${role}">${escHtml(text)}</div>${role==='assistant' ? cardsHtml : ''}`;
+  const bubbleContent = role === 'assistant' ? _renderChatMarkdown(text) : escHtml(text);
+  div.innerHTML = `<div class="chat-bubble chat-bubble--${role}">${bubbleContent}</div>${role==='assistant' ? cardsHtml : ''}`;
   thread.appendChild(div);
   thread.scrollTop = thread.scrollHeight;
 }
