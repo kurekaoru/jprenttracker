@@ -1310,7 +1310,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 15:21 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 15:38 JST</p>
       </div>
 
 
@@ -2952,6 +2952,20 @@ function initMap() {
       if (this._div) { this._div.parentNode?.removeChild(this._div); this._div = null; }
     }
   };
+
+  // If initMap fires before the browser has laid out the container (zero dimensions),
+  // tiles never load — trigger a resize once the element has real size.
+  const _mapEl = document.getElementById('map');
+  if (_mapEl.offsetWidth === 0 || _mapEl.offsetHeight === 0) {
+    const _ro = new ResizeObserver(() => {
+      if (_mapEl.offsetWidth > 0 && _mapEl.offsetHeight > 0) {
+        google.maps.event.trigger(map, 'resize');
+        map.setCenter({ lat: 35.660, lng: 139.745 });
+        _ro.disconnect();
+      }
+    });
+    _ro.observe(_mapEl);
+  }
 
   loadTokyoBoundary();
   loadListings();
