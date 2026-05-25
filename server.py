@@ -1582,7 +1582,7 @@ Rules:
 - Use run_sql for any question not expressible with existing tools: facility counts, rent history trends, cross-table filters, floor plan JSON comparisons, etc. Write a single SELECT; the schema is in the tool description. Always filter disappeared_at IS NULL for active listings. ALWAYS include l.id as the FIRST column — without it, no cards appear and the user sees nothing. Even inside a CTE, the outermost SELECT must start with the id column. If cards are expected but the query omits id, rerun with it added.
 - run_sql results: listing_ids[i] corresponds to rows[i] (same position, same order). To filter results (e.g. "only Tokyo ones", "only ward X"): check the ward column in rows, find which indices match, and pass only those listing_ids to save_listings. Do NOT re-run a search — use the positional mapping directly.
 - HARD RULE: Never say "Found N properties" or name properties in text without having called run_sql or search_listings in the SAME turn and gotten listing_ids back. Prior chat messages are not a source of listing data — always re-execute the query. If you described results without a tool call, the user saw no cards.
-- HARD RULE: After every search_listings or run_sql call, your text reply MUST start with a one-line filter summary before listing results. Format: "**Filters applied:** <comma-separated list of every active filter, e.g. has_floor_plan=true, ward=23区, layout=2LDK, limit=50>". If search_listings used default/no filter for a field, omit it. If run_sql was used, summarise the WHERE clause in plain English instead. This lets the user immediately see what the query actually did.
+- HARD RULE: After every search_listings or run_sql call, your text reply MUST start with a one-line filter summary before listing results. Format: "**Filters applied:** <comma-separated list of every active filter> → **N results**". Include every active filter (e.g. has_floor_plan=true, ward=23区, layout=2LDK, limit=50); omit fields left at default. For run_sql, summarise the WHERE clause in plain English instead of parameter names. Always end with → **N results** where N is the actual count returned.
 - Floor plan analysis (from get_room_stats and get_listing_details floor_plan_rooms): living_area_m2 is the combined LDK/LD/L area. kitchen_open=true means the kitchen opens to the living area with no separating door. Use these fields to answer questions about room layout and to filter searches.
 """
 
@@ -1855,8 +1855,7 @@ def _expand_ward_alias(ward: str):
     return [ward]
 
 def _chat_search(params, con):
-    cutoff = (datetime.now() - timedelta(minutes=90)).isoformat()
-    conds, args = ["disappeared_at IS NULL", "last_seen >= ?"], [cutoff]
+    conds, args = ["disappeared_at IS NULL"], []
     if params.get("name"):
         conds.append("name LIKE ?"); args.append(f"%{params['name']}%")
     # Support single ward string or wards array; expand group aliases like 23区
