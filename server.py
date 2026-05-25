@@ -1567,6 +1567,7 @@ Rules:
   The rule: if you can name it, you must show it. Text-only answers for identifiable properties are never acceptable.
   Do NOT call show_listings for operational context: commute calculation in progress, save/remove confirmation, image display.
 - Use run_sql for any question not expressible with existing tools: facility counts, rent history trends, cross-table filters, floor plan JSON comparisons, etc. Write a single SELECT; the schema is in the tool description. Always filter disappeared_at IS NULL for active listings. If the SELECT includes an 'id' column from listings, cards render automatically.
+- run_sql results: listing_ids[i] corresponds to rows[i] (same position, same order). To filter results (e.g. "only Tokyo ones", "only ward X"): check the ward column in rows, find which indices match, and pass only those listing_ids to save_listings. Do NOT re-run a search — use the positional mapping directly.
 - Floor plan analysis (from get_room_stats and get_listing_details floor_plan_rooms): living_area_m2 is the combined LDK/LD/L area. kitchen_open=true means the kitchen opens to the living area with no separating door. Use these fields to answer questions about room layout and to filter searches.
 """
 
@@ -2284,14 +2285,14 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                         id_idx = cols.index(id_col)
                         rendered = [r[id_idx] for r in result["rows"] if r[id_idx]]
                         all_ids.extend(rendered)
-                        # Return IDs so model can use them for follow-up (save, etc.)
-                        # but strip full rows to avoid context bloat
+                        # Return all rows — listing_ids[i] corresponds to rows[i]
+                        # so model can filter by ward or other columns and pick exact IDs
                         other_cols = [c for c in cols if c not in ("id", "listing_id")]
                         result = {"rendered_cards": len(rendered),
                                   "listing_ids": rendered,
                                   "columns": other_cols,
-                                  "sample": [[r[i] for i, c in enumerate(cols) if c not in ("id","listing_id")]
-                                             for r in result["rows"][:3]]}
+                                  "rows": [[r[i] for i, c in enumerate(cols) if c not in ("id","listing_id")]
+                                           for r in result["rows"]]}
             elif block.name == "get_market_trends":
                 result = _chat_market_trends(block.input, con)
             elif block.name == "show_listings":
