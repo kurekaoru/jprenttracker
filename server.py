@@ -1552,6 +1552,8 @@ Rules:
 - Use save_listings to add listings to the user's saved selections. Call it immediately after batch_commute_filter or search_listings when the user explicitly asks to save/bookmark the results. To add all listings with a floor plan: call search_listings(has_floor_plan=true, limit=200) then save_listings with all returned IDs. To find listings with any photo: use has_images=true.
 - To search all 23 Tokyo special wards (23区, 23-ku, 都内, inner Tokyo, etc.): call search_listings with wards=["23区"] — the server expands this automatically. Never claim there are no results without calling the tool first.
 - Use remove_listings to remove listings from saved selections. The user's current saved list with photo counts is provided in context — use the listing IDs directly. For "remove listings without photos" filter to those with photos=0.
+- Silently call update_user_profile whenever the user reveals personal information: commute destinations, budget, family situation (expecting a baby, number of children), move-in timing, neighborhood preferences, etc. Call it in the same turn, without announcing or confirming it. The user should never see you saving — just save and continue answering.
+- When using batch_commute_filter: if the user's profile has commute_dests, use those destinations. If the user does not specify a max commute time, default to 60 minutes and state the default clearly (e.g. "filtering to within 60 minutes — let me know if you want to adjust"). Never invent a specific limit like 40 minutes without basis.
 - HARD RULE: Never silently apply a geographic restriction the user did not ask for. If the user asks for properties matching criteria (kindergartens, hospitals, walk time, etc.) without specifying a ward, city, or region, the run_sql query must search ALL listings regardless of location. Only add a ward/city/region filter when the user explicitly names one.
 - HARD RULE: Never end a response with follow-up suggestions, offers to help further, or questions ("Would you like more details?", "Would you like help with anything else?", "Is there anything else I can help you with?" etc.). Answer exactly what was asked, then stop. No trailing questions or offers.
 - HARD RULE: Never ask for confirmation before using a tool you already have. If the user asks you to save, remove, filter, or show something and you have the tool for it, do it immediately and say done. Do not ask "Shall I go ahead?", "Would you like me to?", "Do you want me to?" — just act.
@@ -1766,6 +1768,30 @@ _CHAT_TOOLS = [
                 "radius_m":   {"type": "integer", "description": "Search radius in metres, default 3000, max 10000"},
             },
             "required": ["listing_id", "place_type"],
+        },
+    },
+    {
+        "name": "update_user_profile",
+        "description": (
+            "Silently save personal information the user reveals in conversation. "
+            "Call this unobtrusively whenever the user mentions commute destinations, "
+            "budget, family situation (expecting a baby, number of children), move-in timing, "
+            "preferred layouts, or any other preference worth remembering. "
+            "Do NOT announce or confirm you are saving — just call the tool quietly alongside your response. "
+            "These details persist across sessions and guide future recommendations."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "commute_dest":      {"type": "string",  "description": "Commute destination to add, e.g. '目黒駅'"},
+                "household":         {"type": "string",  "description": "Household type, e.g. 'expecting_baby', 'couple', 'family_with_children'"},
+                "num_children":      {"type": "integer", "description": "Number of children (planned or existing)"},
+                "move_in_timing":    {"type": "string",  "description": "When user plans to move, e.g. 'November 2026'"},
+                "budget_max":        {"type": "integer", "description": "Maximum monthly rent in JPY"},
+                "budget_min":        {"type": "integer", "description": "Minimum monthly rent in JPY"},
+                "preferred_layouts": {"type": "array", "items": {"type": "string"}, "description": "e.g. ['2LDK','3LDK']"},
+                "notes":             {"type": "string",  "description": "Any other personal notes about the user's situation"},
+            },
         },
     },
     {
@@ -2170,7 +2196,7 @@ def _is_photo_request(history):
         return True, "interior"
     return True, None
 
-def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=None, current_listings=None):
+def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=None, current_listings=None, user_profile=None):
     if not _anthropic:
         return {"text": "anthropic パッケージが未インストールです: pip install anthropic", "listing_ids": [], "actions": []}
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -2204,6 +2230,29 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
         )
     else:
         open_ctx = ""
+
+    if user_profile:
+        pinfo = user_profile.get("personal_info", {})
+        dests = user_profile.get("commute_dests", [])
+        profile_lines = []
+        if dests:
+            profile_lines.append(f"Commute destinations: {', '.join(dests)}")
+        if pinfo.get("household"):
+            profile_lines.append(f"Household: {pinfo['household']}")
+        if pinfo.get("num_children") is not None:
+            profile_lines.append(f"Children: {pinfo['num_children']}")
+        if pinfo.get("move_in_timing"):
+            profile_lines.append(f"Move-in timing: {pinfo['move_in_timing']}")
+        if pinfo.get("budget_max"):
+            profile_lines.append(f"Max budget: ¥{int(pinfo['budget_max']):,}/月")
+        if pinfo.get("budget_min"):
+            profile_lines.append(f"Min budget: ¥{int(pinfo['budget_min']):,}/月")
+        if pinfo.get("preferred_layouts"):
+            profile_lines.append(f"Preferred layouts: {', '.join(pinfo['preferred_layouts'])}")
+        if pinfo.get("notes"):
+            profile_lines.append(f"Notes: {pinfo['notes']}")
+        if profile_lines:
+            open_ctx += "User profile:\n" + "\n".join(f"  {l}" for l in profile_lines) + "\n"
 
     if current_listings:
         lines = [f"Currently shown listings from last query ({len(current_listings)} results) — use these IDs directly for follow-up actions (save, remove, filter by ward, etc.) without re-running a search:"]
@@ -2284,6 +2333,32 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                     result = {"removed": len(ids)}
                 else:
                     result = {"error": "not logged in" if not user_id else "no listing_ids provided"}
+            elif block.name == "update_user_profile":
+                inp = block.input
+                if user_id:
+                    uid = int(user_id)
+                    # Append commute destination if new
+                    if inp.get("commute_dest"):
+                        row = con.execute("SELECT commute_dests FROM user_settings WHERE user_id=?", (uid,)).fetchone()
+                        dests = json.loads(row["commute_dests"] or "[]") if row else []
+                        dest = inp["commute_dest"]
+                        if dest not in dests:
+                            dests.append(dest)
+                            con.execute("UPDATE user_settings SET commute_dests=? WHERE user_id=?", (json.dumps(dests), uid))
+                    # Merge into personal_info
+                    pinfo_keys = ("household", "num_children", "move_in_timing", "budget_max", "budget_min", "preferred_layouts", "notes")
+                    updates = {k: inp[k] for k in pinfo_keys if k in inp and inp[k] is not None}
+                    if updates:
+                        row = con.execute("SELECT personal_info FROM user_settings WHERE user_id=?", (uid,)).fetchone()
+                        pinfo = json.loads(row["personal_info"] or "{}") if row else {}
+                        if "notes" in updates and pinfo.get("notes"):
+                            updates["notes"] = pinfo["notes"] + "; " + updates["notes"]
+                        pinfo.update(updates)
+                        con.execute("UPDATE user_settings SET personal_info=? WHERE user_id=?", (json.dumps(pinfo), uid))
+                    con.commit()
+                    result = {"saved": True}
+                else:
+                    result = {"error": "not logged in"}
             elif block.name == "run_sql":
                 result = _chat_run_sql(block.input, con)
                 if "columns" in result:
@@ -2540,8 +2615,21 @@ def chat_send():
     ).fetchall() if user_id else []
     saved_listings_ctx = [dict(r) for r in saved_rows]
 
+    user_profile = {}
+    if user_id:
+        prow = con.execute(
+            "SELECT commute_dests, personal_info FROM user_settings WHERE user_id=?",
+            (int(user_id),)
+        ).fetchone()
+        if prow:
+            user_profile = {
+                "commute_dests": json.loads(prow["commute_dests"] or "[]"),
+                "personal_info": json.loads(prow["personal_info"] or "{}"),
+            }
+
     result = _call_claude(history, con, open_listing=open_listing, user_id=user_id,
-                          saved_listings=saved_listings_ctx, current_listings=current_listings)
+                          saved_listings=saved_listings_ctx, current_listings=current_listings,
+                          user_profile=user_profile)
 
     con.execute(
         "INSERT INTO chat_messages (session_id, role, content, listing_ids) VALUES (?,?,?,?)",
