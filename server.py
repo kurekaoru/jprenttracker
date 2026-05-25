@@ -1566,6 +1566,7 @@ Rules:
   • Single known property: call show_listings(listing_ids=[id]).
   The rule: if you can name it, you must show it. Text-only answers for identifiable properties are never acceptable.
   Do NOT call show_listings for operational context: commute calculation in progress, save/remove confirmation, image display.
+- Use run_sql for any question not expressible with existing tools: facility counts, rent history trends, cross-table filters, floor plan JSON comparisons, etc. Write a single SELECT; the schema is in the tool description. Always filter disappeared_at IS NULL for active listings. After getting listing IDs from the result, call show_listings with them so cards render.
 - Floor plan analysis (from get_room_stats and get_listing_details floor_plan_rooms): living_area_m2 is the combined LDK/LD/L area. kitchen_open=true means the kitchen opens to the living area with no separating door. Use these fields to answer questions about room layout and to filter searches.
 """
 
@@ -1762,6 +1763,34 @@ _CHAT_TOOLS = [
                 "radius_m":   {"type": "integer", "description": "Search radius in metres, default 3000, max 10000"},
             },
             "required": ["listing_id", "place_type"],
+        },
+    },
+    {
+        "name": "run_sql",
+        "description": (
+            "Execute a read-only SELECT query against the listings database. "
+            "Use this for any question not covered by other tools — facility counts, "
+            "rent history, cross-table filters, floor plan JSON fields, etc.\n\n"
+            "SCHEMA:\n"
+            "listings(id TEXT PK, name TEXT, ward TEXT, layout TEXT, rent INT, size_m2 REAL, "
+            "url TEXT, source TEXT ['jkk'|'ur'], address TEXT, lat REAL, lng REAL, "
+            "first_seen TEXT, last_seen TEXT, disappeared_at TEXT [NULL=active], "
+            "walk_min INT, nearest_station TEXT, floor_plan_data JSON)\n"
+            "  floor_plan_data JSON fields: living_area_m2, kitchen_open, toilet_count, "
+            "bathroom_count, envelope_width_m, envelope_height_m, rooms[] (label,area_m2,has_window,is_outdoor)\n\n"
+            "listing_facilities(listing_id, type TEXT, name TEXT, distance_m INT)\n"
+            "  type values: konbini, pharmacy, clinic, kindergarten, supermarket, school, station, hospital, park\n\n"
+            "listing_images(listing_id, image_type TEXT ['floor_plan'|'exterior'|'interior'])\n\n"
+            "snapshots(listing_id, rent INT, seen_at TEXT)  -- rent history\n\n"
+            "RULES: SELECT only. Always filter disappeared_at IS NULL for active listings. "
+            "Max 50 rows returned. After getting listing IDs, call show_listings with them."
+        ),
+        "input_schema": {
+            "type": "object",
+            "required": ["sql"],
+            "properties": {
+                "sql": {"type": "string", "description": "A single SELECT statement"},
+            },
         },
     },
 ]
@@ -2012,6 +2041,30 @@ def _chat_batch_commute(params, con):
     }
 
 
+def _chat_run_sql(params, con):
+    import re as _re
+    sql = (params.get("sql") or "").strip().rstrip(";")
+    if not sql:
+        return {"error": "no sql provided"}
+    first_word = _re.split(r'\s+', sql, maxsplit=1)[0].upper()
+    if first_word != "SELECT":
+        return {"error": "only SELECT statements are allowed"}
+    blocked = ("users", "user_settings", "user_notifications", "chat_messages", "chat_sessions")
+    lower = sql.lower()
+    for t in blocked:
+        if _re.search(rf'\b{t}\b', lower):
+            return {"error": f"access to table '{t}' is not allowed"}
+    if "limit" not in lower:
+        sql = f"{sql} LIMIT 50"
+    try:
+        cur = con.execute(sql)
+        cols = [d[0] for d in cur.description]
+        rows = cur.fetchmany(50)
+        return {"columns": cols, "rows": [list(r) for r in rows], "count": len(rows)}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 def _chat_market_trends(params, con):
     conds, args = ["disappeared_at IS NOT NULL", "first_seen IS NOT NULL"], []
     if params.get("ward"):
@@ -2201,6 +2254,8 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                     result = {"removed": len(ids)}
                 else:
                     result = {"error": "not logged in" if not user_id else "no listing_ids provided"}
+            elif block.name == "run_sql":
+                result = _chat_run_sql(block.input, con)
             elif block.name == "get_market_trends":
                 result = _chat_market_trends(block.input, con)
             elif block.name == "show_listings":
