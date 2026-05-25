@@ -812,6 +812,23 @@
   }
   .save-listing-btn.saved { color: #f59e0b; }
   .save-listing-btn:hover { transform: scale(1.2); }
+  .share-listing-btn {
+    background: none; border: none; cursor: pointer; padding: 2px 4px;
+    font-size: 14px; line-height: 1; color: var(--muted); transition: color .15s, transform .1s;
+    flex-shrink: 0; position: relative;
+  }
+  .share-listing-btn:hover { color: var(--accent); transform: scale(1.2); }
+  .share-listing-btn .share-copied {
+    position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+    background: var(--accent); color: #fff; font-size: 10px; white-space: nowrap;
+    padding: 2px 6px; border-radius: 4px; pointer-events: none;
+    animation: sharecopied .9s ease forwards;
+  }
+  @keyframes sharecopied {
+    0%   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    70%  { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+  }
   .star-btn {
     background: none; border: none; cursor: pointer;
     font-size: 13px; line-height: 1; padding: 0 2px;
@@ -1293,7 +1310,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 11:18 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 11:58 JST</p>
       </div>
 
 
@@ -2802,6 +2819,22 @@ async function loadSavedListings() {
   } catch {}
 }
 
+function shareListing(id, btn) {
+  const url = window.location.origin + window.location.pathname + '?listing=' + encodeURIComponent(id);
+  const copy = () => {
+    const tip = document.createElement('span');
+    tip.className = 'share-copied';
+    tip.textContent = 'Copied!';
+    btn.appendChild(tip);
+    tip.addEventListener('animationend', () => tip.remove());
+  };
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(url).then(copy).catch(() => { window.prompt('Copy link:', url); });
+  } else {
+    window.prompt('Copy link:', url);
+  }
+}
+
 async function toggleSave(listingId) {
   const wasSaved = _savedListings.has(listingId);
   if (wasSaved) _savedListings.delete(listingId);
@@ -2960,6 +2993,7 @@ function popupHtml(l) {
         <button id="save-btn-${eid}" class="save-listing-btn${isSaved ? ' saved' : ''}"
           title="${isSaved ? t('saved_listing') : t('save_listing')}"
           onclick="toggleSave('${l.id}')">★</button>
+        <button class="share-listing-btn" title="Share" onclick="shareListing('${l.id}',this)">⤴</button>
       </div>
       <div><span class="pin-rent">${rent}</span> · ${escHtml(l.layout || '—')} · ${size}</div>
       ${station ? `<div style="margin-top:3px;">${escHtml(station)}</div>` : ''}
@@ -3358,6 +3392,7 @@ function selectListing(id) {
 }
 
 let _listingsPollTimer = null;
+let _deepLinkHandled  = false;
 
 function setViewMode(mode) {
   _viewMode = mode;
@@ -3586,6 +3621,11 @@ async function loadListings() {
     _geoPending      = d.geo_pending      ?? 0;
     _stationPending  = d.station_pending  ?? 0;
     applyMapFilters();
+    if (!_deepLinkHandled) {
+      _deepLinkHandled = true;
+      const sharedId = new URLSearchParams(window.location.search).get('listing');
+      if (sharedId) setTimeout(() => selectListing(sharedId), 0);
+    }
 
     clearTimeout(_listingsPollTimer);
     if (_pendingCount > 0) {
