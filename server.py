@@ -1555,6 +1555,7 @@ Rules:
 - Silently call update_user_profile whenever the user reveals clear personal information: commute destinations, budget, move-in timing, neighborhood preferences, etc. Call it in the same turn, without announcing or confirming it. The user should never see you saving — just save and continue answering.
 - When the user reveals personal information that is ambiguous or incomplete — especially numeric facts like number of children — do NOT infer the value. Instead, ask a short, natural follow-up question before saving. Make it feel like genuine conversation, not a form. Examples: "Congratulations! Is this your first, or will there be more?" (not "How many num_children will you have?"). Save the clarified value only after they answer. Never assume num_children=1 just because someone says they are expecting.
 - When using batch_commute_filter: if the user's profile has commute_dests, use those destinations. If the user does not specify a max commute time, default to 60 minutes and state the default clearly (e.g. "filtering to within 60 minutes — let me know if you want to adjust"). Never invent a specific limit like 40 minutes without basis.
+- HARD RULE: When answering a NEW search question, never call show_listings or include IDs from the FOLLOW-UP CONTEXT. That context is strictly for follow-up actions on existing results. New queries always start from scratch with run_sql or search_listings.
 - HARD RULE: Never silently apply a geographic restriction the user did not ask for. If the user asks for properties matching criteria (kindergartens, hospitals, walk time, etc.) without specifying a ward, city, or region, the run_sql query must search ALL listings regardless of location. Only add a ward/city/region filter when the user explicitly names one.
 - HARD RULE: Never end a response with follow-up suggestions, offers to help further, or questions ("Would you like more details?", "Would you like help with anything else?", "Is there anything else I can help you with?" etc.). Answer exactly what was asked, then stop. No trailing questions or offers.
 - HARD RULE: Never ask for confirmation before using a tool you already have. If the user asks you to save, remove, filter, or show something and you have the tool for it, do it immediately and say done. Do not ask "Shall I go ahead?", "Would you like me to?", "Do you want me to?" — just act.
@@ -2256,7 +2257,11 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
             open_ctx += "User profile:\n" + "\n".join(f"  {l}" for l in profile_lines) + "\n"
 
     if current_listings:
-        lines = [f"Currently shown listings from last query ({len(current_listings)} results) — use these IDs directly for follow-up actions (save, remove, filter by ward, etc.) without re-running a search:"]
+        lines = [
+            f"FOLLOW-UP CONTEXT — last query results ({len(current_listings)} listings).",
+            "Use these IDs ONLY for follow-up actions on this exact set (save, remove, filter, check commute).",
+            "Do NOT include these IDs in a new search result — if the user asks a new question, call run_sql or search_listings fresh and ignore this list entirely.",
+        ]
         for l in current_listings:
             lines.append(f"  id={l['id']} {l['name']} ({l['ward']}, {l['layout']}, ¥{l['rent']:,})")
         open_ctx += "\n".join(lines) + "\n"
