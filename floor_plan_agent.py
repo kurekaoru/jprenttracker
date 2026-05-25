@@ -349,6 +349,27 @@ class FloorPlanAgent:
 
         envelope_area = round(envelope_w * envelope_h, 2) if (envelope_w and envelope_h) else None
 
+        # Sanity check: envelope area must be >= listed indoor area.
+        # If it's smaller, the model read a partial width (e.g. balcony span only).
+        # Correct by deriving width from total_area_m2 / envelope_height.
+        if (total_area_m2 and envelope_area is not None
+                and envelope_area > total_area_m2 * 1.5):
+            log.warning(
+                f"Envelope {envelope_area:.2f}m² is >50% larger than listed {total_area_m2:.2f}m² "
+                f"— check dimension labels (shared corridor may have been included)."
+            )
+
+        if (total_area_m2 and envelope_area is not None
+                and envelope_area < total_area_m2 * 0.97):
+            log.warning(
+                f"Envelope {envelope_area:.2f}m² < listed {total_area_m2:.2f}m² "
+                f"— width label likely misread (partial span used). Correcting."
+            )
+            if envelope_h:
+                envelope_w = round(total_area_m2 / envelope_h, 2)
+                log.warning(f"  Corrected envelope_width_m → {envelope_w}")
+            envelope_area = total_area_m2  # use listed area as calibration floor
+
         inferred = self._apply_pixel_ratio(rooms, envelope_area=envelope_area)
 
         result = FloorPlanResult(
