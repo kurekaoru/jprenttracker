@@ -344,8 +344,8 @@ def _save_jkk_images_in_session(ctx, listings):
                         if ocr_text:
                             log.info(f"JKK OCR {fpath}: {ocr_text[:80]}")
                         else:
-                            # seq 0 wasn't a floor plan — downgrade
-                            img_type = "interior"
+                            # seq 0 wasn't a floor plan — treat as exterior (building photo)
+                            img_type = "exterior"
                             con.execute(
                                 "UPDATE listing_images SET image_type=? WHERE id=?",
                                 (img_type, row_id),
@@ -731,7 +731,7 @@ def _ocr_floor_plan(image_path):
             ]}],
         )
         text = resp.content[0].text.strip()
-        return None if text == "NOT_FLOOR_PLAN" else text
+        return None if text.startswith("NOT_FLOOR_PLAN") else text
     except Exception as e:
         log.warning(f"OCR failed for {image_path}: {e}")
         return None
@@ -751,7 +751,11 @@ def _scrape_images_for_new_listings(new_lids):
     ).fetchall()
 
     ur_rows  = [(r["id"], r["url"]) for r in rows if "ur-net.go.jp" in (r["url"] or "")]
-    jkk_rows = [(r["id"], r["url"]) for r in rows if "ur-net.go.jp" not in (r["url"] or "")]
+    # JKK images are collected in _save_jkk_images_in_session (session-only mz_copyright);
+    # scraping AKIYAafterPage without a session returns site chrome, not property photos.
+    jkk_rows = [(r["id"], r["url"]) for r in rows
+                if "ur-net.go.jp" not in (r["url"] or "")
+                and "jhomes.to-kousya.or.jp" not in (r["url"] or "")]
     ok = 0
 
     # UR: single Playwright session for the whole batch
