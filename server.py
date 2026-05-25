@@ -855,7 +855,7 @@ def get_listing_images(listing_id):
     rows = con.execute(
         "SELECT id, image_type FROM listing_images "
         "WHERE listing_id=? AND local_path IS NOT NULL "
-        "ORDER BY CASE image_type WHEN 'floor_plan' THEN 0 WHEN 'exterior' THEN 1 ELSE 2 END, id",
+        "ORDER BY CASE image_type WHEN 'exterior' THEN 0 WHEN 'interior' THEN 1 ELSE 2 END, id",
         (listing_id,),
     ).fetchall()
     con.close()

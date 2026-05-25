@@ -260,7 +260,7 @@ def _fetch_ur_images_playwright(listing_url, _page=None):
             results.append((src, img_type))
 
         results.sort(key=lambda x: (
-            0 if x[1] == "floor_plan" else 1 if x[1] == "exterior" else 2
+            0 if x[1] == "exterior" else 1 if x[1] == "interior" else 2
         ))
         return results[:20]
 
@@ -468,8 +468,8 @@ def _fetch_detail_images(listing_url):
             parent = " ".join(cls for p in img.parents if hasattr(p, "get") for cls in p.get("class", []))
             add(src, _classify_image(src, alt, parent))
 
-        # Floor plans first, then others
-        results.sort(key=lambda x: 0 if x[1] == "floor_plan" else 1)
+        # Exterior first, interior second, floor plans last
+        results.sort(key=lambda x: 0 if x[1] == "exterior" else 1 if x[1] == "interior" else 2)
         return results[:12]  # cap at 12 images per listing
     except Exception as e:
         log.debug(f"Image fetch failed ({listing_url}): {e}")
