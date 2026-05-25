@@ -2224,7 +2224,7 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
             # Images are self-displaying — suppress AI text narration when photos were shown
             if any(a.get("type") == "show_images" for a in all_actions):
                 text = ""
-            return {"text": text, "listing_ids": all_ids, "actions": all_actions}
+            return {"text": text, "listing_ids": list(dict.fromkeys(all_ids)), "actions": all_actions}
 
         tool_results = []
         for block in resp.content:
@@ -2259,7 +2259,6 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                         )
                     con.commit()
                     all_actions.append({"type": "save_listings", "listing_ids": ids})
-                    all_ids.extend(ids)
                     result = {"saved": len(ids)}
                 else:
                     result = {"error": "not logged in" if not user_id else "no listing_ids provided"}
@@ -2285,9 +2284,12 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                         id_idx = cols.index(id_col)
                         rendered = [r[id_idx] for r in result["rows"] if r[id_idx]]
                         all_ids.extend(rendered)
-                        # Don't echo rows back — just tell the model how many cards rendered
+                        # Return IDs so model can use them for follow-up (save, etc.)
+                        # but strip full rows to avoid context bloat
                         other_cols = [c for c in cols if c not in ("id", "listing_id")]
-                        result = {"rendered_cards": len(rendered), "columns": other_cols,
+                        result = {"rendered_cards": len(rendered),
+                                  "listing_ids": rendered,
+                                  "columns": other_cols,
                                   "sample": [[r[i] for i, c in enumerate(cols) if c not in ("id","listing_id")]
                                              for r in result["rows"][:3]]}
             elif block.name == "get_market_trends":
