@@ -129,6 +129,8 @@ def init_db():
         ("walk_m",          "INTEGER"),
         ("nearest_station", "TEXT"),
         ("thumbnail_url",   "TEXT"),
+        ("priority",        "TEXT"),   # JKK priority tags: 子育て世帯優先, 障がい者世帯優先, etc.
+        ("building_type",   "TEXT"),   # JKK building type: 一般, 高齢者向け, etc.
     ]:
         if col not in cols:
             con.execute(f"ALTER TABLE listings ADD COLUMN {col} {defn}")
@@ -144,19 +146,22 @@ def upsert_listing(con, lid, listing, notified=False):
     address = listing.get("address") or listing.get("ward", "")
     thumb = listing.get("thumbnail_url")
     is_new = not get_listing_row(con, lid)
+    priority      = listing.get("priority") or None
+    building_type = listing.get("building_type") or None
     if not is_new:
         con.execute(
             "UPDATE listings SET last_seen=?, rent=?, source=?, address=?, disappeared_at=NULL,"
-            " notified=MAX(notified,?) WHERE id=?",
-            (now, listing["rent"], source, address, int(notified), lid),
+            " notified=MAX(notified,?), priority=COALESCE(priority,?), building_type=COALESCE(building_type,?)"
+            " WHERE id=?",
+            (now, listing["rent"], source, address, int(notified), priority, building_type, lid),
         )
     else:
         con.execute(
-            "INSERT INTO listings (id,name,ward,layout,rent,size_m2,url,first_seen,last_seen,notified,source,address,thumbnail_url) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO listings (id,name,ward,layout,rent,size_m2,url,first_seen,last_seen,notified,source,address,thumbnail_url,priority,building_type) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (lid, listing["name"], listing["ward"], listing["layout"],
              listing["rent"], listing["size_m2"], listing["url"], now, now,
-             int(notified), source, address, thumb)
+             int(notified), source, address, thumb, priority, building_type)
         )
         if thumb:
             con.execute(
@@ -310,7 +315,7 @@ def _save_jkk_images_in_session(ctx, listings):
 
             imgs_saved = 0
             first_url = None
-            for seq in range(10):
+            for seq in range(30):
                 url = f"{JKK_BASE}/mz_copyright/mobile/{mz_id}/{mz_id}{seq:03d}.jpg"
                 try:
                     resp = ctx.request.get(url, timeout=10_000)
@@ -366,6 +371,7 @@ def _save_jkk_images_in_session(ctx, listings):
                     con.commit()
                 saved += 1
                 log.info(f"JKK images: {imgs_saved} saved for {lst['name']}")
+                _run_floor_plan_analysis(lid, con)
             lids_with_images.add(lid)  # avoid re-processing same listing
     finally:
         con.close()
@@ -1012,8 +1018,10 @@ def extract_fields(tds, text, base_url):
     if len(tds) < 10:
         return None
 
-    name   = tds[1].get_text(strip=True)
-    ward   = tds[2].get_text(strip=True)
+    name          = tds[1].get_text(strip=True)
+    ward          = tds[2].get_text(strip=True)
+    priority_text = tds[3].get_text(" ", strip=True) or None   # e.g. "子育て世帯優先"
+    building_type = tds[4].get_text(strip=True) or None        # e.g. "一般", "高齢者向け"
     layout = tds[5].get_text(strip=True).translate(FWTABLE)
     layout = re.sub(r"S$", "", layout)          # strip service-room suffix: 2DKS→2DK
     if re.match(r"^[4-9]", layout): layout = "4LDK以上"  # 4K/4DK/4LDK→4LDK以上
@@ -1064,6 +1072,7 @@ def extract_fields(tds, text, base_url):
         "name": name, "address": ward, "ward": ward,
         "rent": rent_raw, "layout": layout, "size_m2": size_m2, "url": url,
         "source": "jkk", "thumbnail_url": thumbnail_url,
+        "priority": priority_text, "building_type": building_type,
     }
 
 

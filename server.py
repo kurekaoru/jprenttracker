@@ -1479,6 +1479,7 @@ def get_listings():
         "       COALESCE(source,'jkk') AS source,"
         "       COALESCE(address, ward) AS address, lat, lng, geocoded_at,"
         "       disappeared_at, walk_min, walk_m, nearest_station, thumbnail_url,"
+        "       priority, building_type,"
         "       CASE WHEN thumbnail_url IS NOT NULL AND ("
         "         lower(thumbnail_url) LIKE '%madori%' OR"
         "         lower(thumbnail_url) LIKE '%floor_plan%' OR"
@@ -1929,7 +1930,7 @@ def _chat_search(params, con):
     }
     order = sort_map.get(params.get("sort_by", "rent_asc"), "rent ASC")
     rows = con.execute(
-        f"SELECT id,name,ward,rent,layout,size_m2,url,source,nearest_station,walk_min,thumbnail_url "
+        f"SELECT id,name,ward,rent,layout,size_m2,url,source,nearest_station,walk_min,thumbnail_url,priority,building_type "
         f"FROM listings WHERE {' AND '.join(conds)} ORDER BY {order} LIMIT ?",
         args + [limit]
     ).fetchall()
