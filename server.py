@@ -862,6 +862,19 @@ def get_listing_images(listing_id):
     return jsonify([{"url": f"/api/images/{r['id']}", "type": r["image_type"]} for r in rows])
 
 
+@app.route("/api/listings/<listing_id>/floor_plan_analysis")
+def get_floor_plan_analysis(listing_id):
+    con = db()
+    row = con.execute(
+        "SELECT floor_plan_data FROM listings WHERE id=?", (listing_id,)
+    ).fetchone()
+    con.close()
+    if not row or not row["floor_plan_data"]:
+        return jsonify({"error": "no analysis available"}), 404
+    import json as _json
+    return jsonify(_json.loads(row["floor_plan_data"]))
+
+
 @app.route("/api/listings/<listing_id>/facilities")
 def get_listing_facilities(listing_id):
     con  = db()

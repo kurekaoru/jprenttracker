@@ -607,6 +607,19 @@
   .prop-photos-grid img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 5px; cursor: pointer; background: var(--surface2); display: block; }
   #prop-floorplan-grid { grid-template-columns: 1fr; }
   #prop-floorplan-grid img { aspect-ratio: unset; height: auto; object-fit: unset; background: none; }
+  #prop-floorplan-analysis { margin-top: 10px; }
+  .fp-analysis-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .fp-analysis-table th { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 3px 6px 4px 0; border-bottom: 1px solid var(--border); text-align: left; }
+  .fp-analysis-table th.r { text-align: right; }
+  .fp-analysis-table th.c { text-align: center; }
+  .fp-analysis-table td { padding: 4px 6px 4px 0; border-bottom: 1px solid var(--border); color: var(--fg); }
+  .fp-analysis-table td.r { text-align: right; font-variant-numeric: tabular-nums; }
+  .fp-analysis-table td.c { text-align: center; }
+  .fp-analysis-table tr:last-child td { border-bottom: none; }
+  .fp-analysis-summary { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; font-size: 11px; }
+  .fp-analysis-summary span { color: var(--muted); }
+  .fp-analysis-summary b { color: var(--fg); }
+  .fp-analysis-footer { margin-top: 5px; font-size: 10px; color: var(--muted); }
   .chat-listing-card:hover { border-color: rgba(74,222,128,0.5); }
   .chat-listing-card img { width: 100%; height: 80px; object-fit: cover; display: block; background: var(--surface2); }
   .chat-listing-card-no-img { width: 100%; height: 80px; background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 22px; }
@@ -1280,7 +1293,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 09:52 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 10:10 JST</p>
       </div>
 
 
@@ -2985,6 +2998,7 @@ function popupHtml(l) {
           </div>
           <div class="prop-tab-pane" id="prop-tab-floorplan">
             <div class="prop-photos-grid" id="prop-floorplan-grid"></div>
+            <div id="prop-floorplan-analysis"></div>
           </div>
           <div class="prop-tab-pane" id="prop-tab-photos">
             <div class="prop-photos-grid" id="prop-photos-grid"></div>
@@ -3002,7 +3016,10 @@ function switchPropTab(tab) {
   document.querySelectorAll('.prop-tab-pane').forEach(p =>
     p.classList.toggle('active', p.id === 'prop-tab-' + tab));
   if (!_selectedId) return;
-  if (tab === 'floorplan') loadPropPhotos(_selectedId, 'prop-floorplan-grid', ['floor_plan']);
+  if (tab === 'floorplan') {
+    loadPropPhotos(_selectedId, 'prop-floorplan-grid', ['floor_plan']);
+    loadFloorPlanAnalysis(_selectedId);
+  }
   if (tab === 'photos')    loadPropPhotos(_selectedId, 'prop-photos-grid',    ['exterior', 'interior']);
 }
 
@@ -3034,6 +3051,48 @@ async function loadPropPhotos(listingId, gridId, filterTypes) {
   } catch (_) {
     grid.innerHTML = `<div style="color:var(--muted);font-size:12px;grid-column:1/-1;">${t('no_photos')}</div>`;
   }
+}
+
+async function loadFloorPlanAnalysis(listingId) {
+  const el = document.getElementById('prop-floorplan-analysis');
+  if (!el || el.dataset.loaded === listingId) return;
+  el.dataset.loaded = listingId;
+  el.innerHTML = '';
+  try {
+    const r = await fetch(`${API}/listings/${listingId}/floor_plan_analysis`, { headers: authHeaders() });
+    if (!r.ok) return;
+    const d = await r.json();
+    el.innerHTML = _renderFloorPlanAnalysis(d);
+  } catch (_) {}
+}
+
+function _renderFloorPlanAnalysis(d) {
+  if (!d || !d.rooms || !d.rooms.length) return '';
+  const windowSymbol = v => v === true ? '◎' : v === false ? '—' : '?';
+  const rows = d.rooms.map(r =>
+    `<tr>
+      <td>${escHtml(r.label)}</td>
+      <td class="r">${r.area_m2 != null ? r.area_m2 + ' m²' : '—'}</td>
+      <td class="c" style="color:var(--accent)">${windowSymbol(r.has_window)}</td>
+    </tr>`
+  ).join('');
+  const kitchenLabel = d.kitchen_open === true ? 'open' : d.kitchen_open === false ? 'closed' : '—';
+  const dateStr = d.analyzed_at ? new Date(d.analyzed_at).toLocaleDateString() : '';
+  return `
+    <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">Floor Plan Analysis</div>
+    <table class="fp-analysis-table">
+      <thead><tr>
+        <th>Room</th><th class="r">Area</th><th class="c" title="Exterior window">Win</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="fp-analysis-summary">
+      <span>LDK area: <b>${d.living_area_m2 != null ? d.living_area_m2 + ' m²' : '—'}</b></span>
+      <span>Kitchen: <b>${kitchenLabel}</b></span>
+      <span>WC: <b>${d.toilet_count ?? '—'}</b></span>
+      <span>Bath: <b>${d.bathroom_count ?? '—'}</b></span>
+    </div>
+    <div class="fp-analysis-footer">${dateStr ? `Analyzed ${dateStr} · ` : ''}${escHtml(d.model || '')}</div>`;
 }
 
 function _openGridPhotoAt(gridId, idx) {
