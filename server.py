@@ -2170,7 +2170,7 @@ def _is_photo_request(history):
         return True, "interior"
     return True, None
 
-def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=None):
+def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=None, current_listings=None):
     if not _anthropic:
         return {"text": "anthropic パッケージが未インストールです: pip install anthropic", "listing_ids": [], "actions": []}
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -2204,6 +2204,12 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
         )
     else:
         open_ctx = ""
+
+    if current_listings:
+        lines = [f"Currently shown listings from last query ({len(current_listings)} results) — use these IDs directly for follow-up actions (save, remove, filter by ward, etc.) without re-running a search:"]
+        for l in current_listings:
+            lines.append(f"  id={l['id']} {l['name']} ({l['ward']}, {l['layout']}, ¥{l['rent']:,})")
+        open_ctx += "\n".join(lines) + "\n"
 
     if saved_listings:
         lines = [f"User's saved selections ({len(saved_listings)} listings):"]
@@ -2482,11 +2488,29 @@ def chat_send():
         session_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
 
     rows = con.execute(
-        "SELECT role, content FROM chat_messages WHERE session_id=? ORDER BY created_at DESC LIMIT 15",
+        "SELECT role, content, listing_ids FROM chat_messages WHERE session_id=? ORDER BY created_at DESC LIMIT 15",
         (session_id,)
     ).fetchall()
     history = [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
     history.append({"role": "user", "content": message})
+
+    # Find the most recent assistant message with listing_ids and load their details
+    current_listings = []
+    for r in reversed(rows):
+        if r["role"] == "assistant":
+            ids = json.loads(r["listing_ids"] or "[]")
+            if ids:
+                placeholders = ",".join("?" * len(ids))
+                cl_rows = con.execute(
+                    f"SELECT id, name, ward, layout, rent FROM listings WHERE id IN ({placeholders})",
+                    ids,
+                ).fetchall()
+                id_order = {lid: i for i, lid in enumerate(ids)}
+                current_listings = sorted(
+                    [dict(r) for r in cl_rows],
+                    key=lambda r: id_order.get(r["id"], 999),
+                )
+                break
 
     con.execute(
         "INSERT INTO chat_messages (session_id, role, content) VALUES (?,?,?)",
@@ -2516,7 +2540,8 @@ def chat_send():
     ).fetchall() if user_id else []
     saved_listings_ctx = [dict(r) for r in saved_rows]
 
-    result = _call_claude(history, con, open_listing=open_listing, user_id=user_id, saved_listings=saved_listings_ctx)
+    result = _call_claude(history, con, open_listing=open_listing, user_id=user_id,
+                          saved_listings=saved_listings_ctx, current_listings=current_listings)
 
     con.execute(
         "INSERT INTO chat_messages (session_id, role, content, listing_ids) VALUES (?,?,?,?)",
