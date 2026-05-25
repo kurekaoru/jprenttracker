@@ -2074,16 +2074,16 @@ def _chat_run_sql(params, con):
                 alias = alias_m.group(1) if alias_m else 'listings'
                 sql = _re.sub(r'^SELECT\s+', f'SELECT {alias}.id, ', sql, flags=_re.IGNORECASE)
                 lower = sql.lower()
-                log.info(f"run_sql: injected {alias}.id into SELECT")
+                app.logger.info(f"run_sql: injected {alias}.id into SELECT")
 
     try:
         cur = con.execute(sql)
         cols = [d[0] for d in cur.description]
         rows = cur.fetchmany(200)
-        log.info(f"run_sql cols={cols} rows={len(rows)} sql={sql[:120]}")
+        app.logger.info(f"run_sql cols={cols} rows={len(rows)} sql={sql[:120]}")
         return {"columns": cols, "rows": [list(r) for r in rows], "count": len(rows)}
     except Exception as e:
-        log.warning(f"run_sql error: {e} sql={sql[:120]}")
+        app.logger.warning(f"run_sql error: {e} sql={sql[:120]}")
         return {"error": str(e)}
 
 
