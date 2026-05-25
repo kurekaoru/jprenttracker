@@ -1310,7 +1310,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 11:58 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 12:38 JST</p>
       </div>
 
 
@@ -3926,7 +3926,9 @@ async function chatSend() {
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ message: msg, session_id: _chatSessionId, open_listing_id: _selectedId || null }),
     });
-    const data = await r.json();
+    let data;
+    try { data = await r.json(); }
+    catch { throw new Error(r.status >= 500 ? 'server_error' : 'bad_response'); }
     _chatRemoveTyping();
     if (!r.ok) throw new Error(data.error || r.status);
 
@@ -3936,7 +3938,13 @@ async function chatSend() {
     (data.actions || []).forEach(chatExecuteAction);
   } catch (e) {
     _chatRemoveTyping();
-    _chatAppendMsg('assistant', `エラー: ${e.message}`, []);
+    const friendly = {
+      server_error:  'Something went wrong on the server. Please try again.',
+      bad_response:  'Received an unexpected response. Please try again.',
+      'Failed to fetch': 'Could not reach the server — check your connection.',
+    };
+    const msg = friendly[e.message] || (e.message?.length < 120 ? e.message : 'Something went wrong. Please try again.');
+    _chatAppendMsg('assistant', msg, []);
   } finally {
     _chatBusy = false;
     document.getElementById('chat-send-btn').disabled = false;
