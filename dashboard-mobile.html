@@ -172,10 +172,18 @@ html[data-theme="light"] ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,0
 
 /* ── Property sheet ── */
 #prop-sheet{height:72dvh;padding-bottom:calc(var(--nav-h) + var(--safe-b));}
+#prop-sheet.minimized{transform:translateY(calc(100% - 62px - var(--nav-h) - var(--safe-b)));}
+#prop-sheet.minimized #ps-body-wrap{display:none;}
+#prop-sheet.minimized .sheet-handle{display:none;}
+#ps-body-wrap{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0;}
 #ps-thumb-wrap{flex-shrink:0;}
 .prop-sheet-head{
   display:flex;align-items:flex-start;gap:10px;
-  padding:12px 16px 10px;flex-shrink:0;
+  padding:12px 16px 10px;flex-shrink:0;cursor:pointer;
+}
+.ps-minimize-btn{
+  background:none;border:none;color:var(--muted);font-size:18px;line-height:1;
+  padding:0 0 0 6px;cursor:pointer;flex-shrink:0;margin-top:2px;
 }
 .prop-sheet-name{font-size:14px;font-weight:700;flex:1;line-height:1.3;}
 .prop-sheet-src{
@@ -460,13 +468,15 @@ html[data-theme="light"] ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,0
 <!-- Property bottom sheet -->
 <div class="sheet" id="prop-sheet">
   <div class="sheet-handle" id="sheet-drag-handle"></div>
-  <div class="prop-sheet-head">
-    <div>
+  <div class="prop-sheet-head" onclick="togglePropSheetMinimize()">
+    <div style="flex:1;min-width:0;">
       <div class="prop-sheet-name" id="ps-name"></div>
       <div style="margin-top:4px;" id="ps-src"></div>
     </div>
-    <button class="star-btn" id="ps-star" onclick="toggleSave(_selectedId)">★</button>
+    <button class="star-btn" id="ps-star" onclick="event.stopPropagation();toggleSave(_selectedId)">★</button>
+    <button class="ps-minimize-btn" id="ps-min-btn" onclick="event.stopPropagation();togglePropSheetMinimize()" title="Minimize">⌄</button>
   </div>
+  <div class="prop-sheet-body-wrap" id="ps-body-wrap">
   <div class="prop-sheet-meta" id="ps-meta"></div>
   <div class="prop-sheet-station" id="ps-station"></div>
   <div id="ps-thumb-wrap"></div>
@@ -489,6 +499,7 @@ html[data-theme="light"] ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,0
       <div class="m-photos-grid" id="m-photos-grid"></div>
     </div>
   </div>
+  </div><!-- /ps-body-wrap -->
 </div>
 
 <!-- List overlay -->
@@ -922,6 +933,12 @@ function openPropSheet(id){
   const pGrid=document.getElementById('m-photos-grid');
   fpGrid.innerHTML='';pGrid.innerHTML='';
   delete fpGrid.dataset.loaded;delete pGrid.dataset.loaded;
+  // Always open fully expanded
+  _propSheetMinimized = false;
+  const sheet=document.getElementById('prop-sheet');
+  sheet.classList.remove('minimized');
+  const btn=document.getElementById('ps-min-btn');
+  if(btn) btn.textContent='⌄';
   openSheet('prop-sheet');
 }
 
@@ -1059,7 +1076,19 @@ function applyFilterSheet(){
 function chatAutoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,120)+'px';}
 function chatKeydown(e){if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();chatSend();}}
 
+let _propSheetMinimized = false;
+function togglePropSheetMinimize(){
+  const sheet = document.getElementById('prop-sheet');
+  if (!sheet.classList.contains('open')) return;
+  _propSheetMinimized = !_propSheetMinimized;
+  sheet.classList.toggle('minimized', _propSheetMinimized);
+  const btn = document.getElementById('ps-min-btn');
+  if (btn) btn.textContent = _propSheetMinimized ? '⌃' : '⌄';
+}
+
 function chatCardSelect(id){
+  // Close chat overlay so the property sheet is visible
+  closeOverlay('chat-overlay');
   selectListing(id);
   if(_chatPendingIntent){
     const intent=_chatPendingIntent;
@@ -1311,6 +1340,8 @@ document.addEventListener('DOMContentLoaded', () => {
     sheet.style.transform='';
     if(dy>80){
       sheet.classList.remove('open');
+      sheet.classList.remove('minimized');
+      _propSheetMinimized=false;
       if(_selectedId&&_markers[_selectedId]){
         const en=_markers[_selectedId];
         en.marker.setIcon(markerIcon(en.source,false,_savedListings.has(_selectedId)));
