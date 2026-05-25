@@ -299,12 +299,14 @@ def classify_image_ai(image_path: str) -> str:
     if not api_key:
         return "interior"
     try:
+        ext = image_path.rsplit(".", 1)[-1].lower()
+        if ext == "gif":
+            # Claude vision doesn't support GIF; GIFs on rental sites are always site chrome
+            return "skip"
         with open(image_path, "rb") as f:
             data = base64.standard_b64encode(f.read()).decode()
-        ext  = image_path.rsplit(".", 1)[-1].lower()
         mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg",
-                "png": "image/png",  "webp": "image/webp",
-                "gif": "image/gif"}.get(ext, "image/jpeg")
+                "png": "image/png",  "webp": "image/webp"}.get(ext, "image/jpeg")
         client = Anthropic(api_key=api_key)
         resp = client.messages.create(
             model="claude-haiku-4-5-20251001",
@@ -347,12 +349,13 @@ def extract_appliances(image_path: str) -> list[str]:
     if not api_key:
         return []
     try:
+        ext = image_path.rsplit(".", 1)[-1].lower()
+        if ext == "gif":
+            return []
         with open(image_path, "rb") as f:
             data = base64.standard_b64encode(f.read()).decode()
-        ext  = image_path.rsplit(".", 1)[-1].lower()
         mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg",
-                "png": "image/png",  "webp": "image/webp",
-                "gif": "image/gif"}.get(ext, "image/jpeg")
+                "png": "image/png",  "webp": "image/webp"}.get(ext, "image/jpeg")
         client = Anthropic(api_key=api_key)
         resp = client.messages.create(
             model="claude-haiku-4-5-20251001",
