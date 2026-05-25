@@ -21,25 +21,45 @@ log = logging.getLogger(__name__)
 
 PROMPT = """Analyze this Japanese apartment floor plan image.
 
-Extract all labeled rooms and spaces. For each room:
-1. Label (use text shown in image: LDK, DK, K, L, D, 洋室, 和室, WIC, SIC, UB, WC, MB, バルコニー, etc.)
-2. Area in m² — look for numbers like "18.5m²" or tatami count like "6畳" (convert: 1畳 = 1.62m²). Use null if not shown.
-3. has_window: true if the room has an exterior wall or window shown, false otherwise. Use null if unclear.
+IMPORTANT — how these floor plans work:
+- Dimension lines in METERS are printed along the edges of each room (e.g. 2.775, 3.150, 4.700).
+  These are NOT areas — they are wall lengths.
+- Room areas are computed as: width_m × depth_m = area_m².
+- Some rooms extend into a storage alcove (物入れ, 押入れ, WIC, SIC, クローゼット).
+  Include the storage depth in the room's dimensions ONLY if it is labelled as part of that room
+  (i.e. a dotted boundary shared with the room, not a solid wall separating them).
+- Some rooms also have an 約X畳 annotation printed inside (e.g. 約5.1畳). Use this as a
+  cross-check but do NOT use it as the primary area — read the dimension lines.
+  Tatami conversion (fallback only): 1畳 ≈ 1.62 m².
+
+Step-by-step:
+1. Identify every distinct labeled space (洋室, 和室, LDK, LD, D, K, キッチン, UB, WC/トイレ,
+   洗面所/脱衣室, 廊下, ホール, MB, 物入れ, 押入れ, WIC, SIC, バルコニー, etc.).
+2. For each habitable room (not UB/WC/廊下/storage), find the two dimension numbers
+   that bound its width and depth. If a room spans multiple segments, sum them
+   (e.g. width = 1.500 + 1.575 = 3.075).
+3. Compute area_m2 = round(width × depth, 2). Use null only if NO dimension lines
+   are visible for that room.
+4. has_window: true if the room touches an exterior wall (bold outer boundary), false otherwise.
 
 Also determine:
-- living_area_m2: the m² area of the main living space (LDK, LD, or L room). Use the largest combined living area.
-- kitchen_open: true if the kitchen is open/semi-open to the living/dining area, false if separated by a wall with a door.
-- toilet_count: integer number of toilet rooms (WC, トイレ). Count 0 if none visible.
-- bathroom_count: integer number of bathing units (UB, 浴室, バスルーム). Count 0 if none visible.
+- living_area_m2: the computed m² of the combined living/dining/kitchen space
+  (LDK, LD+K, L+DK, or whichever is the main living area). Exclude separate kitchens
+  that are enclosed by solid walls with a door.
+- kitchen_open: true if the kitchen shares an open boundary (no solid wall + door)
+  with the living/dining space.
+- toilet_count: number of WC / トイレ rooms. Count carefully — do not double-count
+  UB (bath unit) as a toilet.
+- bathroom_count: number of UB / 浴室 (bathing) units.
 
 Respond ONLY with valid JSON in exactly this format (no markdown, no explanation):
 {
   "rooms": [
-    {"label": "LDK", "area_m2": 18.5, "has_window": true},
-    {"label": "洋室", "area_m2": 6.5, "has_window": false},
+    {"label": "洋室(2)", "area_m2": 10.68, "has_window": true},
+    {"label": "リビング・ダイニング", "area_m2": 14.45, "has_window": true},
     {"label": "UB", "area_m2": null, "has_window": false}
   ],
-  "living_area_m2": 18.5,
+  "living_area_m2": 14.45,
   "kitchen_open": true,
   "toilet_count": 1,
   "bathroom_count": 1
