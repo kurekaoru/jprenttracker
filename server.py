@@ -2343,12 +2343,14 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                 inp = block.input
                 if user_id:
                     uid = int(user_id)
-                    # Append commute destination if new
+                    # Append commute destination — deduplicate by normalised string
                     if inp.get("commute_dest"):
                         row = con.execute("SELECT commute_dests FROM user_settings WHERE user_id=?", (uid,)).fetchone()
                         dests = json.loads(row["commute_dests"] or "[]") if row else []
-                        dest = inp["commute_dest"]
-                        if dest not in dests:
+                        dest = inp["commute_dest"].strip()
+                        dest_norm = dest.lower().rstrip("駅station")
+                        already = any(d.lower().rstrip("駅station") == dest_norm for d in dests)
+                        if not already:
                             dests.append(dest)
                             con.execute("UPDATE user_settings SET commute_dests=? WHERE user_id=?", (json.dumps(dests), uid))
                     # Merge into personal_info
@@ -2357,8 +2359,23 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                     if updates:
                         row = con.execute("SELECT personal_info FROM user_settings WHERE user_id=?", (uid,)).fetchone()
                         pinfo = json.loads(row["personal_info"] or "{}") if row else {}
-                        if "notes" in updates and pinfo.get("notes"):
-                            updates["notes"] = pinfo["notes"] + "; " + updates["notes"]
+                        if "notes" in updates:
+                            new_note = updates["notes"].strip()
+                            existing = pinfo.get("notes", "")
+                            if existing:
+                                # Split into individual facts; skip if the new note is already
+                                # substantially covered by any existing fact (substring either way)
+                                parts = [p.strip() for p in existing.split(";") if p.strip()]
+                                new_norm = new_note.lower()
+                                duplicate = any(
+                                    new_norm in p.lower() or p.lower() in new_norm
+                                    for p in parts
+                                )
+                                if duplicate:
+                                    del updates["notes"]
+                                else:
+                                    updates["notes"] = "; ".join(parts + [new_note])
+                            # else: no existing notes, just store the new one as-is
                         pinfo.update(updates)
                         con.execute("UPDATE user_settings SET personal_info=? WHERE user_id=?", (json.dumps(pinfo), uid))
                     con.commit()
