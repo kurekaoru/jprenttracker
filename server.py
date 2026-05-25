@@ -246,7 +246,7 @@ def db():
     con.commit()
 
     # users table migrations
-    for col in ("google_id", "github_id"):
+    for col in ("google_id", "github_id", "avatar_url"):
         try:
             con.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT")
             con.commit()
@@ -593,7 +593,7 @@ def me():
     user_id = int(get_jwt_identity())
     con     = db()
     user    = con.execute(
-        "SELECT id, email, display_name, created_at FROM users WHERE id=?", (user_id,)
+        "SELECT id, email, display_name, avatar_url, created_at FROM users WHERE id=?", (user_id,)
     ).fetchone()
     con.close()
     if not user:
@@ -1125,6 +1125,7 @@ def google_oauth_callback():
         google_id    = userinfo.get("id", "")
         email        = userinfo.get("email", "").strip().lower()
         display_name = userinfo.get("name", "")
+        avatar_url   = userinfo.get("picture", "")
         if not google_id or not email:
             con.close()
             return _error_page("ユーザー情報の取得に失敗しました")
@@ -1133,17 +1134,21 @@ def google_oauth_callback():
         if not user:
             user = con.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
             if user:
-                con.execute("UPDATE users SET google_id=? WHERE id=?", (google_id, user["id"]))
+                con.execute("UPDATE users SET google_id=?, avatar_url=? WHERE id=?", (google_id, avatar_url, user["id"]))
                 con.commit()
             else:
                 con.execute(
-                    "INSERT INTO users (email, password_hash, display_name, google_id) VALUES (?,?,?,?)",
-                    (email, "", display_name or email.split("@")[0], google_id)
+                    "INSERT INTO users (email, password_hash, display_name, google_id, avatar_url) VALUES (?,?,?,?,?)",
+                    (email, "", display_name or email.split("@")[0], google_id, avatar_url)
                 )
                 con.commit()
                 user = con.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
                 con.execute("INSERT OR IGNORE INTO user_settings (user_id) VALUES (?)", (user["id"],))
                 con.commit()
+        # Always refresh avatar from Google
+        if avatar_url:
+            con.execute("UPDATE users SET avatar_url=? WHERE id=?", (avatar_url, user["id"]))
+            con.commit()
 
         pinfo_row = con.execute(
             "SELECT personal_info FROM user_settings WHERE user_id=?", (user["id"],)
@@ -1170,6 +1175,7 @@ try{{window.opener&&window.opener.postMessage({{
   token:{json.dumps(token)},
   email:{json.dumps(email)},
   display_name:{json.dumps(display_name or str(user["display_name"] or ""))},
+  avatar_url:{json.dumps(avatar_url or str(user.get("avatar_url") or ""))},
   needs_onboarding:{'true' if needs_onboarding else 'false'}
 }},'*');}}catch(e){{}}
 setTimeout(()=>window.close(),600);
@@ -1224,8 +1230,9 @@ def github_oauth_callback():
                                 headers={"Authorization": f"Bearer {access_token}",
                                          "Accept": "application/vnd.github+json"}, timeout=10)
         userinfo    = ui.json()
-        github_id   = str(userinfo.get("id", ""))
+        github_id    = str(userinfo.get("id", ""))
         display_name = userinfo.get("name") or userinfo.get("login", "")
+        avatar_url   = userinfo.get("avatar_url", "")
 
         # GitHub may not expose email; fetch from /user/emails if needed
         email = userinfo.get("email", "") or ""
@@ -1250,17 +1257,21 @@ def github_oauth_callback():
         if not user:
             user = con.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
             if user:
-                con.execute("UPDATE users SET github_id=? WHERE id=?", (github_id, user["id"]))
+                con.execute("UPDATE users SET github_id=?, avatar_url=? WHERE id=?", (github_id, avatar_url, user["id"]))
                 con.commit()
             else:
                 con.execute(
-                    "INSERT INTO users (email, password_hash, display_name, github_id) VALUES (?,?,?,?)",
-                    (email, "", display_name or email.split("@")[0], github_id)
+                    "INSERT INTO users (email, password_hash, display_name, github_id, avatar_url) VALUES (?,?,?,?,?)",
+                    (email, "", display_name or email.split("@")[0], github_id, avatar_url)
                 )
                 con.commit()
                 user = con.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
                 con.execute("INSERT OR IGNORE INTO user_settings (user_id) VALUES (?)", (user["id"],))
                 con.commit()
+        # Always refresh avatar from GitHub
+        if avatar_url:
+            con.execute("UPDATE users SET avatar_url=? WHERE id=?", (avatar_url, user["id"]))
+            con.commit()
 
         pinfo_row = con.execute(
             "SELECT personal_info FROM user_settings WHERE user_id=?", (user["id"],)
@@ -1287,6 +1298,7 @@ try{{window.opener&&window.opener.postMessage({{
   token:{json.dumps(token)},
   email:{json.dumps(email)},
   display_name:{json.dumps(display_name or str(user["display_name"] or ""))},
+  avatar_url:{json.dumps(avatar_url or str(user.get("avatar_url") or ""))},
   needs_onboarding:{'true' if needs_onboarding else 'false'}
 }},'*');}}catch(e){{}}
 setTimeout(()=>window.close(),600);

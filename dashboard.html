@@ -1065,38 +1065,30 @@
       <div class="panel-page" id="panel-account">
         <div class="acct-tabs">
           <div class="acct-tab-bar">
-            <button class="acct-tab-btn active" data-tab="acct-profile" onclick="switchAccountTab('acct-profile')" data-i18n="tab_account">アカウント</button>
-            <button class="acct-tab-btn" data-tab="acct-pinfo" onclick="switchAccountTab('acct-pinfo')" data-i18n="tab_personal_info">個人情報</button>
+            <button class="acct-tab-btn active" data-tab="acct-pinfo" onclick="switchAccountTab('acct-pinfo')" data-i18n="tab_personal_info">プロフィール</button>
             <button class="acct-tab-btn" data-tab="acct-notif" onclick="switchAccountTab('acct-notif')" data-i18n="tab_alerts">通知</button>
+            <button class="acct-tab-btn" data-tab="acct-profile" onclick="switchAccountTab('acct-profile')" data-i18n="tab_account">アカウント</button>
           </div>
           <div class="acct-tab-content">
 
             <!-- Profile tab -->
-            <div class="acct-tab-pane active" id="acct-profile">
-              <div id="account-guest">
-                <p style="font-size:12px;color:var(--muted);margin-bottom:12px;" data-i18n="account_guest_msg">ログインして設定を保存・通知を受け取りましょう。</p>
-                <button class="save-btn" onclick="openAuthModal()" data-i18n="login_register">ログイン / 新規登録</button>
-              </div>
-              <div id="account-user" style="display:none;">
-                <p style="font-size:11px;color:var(--muted);margin-bottom:14px;" id="account-email"></p>
-                <div id="pw-section">
-                  <p class="section-label" data-i18n="change_password">パスワード変更</p>
-                  <input type="password" id="pw-current" data-i18n-ph="current_pw" placeholder="現在のパスワード" style="margin-bottom:6px;">
-                  <input type="password" id="pw-new" data-i18n-ph="new_pw" placeholder="新しいパスワード（8文字以上）" style="margin-bottom:6px;">
-                  <button class="save-btn" onclick="doChangePassword()" data-i18n="update">変更する</button>
-                  <div class="saved-msg" id="pw-msg"></div>
-                </div>
-                <button class="save-btn" style="background:var(--danger);margin-top:16px;" onclick="doLogout()" data-i18n="logout">ログアウト</button>
-              </div>
-            </div>
-
-            <!-- Personal info tab -->
-            <div class="acct-tab-pane" id="acct-pinfo">
+            <div class="acct-tab-pane active" id="acct-pinfo">
               <div id="pinfo-guest" style="display:none;">
-                <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">ログインすると個人情報を保存できます。</p>
+                <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">ログインするとプロフィールを保存できます。</p>
                 <button class="save-btn" onclick="openAuthModal()">ログイン</button>
               </div>
               <div id="pinfo-form">
+                <!-- Photo row -->
+                <div class="pinfo-row" style="align-items:center;">
+                  <div class="pinfo-label">写真</div>
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <div id="pinfo-avatar" style="width:44px;height:44px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff;overflow:hidden;flex-shrink:0;"></div>
+                    <div>
+                      <div id="pinfo-avatar-src" style="font-size:10px;color:var(--muted);margin-bottom:4px;"></div>
+                      <input class="pinfo-input" id="pinfo-photo-url" type="url" placeholder="https://..." style="font-size:11px;">
+                    </div>
+                  </div>
+                </div>
                 <div class="pinfo-row">
                   <div class="pinfo-label">表示名</div>
                   <input class="pinfo-input" id="pinfo-name" type="text" placeholder="表示名">
@@ -1177,6 +1169,28 @@
               <div id="notif-section" style="display:none;">
                 <div id="notif-list"><p style="font-size:11px;color:var(--muted);" data-i18n="notif_none">登録なし</p></div>
                 <button class="add-notif-btn" onclick="openAddNotif()" data-i18n="add_notif">＋ 通知先を追加</button>
+              </div>
+            </div>
+
+            <!-- Account tab -->
+            <div class="acct-tab-pane" id="acct-profile">
+              <div id="account-guest">
+                <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">ログインするとアカウント設定を利用できます。</p>
+                <button class="save-btn" onclick="openAuthModal()" data-i18n="login">ログイン</button>
+              </div>
+              <div id="account-user" style="display:none;">
+                <div class="pinfo-row" style="align-items:center;">
+                  <div class="pinfo-label" data-i18n="email_label">メール</div>
+                  <span id="account-email" style="font-size:12px;color:var(--fg);word-break:break-all;"></span>
+                </div>
+                <div id="pw-section" style="margin-top:14px;">
+                  <p class="section-label" data-i18n="change_password" style="margin-bottom:8px;">パスワード変更</p>
+                  <input class="pinfo-input" id="pw-current" type="password" placeholder="現在のパスワード" style="margin-bottom:6px;">
+                  <input class="pinfo-input" id="pw-new" type="password" placeholder="新しいパスワード" style="margin-bottom:6px;">
+                  <button class="save-btn" onclick="doChangePassword()" data-i18n="change_password">変更する</button>
+                  <div class="saved-msg" id="pw-msg"></div>
+                </div>
+                <button class="save-btn" style="margin-top:16px;background:#e53935;" onclick="doLogout()" data-i18n="logout">ログアウト</button>
               </div>
             </div>
 
@@ -1266,7 +1280,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 03:45 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 09:52 JST</p>
       </div>
 
 
@@ -1742,7 +1756,7 @@ const STRINGS = {
   panel_listings:       { ja:'空室一覧',                en:'Vacancies',         uk:'Вакансії' },
   panel_notif:          { ja:'通知設定',                en:'Alerts',            uk:'Сповіщення' },
   tab_account:          { ja:'アカウント',              en:'Account',           uk:'Акаунт' },
-  tab_personal_info:    { ja:'個人情報',                en:'Profile',           uk:'Профіль' },
+  tab_personal_info:    { ja:'プロフィール',             en:'Profile',           uk:'Профіль' },
   tab_alerts:           { ja:'通知',                    en:'Alerts',            uk:'Сповіщення' },
 
   // Personal info labels
@@ -4071,15 +4085,13 @@ function renderUserChip() {
     return;
   }
   const initial = (AUTH.user.display_name || AUTH.user.email || '?')[0].toUpperCase();
+  const avatarInner = AUTH.user.avatar_url
+    ? `<img src="${escHtml(AUTH.user.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
+    : initial;
   area.innerHTML = `
-    <div class="user-chip">
-      <div class="user-avatar" onclick="toggleUserMenu()">${initial}</div>
+    <div class="user-chip" onclick="openPanel('account')" style="cursor:pointer;">
+      <div class="user-avatar">${avatarInner}</div>
       <span class="user-name">${escHtml(AUTH.user.display_name || AUTH.user.email)}</span>
-      <div class="user-menu" id="user-menu">
-        <div class="user-menu-email">${escHtml(AUTH.user.email)}</div>
-        <button class="user-menu-item" onclick="openQrModal()">${t('share_qr')}</button>
-        <button class="user-menu-item danger" onclick="doLogout()">${t('logout')}</button>
-      </div>
     </div>`;
 }
 
@@ -4301,6 +4313,22 @@ function renderPinfo() {
   const nameEl = document.getElementById('pinfo-name');
   if (nameEl) nameEl.value = AUTH.user.display_name || '';
 
+  // Avatar preview
+  const avatarEl   = document.getElementById('pinfo-avatar');
+  const avatarSrc  = document.getElementById('pinfo-avatar-src');
+  const photoInput = document.getElementById('pinfo-photo-url');
+  const avatarUrl  = AUTH.user.avatar_url || _pinfoData.photo_url || '';
+  if (avatarEl) {
+    const initials = (AUTH.user.display_name || AUTH.user.email || '?')[0].toUpperCase();
+    avatarEl.innerHTML = avatarUrl
+      ? `<img src="${escHtml(avatarUrl)}" style="width:100%;height:100%;object-fit:cover;">`
+      : initials;
+  }
+  if (avatarSrc) {
+    avatarSrc.textContent = _pinfoIsGoogle ? 'Googleから取得' : (AUTH.user.avatar_url ? 'GitHubから取得' : '');
+  }
+  if (photoInput && !AUTH.user.avatar_url) photoInput.value = _pinfoData.photo_url || '';
+
   // Single-select chip fields
   ['purpose','household','age_range','move_in_timing','num_children'].forEach(field => {
     const container = document.getElementById(`pinfo-${field}`);
@@ -4353,7 +4381,11 @@ function pinfoToggleBool(field) {
 async function savePinfo() {
   const nameEl = document.getElementById('pinfo-name');
   const name   = nameEl?.value.trim() || '';
-  if (name) { _pinfoData.display_name = name; AUTH.user.display_name = name; renderUserChip(); }
+  if (name) { _pinfoData.display_name = name; AUTH.user.display_name = name; }
+  const photoInput = document.getElementById('pinfo-photo-url');
+  const photoUrl   = photoInput?.value.trim() || '';
+  if (photoUrl && !AUTH.user.avatar_url) { AUTH.user.avatar_url = photoUrl; _pinfoData.photo_url = photoUrl; }
+  renderUserChip();
   // Convert raw budget key to min/max
   const payload = { ..._pinfoData };
   if (payload.budget) {
