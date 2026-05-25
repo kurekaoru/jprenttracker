@@ -1783,8 +1783,13 @@ _CHAT_TOOLS = [
             "listing_images(listing_id, image_type TEXT ['floor_plan'|'exterior'|'interior'])\n\n"
             "snapshots(listing_id, rent INT, seen_at TEXT)  -- rent history\n\n"
             "RULES: SELECT only. Always filter disappeared_at IS NULL for active listings. "
-            "Max 200 rows returned. If your SELECT includes an 'id' column from listings, "
-            "those listings are automatically rendered as clickable cards — no need to call show_listings."
+            "Max 200 rows returned. "
+            "IMPORTANT: Always include the listings id as the FIRST column: `SELECT l.id, ...` "
+            "— this is what triggers automatic card rendering. Never omit it. "
+            "Example: SELECT l.id, l.name, COUNT(*) as cnt FROM listings l "
+            "JOIN listing_facilities f ON l.id=f.listing_id "
+            "WHERE f.type='konbini' AND l.disappeared_at IS NULL "
+            "GROUP BY l.id HAVING cnt > 5 ORDER BY cnt DESC"
         ),
         "input_schema": {
             "type": "object",
@@ -2057,12 +2062,28 @@ def _chat_run_sql(params, con):
             return {"error": f"access to table '{t}' is not allowed"}
     if "limit" not in lower:
         sql = f"{sql} LIMIT 200"
+
+    # If the query references listings but omits the id column, inject it.
+    # Only attempt when there's a simple FROM/JOIN listings (not a CTE).
+    if _re.search(r'\blistings\b', lower) and not lower.lstrip().startswith("with"):
+        select_to_from = _re.search(r'^SELECT\s+(.*?)\s+FROM\b', sql, _re.IGNORECASE | _re.DOTALL)
+        if select_to_from:
+            sel = select_to_from.group(1)
+            if not _re.search(r'\bid\b|\blisting_id\b', sel, _re.IGNORECASE):
+                alias_m = _re.search(r'\blistings\b\s+(?:AS\s+)?(\w+)', sql, _re.IGNORECASE)
+                alias = alias_m.group(1) if alias_m else 'listings'
+                sql = _re.sub(r'^SELECT\s+', f'SELECT {alias}.id, ', sql, flags=_re.IGNORECASE)
+                lower = sql.lower()
+                log.info(f"run_sql: injected {alias}.id into SELECT")
+
     try:
         cur = con.execute(sql)
         cols = [d[0] for d in cur.description]
         rows = cur.fetchmany(200)
+        log.info(f"run_sql cols={cols} rows={len(rows)} sql={sql[:120]}")
         return {"columns": cols, "rows": [list(r) for r in rows], "count": len(rows)}
     except Exception as e:
+        log.warning(f"run_sql error: {e} sql={sql[:120]}")
         return {"error": str(e)}
 
 
