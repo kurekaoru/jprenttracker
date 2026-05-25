@@ -516,6 +516,7 @@ def _ocr_floor_plan(image_path):
 def _scrape_images_for_new_listings(new_lids):
     if not new_lids:
         return
+    _reset_asyncio_loop()
     con = sqlite3.connect(DB_FILE, timeout=60)
     con.execute("PRAGMA journal_mode=WAL")
     rows = con.execute(
@@ -523,12 +524,46 @@ def _scrape_images_for_new_listings(new_lids):
         new_lids
     ).fetchall()
     ok = 0
-    for lid, listing_url in rows:
+
+    ur_rows  = [(lid, url) for lid, url in rows if "ur-net.go.jp" in (url or "")]
+    jkk_rows = [(lid, url) for lid, url in rows if "ur-net.go.jp" not in (url or "")]
+
+    # UR: open a single Playwright session for all UR listings to avoid
+    # the "sync API inside asyncio loop" error caused by create/destroy per listing.
+    if ur_rows:
+        try:
+            _pw = sync_playwright().__enter__()
+            browser = _pw.chromium.launch(headless=True, args=_CHROME_ARGS)
+            page = browser.new_page(user_agent=_SCRAPER_UA)
+            for lid, listing_url in ur_rows:
+                try:
+                    images = _fetch_ur_images_playwright(listing_url, _page=page)
+                except Exception as e:
+                    log.debug(f"UR headless image fetch failed ({listing_url}): {e}")
+                    images = []
+                if not images:
+                    time.sleep(0.4)
+                    continue
+                con.execute("UPDATE listings SET thumbnail_url=? WHERE id=?", (images[0][0], lid))
+                for img_url, img_type in images:
+                    con.execute(
+                        "INSERT OR IGNORE INTO listing_images (listing_id, url, image_type) VALUES (?,?,?)",
+                        (lid, img_url, img_type)
+                    )
+                con.commit()
+                ok += 1
+                time.sleep(0.5)
+            browser.close()
+            _pw.__exit__(None, None, None)
+        except Exception as e:
+            log.error(f"UR image batch session failed: {e}")
+
+    # JKK: plain HTTP scraping, no Playwright
+    for lid, listing_url in jkk_rows:
         images = _fetch_detail_images(listing_url)
         if not images:
             time.sleep(0.4)
             continue
-        # First image → thumbnail
         con.execute("UPDATE listings SET thumbnail_url=? WHERE id=?", (images[0][0], lid))
         for img_url, img_type in images:
             con.execute(
@@ -538,10 +573,10 @@ def _scrape_images_for_new_listings(new_lids):
         con.commit()
         ok += 1
         time.sleep(0.5)
+
     con.close()
     if ok:
         log.info(f"Detail images scraped for {ok}/{len(rows)} new listing(s).")
-    con.close()
 
 
 def wait_stable(page, timeout=30_000):
@@ -567,9 +602,21 @@ WARD_CODE = {
 }
 CODE_WARD = {v: k for k, v in WARD_CODE.items()}
 
+def _reset_asyncio_loop():
+    """Clear any stale/running asyncio event loop before calling sync_playwright."""
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.set_event_loop(asyncio.new_event_loop())
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+
+
 def fetch_listings():
     all_listings = []
     ok = False
+    _reset_asyncio_loop()
 
     try:
         with sync_playwright() as p:
