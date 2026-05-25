@@ -211,11 +211,12 @@ def _fetch_ur_images_playwright(listing_url, _page=None):
     Returns [(url, image_type)] sorted floor_plan first, capped at 20.
     """
     owned = _page is None
-    browser = _pw = None
+    browser = _pw_obj = _pw_cm = None
     try:
         if owned:
-            _pw = sync_playwright().__enter__()
-            browser = _pw.chromium.launch(headless=True, args=_CHROME_ARGS)
+            _pw_cm = sync_playwright()
+            _pw_obj = _pw_cm.__enter__()
+            browser = _pw_obj.chromium.launch(headless=True, args=_CHROME_ARGS)
             _page = browser.new_page(user_agent=_SCRAPER_UA)
 
         _page.goto(listing_url, timeout=30_000, wait_until="commit")
@@ -271,7 +272,8 @@ def _fetch_ur_images_playwright(listing_url, _page=None):
         if owned and browser:
             try:
                 browser.close()
-                _pw.__exit__(None, None, None)
+                if _pw_cm:
+                    _pw_cm.__exit__(None, None, None)
             except Exception:
                 pass
 
@@ -566,8 +568,9 @@ def backfill_images(limit=50, listing_ids=None):
 
     log.info(f"Backfill: processing {len(rows)} listing(s)...")
     try:
-        _pw = sync_playwright().__enter__()
-        browser = _pw.chromium.launch(headless=True, args=_CHROME_ARGS)
+        _pw_cm = sync_playwright()
+        _pw_obj = _pw_cm.__enter__()
+        browser = _pw_obj.chromium.launch(headless=True, args=_CHROME_ARGS)
         page = browser.new_page(user_agent=_SCRAPER_UA)
         ok_count = 0
         for row in rows:
@@ -587,7 +590,7 @@ def backfill_images(limit=50, listing_ids=None):
             except Exception as e:
                 log.error(f"  ✗ {lid[:8]} failed: {e}")
         browser.close()
-        _pw.__exit__(None, None, None)
+        _pw_cm.__exit__(None, None, None)
         log.info(f"Backfill done: {ok_count}/{len(rows)} listings updated")
     except Exception as e:
         log.error(f"Backfill playwright session failed: {e}")
@@ -748,8 +751,9 @@ def _scrape_images_for_new_listings(new_lids):
     # UR: single Playwright session for the whole batch
     if ur_rows:
         try:
-            _pw = sync_playwright().__enter__()
-            browser = _pw.chromium.launch(headless=True, args=_CHROME_ARGS)
+            _pw_cm = sync_playwright()
+            _pw_obj = _pw_cm.__enter__()
+            browser = _pw_obj.chromium.launch(headless=True, args=_CHROME_ARGS)
             page = browser.new_page(user_agent=_SCRAPER_UA)
             for lid, listing_url in ur_rows:
                 try:
@@ -762,7 +766,7 @@ def _scrape_images_for_new_listings(new_lids):
                 except Exception as e:
                     log.error(f"UR image pipeline failed ({listing_url}): {e}")
             browser.close()
-            _pw.__exit__(None, None, None)
+            _pw_cm.__exit__(None, None, None)
         except Exception as e:
             log.error(f"UR image batch session failed: {e}")
 
