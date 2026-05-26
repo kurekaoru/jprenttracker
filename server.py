@@ -8,7 +8,7 @@ from flask_jwt_extended import (
     JWTManager, create_access_token, jwt_required, get_jwt_identity
 )
 from werkzeug.security import generate_password_hash, check_password_hash
-import json, logging, math, os, secrets, sqlite3, time, threading, requests
+import json, logging, math, os, re, secrets, sqlite3, time, threading, requests
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 from dotenv import load_dotenv
@@ -204,7 +204,8 @@ def db():
             fetched_at  TEXT    DEFAULT (datetime('now')),
             UNIQUE(listing_id, lat, lng)
         );
-        CREATE INDEX IF NOT EXISTS idx_lf_listing ON listing_facilities(listing_id);
+        CREATE INDEX IF NOT EXISTS idx_lf_listing  ON listing_facilities(listing_id);
+        CREATE INDEX IF NOT EXISTS idx_lf_station  ON listing_facilities(type, name);
     """)
     con.commit()
 
@@ -262,11 +263,16 @@ def db():
 
     # Column migrations (idempotent)
     for col, defn in [
-        ("map_layers",     "TEXT DEFAULT '{}'"),
-        ("lang",           "TEXT DEFAULT 'ja'"),
-        ("commute_dests",  "TEXT DEFAULT '[]'"),
-        ("ai_profile",     "TEXT DEFAULT '{}'"),
-        ("personal_info",  "TEXT DEFAULT '{}'"),
+        ("map_layers",         "TEXT DEFAULT '{}'"),
+        ("lang",               "TEXT DEFAULT 'ja'"),
+        ("commute_dests",      "TEXT DEFAULT '[]'"),
+        ("ai_profile",         "TEXT DEFAULT '{}'"),
+        ("personal_info",      "TEXT DEFAULT '{}'"),
+        ("has_parking",        "INTEGER DEFAULT NULL"),
+        ("max_age_years",      "INTEGER DEFAULT 0"),
+        ("required_features",  "TEXT DEFAULT '[]'"),
+        ("filter_stations",    "TEXT DEFAULT '[]'"),
+        ("available_now",      "INTEGER DEFAULT 0"),
     ]:
         try:
             con.execute(f"ALTER TABLE user_settings ADD COLUMN {col} {defn}")
@@ -643,8 +649,10 @@ def get_user_settings():
     if not row:
         return jsonify({})
     d = dict(row)
-    d["layouts"] = json.loads(d.get("layouts") or "[]")
-    d["wards"]   = json.loads(d.get("wards")   or "[]")
+    d["layouts"]           = json.loads(d.get("layouts")           or "[]")
+    d["wards"]             = json.loads(d.get("wards")             or "[]")
+    d["required_features"] = json.loads(d.get("required_features") or "[]")
+    d["filter_stations"]   = json.loads(d.get("filter_stations")   or "[]")
     return jsonify(d)
 
 
@@ -655,21 +663,33 @@ def set_user_settings():
     data    = request.get_json() or {}
     con     = db()
     con.execute("""
-        INSERT INTO user_settings (user_id, min_rent, max_rent, min_size_m2, max_walk_min, layouts, wards)
-        VALUES (:uid, :min_rent, :max_rent, :min_size, :max_walk, :layouts, :wards)
+        INSERT INTO user_settings
+            (user_id, min_rent, max_rent, min_size_m2, max_walk_min, layouts, wards,
+             has_parking, max_age_years, required_features, filter_stations, available_now)
+        VALUES
+            (:uid, :min_rent, :max_rent, :min_size, :max_walk, :layouts, :wards,
+             :has_parking, :max_age_years, :required_features, :filter_stations, :available_now)
         ON CONFLICT(user_id) DO UPDATE SET
             min_rent=excluded.min_rent, max_rent=excluded.max_rent,
             min_size_m2=excluded.min_size_m2, max_walk_min=excluded.max_walk_min,
             layouts=excluded.layouts, wards=excluded.wards,
+            has_parking=excluded.has_parking, max_age_years=excluded.max_age_years,
+            required_features=excluded.required_features,
+            filter_stations=excluded.filter_stations, available_now=excluded.available_now,
             updated_at=datetime('now')
     """, {
-        "uid":      user_id,
-        "min_rent": int(data.get("min_rent") or 0),
-        "max_rent": int(data.get("max_rent") or 0),
-        "min_size": float(data.get("min_size_m2") or 0),
-        "max_walk": int(data.get("max_walk_min") or 0),
-        "layouts":  json.dumps(data.get("layouts") or []),
-        "wards":    json.dumps(data.get("wards")   or []),
+        "uid":               user_id,
+        "min_rent":          int(data.get("min_rent") or 0),
+        "max_rent":          int(data.get("max_rent") or 0),
+        "min_size":          float(data.get("min_size_m2") or 0),
+        "max_walk":          int(data.get("max_walk_min") or 0),
+        "layouts":           json.dumps(data.get("layouts") or []),
+        "wards":             json.dumps(data.get("wards")   or []),
+        "has_parking":       1 if data.get("has_parking") else None,
+        "max_age_years":     int(data.get("max_age_years") or 0),
+        "required_features": json.dumps(data.get("required_features") or []),
+        "filter_stations":   json.dumps(data.get("filter_stations") or []),
+        "available_now":     1 if data.get("available_now") else 0,
     })
     con.commit()
     con.close()
@@ -1480,6 +1500,7 @@ def get_listings():
         "       COALESCE(address, ward) AS address, lat, lng, geocoded_at,"
         "       disappeared_at, walk_min, walk_m, nearest_station, thumbnail_url,"
         "       priority, building_type, appliances,"
+        "       has_parking, age_years, available_from, features,"
         "       CASE WHEN thumbnail_url IS NOT NULL AND ("
         "         lower(thumbnail_url) LIKE '%madori%' OR"
         "         lower(thumbnail_url) LIKE '%floor_plan%' OR"
@@ -1536,6 +1557,15 @@ def get_disappeared():
     return jsonify({"listings": rows})
 
 
+def _round_origin(origin: str) -> str:
+    """Round lat,lng origin to 3 decimal places (~110m) for cache key stability."""
+    try:
+        lat, lng = origin.split(",")
+        return f"{float(lat):.3f},{float(lng):.3f}"
+    except Exception:
+        return origin
+
+
 @app.route("/api/route")
 def proxy_directions():
     origin      = request.args.get("origin", "").strip()
@@ -1547,6 +1577,17 @@ def proxy_directions():
         return jsonify({"status": "INVALID_REQUEST"}), 400
     if not GOOGLE_MAPS_SERVER_KEY:
         return jsonify({"status": "REQUEST_DENIED", "error_message": "GOOGLE_MAPS_SERVER_KEY not set"}), 503
+
+    cache_origin = _round_origin(origin)
+    cache_cutoff = (datetime.now() - timedelta(hours=24)).isoformat()
+
+    con = db()
+    cached = con.execute(
+        "SELECT response FROM route_cache WHERE origin=? AND destination=? AND mode=? AND cached_at>?",
+        (cache_origin, destination, mode, cache_cutoff),
+    ).fetchone()
+    if cached:
+        return cached["response"], 200, {"Content-Type": "application/json"}
 
     params = {
         "origin":           origin,
@@ -1562,7 +1603,16 @@ def proxy_directions():
             "https://maps.googleapis.com/maps/api/directions/json",
             params=params, timeout=10
         )
-        return jsonify(r.json())
+        body = r.text
+        data = r.json()
+        if data.get("status") == "OK":
+            con.execute(
+                "INSERT OR REPLACE INTO route_cache (origin, destination, mode, response, cached_at)"
+                " VALUES (?,?,?,?,?)",
+                (cache_origin, destination, mode, body, datetime.now().isoformat()),
+            )
+            con.commit()
+        return body, 200, {"Content-Type": "application/json"}
     except Exception as e:
         return jsonify({"status": "UNKNOWN_ERROR", "error_message": str(e)}), 502
 
@@ -1589,7 +1639,12 @@ Rules:
 - HARD RULE: NEVER say images are "rendering", "displaying", "showing", "loading", or "appearing" in text. NEVER narrate what the tool is doing. Call show_listing_images — that IS the display. If you describe images in text without calling the tool, the user sees nothing.
 - Use batch_commute_filter when the user asks to filter by commute time to a destination. IMPORTANT: if the query is about the user's saved listings ("which of my saved...", "remove saved listings that are...", etc.), pass their listing IDs as listing_ids — this is MUCH faster and avoids timeouts. Only omit listing_ids when the user wants to search ALL properties. After it returns, immediately call save_listings or remove_listings with the matching IDs if the user asked to save/remove them.
 - Use save_listings to add listings to the user's saved selections. Call it immediately after batch_commute_filter or search_listings when the user explicitly asks to save/bookmark the results. To add all listings with a floor plan: call search_listings(has_floor_plan=true, limit=200) then save_listings with all returned IDs. To find listings with any photo: use has_images=true.
-- To search all 23 Tokyo special wards (23区, 23-ku, 都内, inner Tokyo, etc.): call search_listings with wards=["23区"] — the server expands this automatically. Never claim there are no results without calling the tool first.
+- The wards parameter (and update_alert_filter wards) accepts geographic aliases the server expands to ward lists. Use as a single string inside the wards array:
+  • 23区 (all 23 special wards) | 多摩地域 (all 23 Tama cities outside 23ku, NOT just 多摩市) | 神奈川 (all Kanagawa)
+  • Directions within 23区: 東部/east/下町 | 北部/north | 南部/south | 西部/west | 都心/central
+  • Kanagawa sub-areas: 横浜 | 川崎 | 相模原
+  All aliases accept English equivalents (e.g. "tama area", "east side", "yokohama").
+- For railway line queries ('along X line', 'near X stations', 'within Y min of Z line stations'): NEVER use wards — ward-based filtering is inaccurate because a property's ward doesn't tell you which line it's closest to. Use nearest_station_in in search_listings. This checks all stations cached from OSM within ~1km of each property (not just the single nearest station), so a property 400m from both 石神井公園 and 大泉学園 will match either. List the stations on the line without 駅 suffix. You know Tokyo's rail network — construct the station list directly. Example: 西武池袋線 → nearest_station_in=['池袋','椎名町','東長崎','江古田','桜台','練馬','中村橋','富士見台','石神井公園','大泉学園','保谷','ひばりが丘','東久留米','清瀬']. Combine with max_walk if the user specifies a walk time limit.
 - Use remove_listings to remove listings from saved selections. The user's current saved list with photo counts is provided in context — use the listing IDs directly. For "remove listings without photos" filter to those with photos=0.
 - Silently call update_user_profile whenever the user reveals clear personal information: commute destinations, budget, move-in timing, neighborhood preferences, etc. Call it in the same turn, without announcing or confirming it. The user should never see you saving — just save and continue answering.
 - When the user reveals personal information that is ambiguous or incomplete — especially numeric facts like number of children — do NOT infer the value. Instead, ask a short, natural follow-up question before saving. Make it feel like genuine conversation, not a form. Examples: "Congratulations! Is this your first, or will there be more?" (not "How many num_children will you have?"). Save the clarified value only after they answer. Never assume num_children=1 just because someone says they are expecting.
@@ -1615,6 +1670,7 @@ Rules:
 - HARD RULE: Never say "Found N properties" or name properties in text without having called run_sql or search_listings in the SAME turn and gotten listing_ids back. Prior chat messages are not a source of listing data — always re-execute the query. If you described results without a tool call, the user saw no cards.
 - HARD RULE: After every search_listings or run_sql call, your text reply MUST start with a one-line filter summary before listing results. Format: "**Filters applied:** <comma-separated list of every active filter> → **N results**". Include every active filter (e.g. has_floor_plan=true, ward=23区, layout=2LDK, limit=50); omit fields left at default. For run_sql, summarise the WHERE clause in plain English instead of parameter names. Always end with → **N results** where N is the actual count returned.
 - Floor plan analysis (from get_room_stats and get_listing_details floor_plan_rooms): living_area_m2 is the combined LDK/LD/L area. kitchen_open=true means the kitchen opens to the living area with no separating door. Use these fields to answer questions about room layout and to filter searches.
+- Use update_alert_filter when the user asks to change their notification/alert settings: budget range, wards, layouts, max walk time, min size, parking requirement, building age limit, or required features (e.g. エアコン, バス・トイレ別). The current filter state is shown in your context. Only pass the fields being changed — omit others to leave them unchanged. To add a ward, pass the full new wards list (current wards + the new one). To remove a ward, pass the list without it. After calling, confirm the change in one sentence.
 """
 
 _CHAT_TOOLS = [
@@ -1637,8 +1693,13 @@ _CHAT_TOOLS = [
                 "has_floor_plan":       {"type": "boolean", "description": "If true, only return listings that have a floor plan image"},
                 "has_images":          {"type": "boolean", "description": "If true, only return listings that have at least one downloaded photo"},
                 "min_living_area_m2":  {"type": "number",  "description": "Min living/dining/kitchen (LDK/LD/L) area in m² from floor plan analysis. Requires floor plan data — call get_room_stats first to pick an evidence-based threshold."},
-                "sort_by":             {"type": "string",  "enum": ["rent_asc","rent_desc","living_area_desc","size_desc"], "description": "Sort order. Default rent_asc. Use living_area_desc for 'biggest living room', size_desc for 'largest apartment'."},
+                "sort_by":             {"type": "string",  "enum": ["rent_asc","rent_desc","living_area_desc","size_desc","age_asc","age_desc"], "description": "Sort order. Default rent_asc. Use living_area_desc for 'biggest living room', size_desc for 'largest apartment', age_asc for newest buildings."},
                 "limit":               {"type": "integer", "description": "Max results, default 10, use 200 to get all"},
+                "has_parking":         {"type": "boolean", "description": "If true, only listings with on-site parking available"},
+                "max_age_years":       {"type": "integer", "description": "Max building age in years (e.g. 30 = built in last 30 years)"},
+                "available_now":       {"type": "boolean", "description": "If true, only listings with 随時 (immediate) availability"},
+                "required_features":   {"type": "array", "items": {"type": "string"}, "description": "Feature tags that must ALL be present, e.g. ['エアコン', 'バス・トイレ別', '追い焚き']. Tag names must match exactly as they appear in Japanese."},
+                "nearest_station_in":  {"type": "array", "items": {"type": "string"}, "description": "Return listings that have ANY of these stations within their cached OSM station radius (~1km). Use for railway line queries — list the stations on that line without 駅 suffix, e.g. ['池袋','椎名町','東長崎','江古田','桜台','練馬','中村橋','富士見台','石神井公園','大泉学園','保谷','ひばりが丘','東久留米','清瀬'] for 西武池袋線. Checks cached OSM data first (all stations within ~1km radius), falls back to nearest_station field."},
             },
         },
     },
@@ -1846,7 +1907,12 @@ _CHAT_TOOLS = [
             "listings(id TEXT PK, name TEXT, ward TEXT, layout TEXT, rent INT, size_m2 REAL, "
             "url TEXT, source TEXT ['jkk'|'ur'], address TEXT, lat REAL, lng REAL, "
             "first_seen TEXT, last_seen TEXT, disappeared_at TEXT [NULL=active], "
-            "walk_min INT, nearest_station TEXT, floor_plan_data JSON)\n"
+            "walk_min INT [walk minutes to nearest_station], nearest_station TEXT [station name without 駅, use for line queries], floor_plan_data JSON, "
+            "features TEXT [CSV of feature tags e.g. 'エアコン, バス・トイレ別, 追い焚き'], "
+            "has_parking INT [1=on-site parking available], parking_fee INT [monthly JPY], "
+            "age_years INT [building age], available_from TEXT [随時 or date], "
+            "nearby_features TEXT [proximity text e.g. 病院徒歩5分], "
+            "appliances TEXT, building_type TEXT)\n"
             "  floor_plan_data JSON fields: living_area_m2, kitchen_open, toilet_count, "
             "bathroom_count, envelope_width_m, envelope_height_m, rooms[] (label,area_m2,has_window,is_outdoor)\n\n"
             "listing_facilities(listing_id, type TEXT, name TEXT, distance_m INT)\n"
@@ -1870,6 +1936,32 @@ _CHAT_TOOLS = [
             },
         },
     },
+    {
+        "name": "update_alert_filter",
+        "description": (
+            "Read or update the user's notification alert filter — the criteria that control which new listings "
+            "trigger Slack/LINE push notifications. The current filter state is always shown in your context. "
+            "Call this when the user asks to change their alert settings: update budget, add or remove wards, "
+            "change allowed layouts, set max walk time, or set minimum size. "
+            "Only pass fields you want to change; omit any field you want to leave as-is. "
+            "To clear wards (match all) pass an empty array. To clear layouts (match all) pass an empty array. "
+            "After calling this tool, the UI automatically refreshes the filter panel."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "min_rent":          {"type": "integer", "description": "Min monthly rent JPY (0 = no minimum)"},
+                "max_rent":          {"type": "integer", "description": "Max monthly rent JPY (0 = no limit)"},
+                "min_size_m2":       {"type": "number",  "description": "Min floor area m² (0 = no minimum)"},
+                "max_walk_min":      {"type": "integer", "description": "Max walk min to nearest station (0 = no limit)"},
+                "layouts":           {"type": "array", "items": {"type": "string"}, "description": "Allowed layouts e.g. ['1LDK', '2LDK']. Pass [] to match all layouts."},
+                "wards":             {"type": "array", "items": {"type": "string"}, "description": "Allowed wards e.g. ['練馬区', '板橋区']. Pass [] to match all wards."},
+                "has_parking":       {"type": "boolean", "description": "If true, only alert on listings with on-site parking. Omit or false to match any."},
+                "max_age_years":     {"type": "integer", "description": "Max building age in years (0 = no limit)"},
+                "required_features": {"type": "array", "items": {"type": "string"}, "description": "Feature tags that must ALL be present, e.g. ['エアコン', 'バス・トイレ別']. Pass [] to clear."},
+            },
+        },
+    },
 ]
 
 _23KU = [
@@ -1878,11 +1970,101 @@ _23KU = [
     "北区","荒川区","板橋区","練馬区","足立区","葛飾区","江戸川区",
 ]
 
-def _expand_ward_alias(ward: str):
-    """Return list of ward strings for known group aliases, else [ward]."""
-    lower = ward.strip().lower().replace("-", "").replace("ー", "").replace("　", "")
-    if lower in ("23区", "23ku", "23wards", "23区内", "東京23区", "特別区", "都内23区"):
-        return _23KU
+_TAMA = [
+    "八王子市","立川市","武蔵野市","三鷹市","府中市","昭島市","調布市","町田市",
+    "小金井市","小平市","日野市","東村山市","国分寺市","国立市","福生市","狛江市",
+    "清瀬市","東久留米市","武蔵村山市","多摩市","稲城市","羽村市","西東京市",
+]
+
+_YOKOHAMA = [
+    "横浜市鶴見区","横浜市神奈川区","横浜市西区","横浜市中区","横浜市南区",
+    "横浜市保土ケ谷区","横浜市磯子区","横浜市金沢区","横浜市港北区","横浜市戸塚区",
+    "横浜市港南区","横浜市旭区","横浜市緑区","横浜市瀬谷区","横浜市栄区",
+    "横浜市青葉区","横浜市都筑区",
+]
+
+_KAWASAKI = [
+    "川崎市川崎区","川崎市幸区","川崎市中原区","川崎市高津区",
+    "川崎市麻生区","川崎市多摩区","川崎市宮前区",
+]
+
+_SAGAMIHARA = ["相模原市緑区","相模原市中央区","相模原市南区"]
+
+# Pre-normalised alias → ward list.
+# Keys: lowercase, no spaces/hyphens/dots/ー/・.  Add every reasonable variant.
+_GEO_ALIASES: dict[str, list[str]] = {
+    # ── 23区 ──────────────────────────────────────────────────────────────────
+    "23区":    _23KU, "23ku":    _23KU, "23wards": _23KU,
+    "23区内":  _23KU, "東京23区": _23KU, "特別区": _23KU, "都内23区": _23KU,
+    "とうきょう23く": _23KU,
+
+    # ── Geographic regions (23区) ─────────────────────────────────────────────
+    "東部":   ["足立区","葛飾区","江戸川区","墨田区","江東区","荒川区"],
+    "東側":   ["足立区","葛飾区","江戸川区","墨田区","江東区","荒川区"],
+    "east":   ["足立区","葛飾区","江戸川区","墨田区","江東区","荒川区"],
+    "eastside":["足立区","葛飾区","江戸川区","墨田区","江東区","荒川区"],
+    "easttokyo":["足立区","葛飾区","江戸川区","墨田区","江東区","荒川区"],
+    "下町":   ["足立区","葛飾区","江戸川区","墨田区","江東区","荒川区","台東区"],
+    "shitamachi":["足立区","葛飾区","江戸川区","墨田区","江東区","荒川区","台東区"],
+
+    "北部":   ["北区","板橋区","豊島区","練馬区","足立区","荒川区"],
+    "北側":   ["北区","板橋区","豊島区","練馬区","足立区","荒川区"],
+    "north":  ["北区","板橋区","豊島区","練馬区","足立区","荒川区"],
+    "northside":["北区","板橋区","豊島区","練馬区","足立区","荒川区"],
+    "northtokyo":["北区","板橋区","豊島区","練馬区","足立区","荒川区"],
+
+    "南部":   ["品川区","大田区","目黒区","世田谷区"],
+    "南側":   ["品川区","大田区","目黒区","世田谷区"],
+    "south":  ["品川区","大田区","目黒区","世田谷区"],
+    "southside":["品川区","大田区","目黒区","世田谷区"],
+    "southtokyo":["品川区","大田区","目黒区","世田谷区"],
+
+    "西部":   ["杉並区","中野区","練馬区","世田谷区","渋谷区"],
+    "西側":   ["杉並区","中野区","練馬区","世田谷区","渋谷区"],
+    "west":   ["杉並区","中野区","練馬区","世田谷区","渋谷区"],
+    "westside":["杉並区","中野区","練馬区","世田谷区","渋谷区"],
+    "westtokyo":["杉並区","中野区","練馬区","世田谷区","渋谷区"],
+
+    "都心":      ["千代田区","中央区","港区","新宿区","渋谷区","文京区"],
+    "中心部":    ["千代田区","中央区","港区","新宿区","渋谷区","文京区"],
+    "central":   ["千代田区","中央区","港区","新宿区","渋谷区","文京区"],
+    "centraltokyo":["千代田区","中央区","港区","新宿区","渋谷区","文京区"],
+    "citycenter":["千代田区","中央区","港区","新宿区","渋谷区","文京区"],
+    "innertokyo":["千代田区","中央区","港区","新宿区","渋谷区","文京区"],
+
+    # ── Tama region ────────────────────────────────────────────────────────────
+    "多摩":       _TAMA, "多摩地域": _TAMA, "多摩地区": _TAMA,
+    "多摩エリア": _TAMA, "多摩地方": _TAMA,
+    "tama":       _TAMA, "tamaarea": _TAMA, "tamaregion": _TAMA,
+    "23区外":     _TAMA, "市部": _TAMA,
+
+    # ── Kanagawa ──────────────────────────────────────────────────────────────
+    "kanagawa":  _YOKOHAMA + _KAWASAKI + _SAGAMIHARA,
+    "神奈川":    _YOKOHAMA + _KAWASAKI + _SAGAMIHARA,
+    "横浜":      _YOKOHAMA, "yokohama": _YOKOHAMA,
+    "川崎":      _KAWASAKI, "kawasaki": _KAWASAKI,
+    "相模原":    _SAGAMIHARA, "sagamihara": _SAGAMIHARA,
+
+}
+
+_ALIAS_NORM_RE  = re.compile(r'[\s\-・·〜～\.ー―　・]+')
+_ALIAS_STOP_RE  = re.compile(r'\b(of|the|in|along|around|near|side|tokyo|東京|都)\b', re.IGNORECASE)
+
+def _normalize_alias(s: str) -> str:
+    s = _ALIAS_STOP_RE.sub('', s.strip())
+    return _ALIAS_NORM_RE.sub('', s.lower())
+
+def _expand_ward_alias(ward: str) -> list[str]:
+    """Return expanded ward list for geographic/line aliases, else [ward]."""
+    key = _normalize_alias(ward)
+    if key in _GEO_ALIASES:
+        return _GEO_ALIASES[key]
+    # Also try without trailing 線/line suffix
+    for suffix in ("線", "line"):
+        if key.endswith(suffix):
+            trimmed = key[: -len(suffix)]
+            if trimmed in _GEO_ALIASES:
+                return _GEO_ALIASES[trimmed]
     return [ward]
 
 def _chat_search(params, con):
@@ -1921,16 +2103,42 @@ def _chat_search(params, con):
             "CAST(json_extract(floor_plan_data, '$.living_area_m2') AS REAL) >= ?"
         )
         args.append(float(params["min_living_area_m2"]))
+    if params.get("has_parking"):
+        conds.append("has_parking = 1")
+    if params.get("max_age_years"):
+        conds.append("age_years IS NOT NULL AND age_years <= ?")
+        args.append(int(params["max_age_years"]))
+    if params.get("available_now"):
+        conds.append("available_from LIKE '%随時%'")
+    for feat in (params.get("required_features") or []):
+        conds.append("features LIKE ?")
+        args.append(f"%{feat}%")
+    stations = params.get("nearest_station_in") or []
+    if stations:
+        # Station names in DB have no 駅 suffix; strip it from input just in case
+        clean = [s.rstrip("駅") for s in stations]
+        ph = ",".join("?" * len(clean))
+        # Primary: any cached OSM station within the facility radius matches
+        # Fallback: nearest_station field for listings not yet OSM-enriched
+        conds.append(
+            f"(EXISTS (SELECT 1 FROM listing_facilities lf "
+            f"WHERE lf.listing_id=id AND lf.type='station' AND lf.name IN ({ph}))"
+            f" OR nearest_station IN ({ph}))"
+        )
+        args.extend(clean + clean)
     limit = min(int(params.get("limit", 10)), 200)
     sort_map = {
         "rent_asc":         "rent ASC",
         "rent_desc":        "rent DESC",
         "living_area_desc": "CAST(json_extract(floor_plan_data,'$.living_area_m2') AS REAL) DESC NULLS LAST",
         "size_desc":        "size_m2 DESC",
+        "age_asc":          "age_years ASC NULLS LAST",
+        "age_desc":         "age_years DESC NULLS LAST",
     }
     order = sort_map.get(params.get("sort_by", "rent_asc"), "rent ASC")
     rows = con.execute(
-        f"SELECT id,name,ward,rent,layout,size_m2,url,source,nearest_station,walk_min,thumbnail_url,priority,building_type,appliances "
+        f"SELECT id,name,ward,rent,layout,size_m2,url,source,nearest_station,walk_min,thumbnail_url,"
+        f"priority,building_type,appliances,features,has_parking,parking_fee,age_years,available_from "
         f"FROM listings WHERE {' AND '.join(conds)} ORDER BY {order} LIMIT ?",
         args + [limit]
     ).fetchall()
@@ -2237,7 +2445,7 @@ def _is_photo_request(history):
         return True, "interior"
     return True, None
 
-def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=None, current_listings=None, user_profile=None):
+def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=None, current_listings=None, user_profile=None, alert_filter=None):
     if not _anthropic:
         return {"text": "anthropic パッケージが未インストールです: pip install anthropic", "listing_ids": [], "actions": []}
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -2313,6 +2521,24 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                 f"id={s['id']} photos={s['photo_count']}"
             )
         open_ctx += "\n".join(lines) + "\n"
+
+    if alert_filter:
+        af = alert_filter
+        parts = []
+        if af.get("min_rent"):          parts.append(f"min_rent=¥{af['min_rent']:,}")
+        if af.get("max_rent"):          parts.append(f"max_rent=¥{af['max_rent']:,}")
+        if af.get("min_size_m2"):       parts.append(f"min_size={af['min_size_m2']}m²")
+        if af.get("max_walk_min"):      parts.append(f"max_walk={af['max_walk_min']}min")
+        if af.get("has_parking"):       parts.append("has_parking=required")
+        if af.get("max_age_years"):     parts.append(f"max_age={af['max_age_years']}年")
+        wards    = af.get("wards", [])
+        layouts  = af.get("layouts", [])
+        req_feat = af.get("required_features", [])
+        parts.append(f"wards=[{', '.join(wards) if wards else 'all'}]")
+        parts.append(f"layouts=[{', '.join(layouts) if layouts else 'all'}]")
+        if req_feat:
+            parts.append(f"required_features=[{', '.join(req_feat)}]")
+        open_ctx += f"Current alert filter: {', '.join(parts)}\n"
 
     for _ in range(10):
         resp = client.messages.create(
@@ -2619,12 +2845,89 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                                                                  loc["lat"], loc["lng"]),
                                     })
                                 places.sort(key=lambda x: x["distance_m"])
+                                if places:
+                                    con_chat = db()
+                                    for p in places:
+                                        con_chat.execute(
+                                            "INSERT OR IGNORE INTO listing_facilities"
+                                            " (listing_id, type, name, lat, lng, distance_m)"
+                                            " VALUES (?,?,?,?,?,?)",
+                                            (lid, place_type, p["name"], p["lat"], p["lng"], p["distance_m"]),
+                                        )
+                                    con_chat.commit()
                                 result = {"places": places, "source": "google"} if places else {
                                     "message": f"No {place_type} found within {radius}m"}
                             else:
                                 result = {"error": f"Places API: {r.get('status')}"}
                         except Exception as e:
                             result = {"error": str(e)}
+            elif block.name == "update_alert_filter":
+                inp = block.input
+                if not user_id:
+                    result = {"error": "not logged in"}
+                else:
+                    uid = int(user_id)
+                    row = con.execute(
+                        "SELECT min_rent, max_rent, min_size_m2, max_walk_min, layouts, wards, "
+                        "has_parking, max_age_years, required_features "
+                        "FROM user_settings WHERE user_id=?", (uid,)
+                    ).fetchone()
+                    cur = dict(row) if row else {}
+                    cur_layouts  = json.loads(cur.get("layouts")           or "[]")
+                    cur_wards    = json.loads(cur.get("wards")             or "[]")
+                    cur_features = json.loads(cur.get("required_features") or "[]")
+                    new_min_rent     = inp["min_rent"]          if "min_rent"          in inp else (cur.get("min_rent")     or 0)
+                    new_max_rent     = inp["max_rent"]          if "max_rent"          in inp else (cur.get("max_rent")     or 0)
+                    new_min_size     = inp["min_size_m2"]       if "min_size_m2"       in inp else (cur.get("min_size_m2")  or 0.0)
+                    new_max_walk     = inp["max_walk_min"]      if "max_walk_min"      in inp else (cur.get("max_walk_min") or 0)
+                    new_layouts      = inp["layouts"]            if "layouts"           in inp else cur_layouts
+                    raw_wards        = inp["wards"]              if "wards"             in inp else cur_wards
+                    new_wards        = []
+                    for w in raw_wards:
+                        new_wards.extend(_expand_ward_alias(w))
+                    new_has_parking  = (1 if inp["has_parking"] else None) if "has_parking" in inp else cur.get("has_parking")
+                    new_max_age      = inp["max_age_years"]     if "max_age_years"     in inp else (cur.get("max_age_years") or 0)
+                    new_req_features = inp["required_features"] if "required_features" in inp else cur_features
+                    con.execute("""
+                        INSERT INTO user_settings
+                            (user_id, min_rent, max_rent, min_size_m2, max_walk_min, layouts, wards,
+                             has_parking, max_age_years, required_features)
+                        VALUES
+                            (:uid, :min_rent, :max_rent, :min_size, :max_walk, :layouts, :wards,
+                             :has_parking, :max_age_years, :required_features)
+                        ON CONFLICT(user_id) DO UPDATE SET
+                            min_rent=excluded.min_rent, max_rent=excluded.max_rent,
+                            min_size_m2=excluded.min_size_m2, max_walk_min=excluded.max_walk_min,
+                            layouts=excluded.layouts, wards=excluded.wards,
+                            has_parking=excluded.has_parking, max_age_years=excluded.max_age_years,
+                            required_features=excluded.required_features,
+                            updated_at=datetime('now')
+                    """, {
+                        "uid":               uid,
+                        "min_rent":          int(new_min_rent),
+                        "max_rent":          int(new_max_rent),
+                        "min_size":          float(new_min_size),
+                        "max_walk":          int(new_max_walk),
+                        "layouts":           json.dumps(new_layouts),
+                        "wards":             json.dumps(new_wards),
+                        "has_parking":       new_has_parking,
+                        "max_age_years":     int(new_max_age),
+                        "required_features": json.dumps(new_req_features),
+                    })
+                    con.commit()
+                    all_actions.append({"type": "refresh_alert_filter"})
+                    result = {
+                        "ok": True,
+                        "min_rent": int(new_min_rent),
+                        "max_rent": int(new_max_rent),
+                        "min_size_m2": float(new_min_size),
+                        "max_walk_min": int(new_max_walk),
+                        "layouts": new_layouts,
+                        "wards": new_wards,
+                        "has_parking": bool(new_has_parking),
+                        "max_age_years": int(new_max_age),
+                        "required_features": new_req_features,
+                    }
             else:
                 result = {"error": "unknown tool"}
             tool_results.append({
@@ -2708,9 +3011,12 @@ def chat_send():
     saved_listings_ctx = [dict(r) for r in saved_rows]
 
     user_profile = {}
+    alert_filter = None
     if user_id:
         prow = con.execute(
-            "SELECT commute_dests, personal_info FROM user_settings WHERE user_id=?",
+            "SELECT commute_dests, personal_info, min_rent, max_rent, min_size_m2, max_walk_min, "
+            "layouts, wards, has_parking, max_age_years, required_features "
+            "FROM user_settings WHERE user_id=?",
             (int(user_id),)
         ).fetchone()
         if prow:
@@ -2718,10 +3024,21 @@ def chat_send():
                 "commute_dests": json.loads(prow["commute_dests"] or "[]"),
                 "personal_info": json.loads(prow["personal_info"] or "{}"),
             }
+            alert_filter = {
+                "min_rent":          prow["min_rent"]     or 0,
+                "max_rent":          prow["max_rent"]     or 0,
+                "min_size_m2":       prow["min_size_m2"]  or 0.0,
+                "max_walk_min":      prow["max_walk_min"] or 0,
+                "layouts":           json.loads(prow["layouts"]           or "[]"),
+                "wards":             json.loads(prow["wards"]             or "[]"),
+                "has_parking":       bool(prow["has_parking"]),
+                "max_age_years":     prow["max_age_years"] or 0,
+                "required_features": json.loads(prow["required_features"] or "[]"),
+            }
 
     result = _call_claude(history, con, open_listing=open_listing, user_id=user_id,
                           saved_listings=saved_listings_ctx, current_listings=current_listings,
-                          user_profile=user_profile)
+                          user_profile=user_profile, alert_filter=alert_filter)
 
     con.execute(
         "INSERT INTO chat_messages (session_id, role, content, listing_ids) VALUES (?,?,?,?)",

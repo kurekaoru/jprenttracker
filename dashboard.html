@@ -9,7 +9,7 @@
   var l=localStorage.getItem('jkktrackr_lang')||'ja';
   document.documentElement.lang=l;
   var s=document.createElement('script');s.async=true;
-  s.src='https://maps.googleapis.com/maps/api/js?key=AIzaSyBHw3d6FU73jXiJxUJoZ4MlDGu2CmhC4i8&libraries=places,geometry&language='+l+'&callback=initMap';
+  s.src='https://maps.googleapis.com/maps/api/js?key=AIzaSyBHw3d6FU73jXiJxUJoZ4MlDGu2CmhC4i8&libraries=geometry&language='+l+'&callback=initMap';
   document.head.appendChild(s);
 })();
 </script>
@@ -513,6 +513,16 @@
   .acct-tab-content { flex:1; min-width:0; padding:10px 0 0 12px; }
   .acct-tab-pane { display:none; }
   .acct-tab-pane.active { display:block; }
+  /* Filter vertical tabs */
+  .ftabs { display:flex; border-top:1px solid var(--border); margin-top:8px; min-height:0; }
+  .ftab-bar { display:flex; flex-direction:column; border-right:1px solid var(--border); flex-shrink:0; padding-top:6px; }
+  .ftab-btn { writing-mode:vertical-rl; background:none; border:none; cursor:pointer; color:var(--muted); font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; padding:12px 7px; transition:color .15s,background .15s; font-family:var(--font); white-space:nowrap; }
+  .ftab-btn:hover { color:var(--text); }
+  .ftab-btn.active { color:var(--accent); background:rgba(93,202,165,0.12); }
+  .ftab-content { flex:1; min-width:0; padding:10px 0 4px 12px; overflow-y:auto; max-height:calc(100vh - 205px); }
+  .ftab-pane { display:none; }
+  .ftab-pane.active { display:block; }
+  .station-override-banner { background:rgba(239,159,39,0.14); border:1px solid rgba(239,159,39,0.35); border-radius:6px; padding:7px 9px; font-size:10px; color:var(--warn); margin-bottom:10px; line-height:1.55; }
   .prop-tab-btn {
     writing-mode: vertical-rl;
     background: none; border: none; cursor: pointer;
@@ -1070,24 +1080,84 @@
           <button class="view-toggle-btn"         id="vtb-starred"  onclick="setViewMode('starred')"  data-i18n="view_saved">★ Saved</button>
           <button class="view-toggle-btn"         id="vtb-filtered" onclick="setViewMode('filtered')" data-i18n="view_filtered">Filtered</button>
         </div>
-        <p class="section-label" data-i18n="area">エリア（区・市）</p>
-        <div class="chips" id="ward-chips"></div>
-        <p class="section-label" style="margin-top:10px;" data-i18n="rent">家賃</p>
-        <label data-i18n="min_rent">最低家賃 (円)</label>
-        <input type="number" id="min-rent" placeholder="0" step="1000" oninput="applyMapFilters()" />
-        <label data-i18n="max_rent_label">上限家賃 (円)</label>
-        <input type="number" id="max-rent" data-i18n-ph="max_rent_ph" placeholder="例: 200000 (0=上限なし)" step="1000" oninput="applyMapFilters()" />
-        <p class="section-label" style="margin-top:10px;" data-i18n="layout">間取り</p>
-        <div class="layout-chips" id="layout-chips"></div>
-        <p class="section-label" style="margin-top:10px;" data-i18n="floor_area">専有面積</p>
-        <label data-i18n="min_area">最低面積 (m²)</label>
-        <input type="number" id="min-size" placeholder="0" step="1" oninput="applyMapFilters()" />
-        <p class="section-label" style="margin-top:10px;" data-i18n="walk_station">駅徒歩</p>
-        <label data-i18n="max_walk">最大徒歩分数 (分)</label>
-        <input type="number" id="max-walk" data-i18n-ph="max_walk_ph" placeholder="例: 10 (0=上限なし)" step="1" min="0" oninput="applyMapFilters()" />
-        <p class="section-label" style="margin-top:10px;" data-i18n="source">データソース</p>
-        <div class="chips" id="source-chips"></div>
-        <button class="save-btn" id="save-btn" onclick="saveConfig()" style="margin-top:14px;" data-i18n="save_settings">設定を保存</button>
+        <div class="ftabs">
+          <div class="ftab-bar">
+            <button class="ftab-btn active" onclick="switchFTab(this,'ftab-district')" data-i18n="ftab_district">地区</button>
+            <button class="ftab-btn" onclick="switchFTab(this,'ftab-station')" data-i18n="ftab_station">駅</button>
+            <button class="ftab-btn" onclick="switchFTab(this,'ftab-facilities')" data-i18n="ftab_facilities">設備</button>
+            <button class="ftab-btn" onclick="switchFTab(this,'ftab-appliances')" data-i18n="ftab_appliances">家電</button>
+            <button class="ftab-btn" onclick="switchFTab(this,'ftab-rent')" data-i18n="ftab_rent">家賃</button>
+            <button class="ftab-btn" onclick="switchFTab(this,'ftab-other')" data-i18n="ftab_other">その他</button>
+          </div>
+          <div class="ftab-content">
+
+            <!-- District -->
+            <div class="ftab-pane active" id="ftab-district">
+              <p class="section-label" style="margin-bottom:6px;" data-i18n="area">エリア（区・市）</p>
+              <div id="ward-chips"></div>
+            </div>
+
+            <!-- Station -->
+            <div class="ftab-pane" id="ftab-station">
+              <div class="station-override-banner" id="station-override-banner" style="display:none;">⚠ 区が選択されているため、駅フィルターは通知では無効です</div>
+              <p class="section-label" style="margin-bottom:4px;">駅名（通知フィルター用）</p>
+              <p style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.5;">カンマ区切りで入力。マップ表示には適用されません。</p>
+              <textarea id="filter-stations" rows="4" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-family:var(--font);font-size:12px;resize:vertical;" placeholder="例: 新宿, 渋谷, 大手町"></textarea>
+            </div>
+
+            <!-- Facilities -->
+            <div class="ftab-pane" id="ftab-facilities">
+              <div class="layer-row">
+                <span class="layer-label">駐車場あり</span>
+                <label class="tog"><input type="checkbox" id="filter-parking" onchange="applyMapFilters()"><span class="tog-slider"></span></label>
+              </div>
+              <div class="layer-row">
+                <span class="layer-label">即入居可能のみ</span>
+                <label class="tog"><input type="checkbox" id="filter-available-now" onchange="applyMapFilters()"><span class="tog-slider"></span></label>
+              </div>
+              <div class="layer-row" style="border-bottom:none;align-items:center;">
+                <span class="layer-label" style="flex:1;min-width:0;">築年数上限</span>
+                <div style="display:flex;align-items:center;gap:4px;">
+                  <input type="number" id="filter-max-age" placeholder="−" step="5" min="0" style="width:58px;margin:0;padding:4px 6px;font-size:12px;" oninput="applyMapFilters()">
+                  <span style="font-size:11px;color:var(--muted);">年以下</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Appliances -->
+            <div class="ftab-pane" id="ftab-appliances">
+              <p class="section-label" style="margin-bottom:8px;">家電・設備（複数選択可）</p>
+              <div class="chips" id="appliance-chips"></div>
+            </div>
+
+            <!-- Rent & Size -->
+            <div class="ftab-pane" id="ftab-rent">
+              <p class="section-label" data-i18n="rent">家賃</p>
+              <label data-i18n="min_rent">最低家賃 (円)</label>
+              <input type="number" id="min-rent" placeholder="0" step="1000" oninput="applyMapFilters()" />
+              <label data-i18n="max_rent_label">上限家賃 (円)</label>
+              <input type="number" id="max-rent" data-i18n-ph="max_rent_ph" placeholder="例: 200000 (0=上限なし)" step="1000" oninput="applyMapFilters()" />
+              <p class="section-label" style="margin-top:10px;" data-i18n="floor_area">専有面積</p>
+              <label data-i18n="min_area">最低面積 (m²)</label>
+              <input type="number" id="min-size" placeholder="0" step="1" oninput="applyMapFilters()" />
+              <p class="section-label" style="margin-top:10px;" data-i18n="walk_station">駅徒歩</p>
+              <label data-i18n="max_walk">最大徒歩分数 (分)</label>
+              <input type="number" id="max-walk" data-i18n-ph="max_walk_ph" placeholder="例: 10 (0=上限なし)" step="1" min="0" oninput="applyMapFilters()" />
+              <p class="section-label" style="margin-top:10px;" data-i18n="layout">間取り</p>
+              <div class="layout-chips" id="layout-chips"></div>
+              <p class="section-label" style="margin-top:10px;" data-i18n="source">データソース</p>
+              <div class="chips" id="source-chips"></div>
+            </div>
+
+            <!-- Others -->
+            <div class="ftab-pane" id="ftab-other">
+              <p class="section-label" style="margin-bottom:8px;">特別プログラム・割引</p>
+              <div class="chips" id="program-chips"></div>
+            </div>
+
+          </div>
+        </div>
+        <button class="save-btn" id="save-btn" onclick="saveConfig()" style="margin-top:12px;" data-i18n="save_settings">設定を保存</button>
         <div class="saved-msg" id="saved-msg"></div>
       </div>
 
@@ -1310,7 +1380,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-25 22:22 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-26 11:55 JST</p>
       </div>
 
 
@@ -1783,6 +1853,12 @@ const STRINGS = {
   view_saved:           { ja:'★ 保存済み',               en:'★ Saved',           uk:'★ Збережені' },
   view_filtered:        { ja:'絞り込み',                 en:'Filtered',          uk:'Відфільтровані' },
   panel_filter:         { ja:'フィルター',               en:'Filter',            uk:'Фільтр' },
+  ftab_district:        { ja:'地区',                    en:'District',          uk:'Район' },
+  ftab_station:         { ja:'駅',                     en:'Station',           uk:'Станція' },
+  ftab_facilities:      { ja:'設備',                    en:'Facilities',        uk:'Умови' },
+  ftab_appliances:      { ja:'家電',                    en:'Appliances',        uk:'Техніка' },
+  ftab_rent:            { ja:'家賃',                    en:'Rent',              uk:'Оренда' },
+  ftab_other:           { ja:'その他',                  en:'Others',            uk:'Інше' },
   panel_listings:       { ja:'空室一覧',                en:'Vacancies',         uk:'Вакансії' },
   panel_notif:          { ja:'通知設定',                en:'Alerts',            uk:'Сповіщення' },
   tab_account:          { ja:'アカウント',              en:'Account',           uk:'Акаунт' },
@@ -2018,9 +2094,13 @@ const DEFAULT_WARDS   = new Set([...KU, ...SI]);   // Kanagawa is opt-in
 const DEFAULT_LAYOUTS = new Set(LAYOUTS);
 const DEFAULT_SOURCES = new Set(['jkk', 'ur']);
 
-let selectedWards   = new Set(DEFAULT_WARDS);
-let selectedLayouts = new Set(DEFAULT_LAYOUTS);
-let filterSources   = new Set(DEFAULT_SOURCES);
+let selectedWards    = new Set(DEFAULT_WARDS);
+let selectedLayouts  = new Set(DEFAULT_LAYOUTS);
+let filterSources    = new Set(DEFAULT_SOURCES);
+let selectedFeatures = new Set();
+
+const APPLIANCES = ['エアコン','浴室乾燥機','追い焚き','自動お湯張り','ウォシュレット','乾燥機','食洗機','BS・CS'];
+const PROGRAMS   = ['近居割','子育て割','高齢者割引','バリアフリー','大学連携'];
 let _viewMode = 'all'; // 'all' | 'starred' | 'filtered'
 
 function makeChip(label, set, container, onChange, displayLabel) {
@@ -2040,6 +2120,20 @@ function addSectionLabel(container, text, marginTop = 8) {
   el.style.cssText = `font-size:10px;color:var(--muted);margin-bottom:4px;margin-top:${marginTop}px;font-weight:600;letter-spacing:.05em`;
   el.textContent = text;
   container.appendChild(el);
+}
+
+function switchFTab(btn, id) {
+  btn.closest('.ftab-bar').querySelectorAll('.ftab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  btn.closest('.ftabs').querySelectorAll('.ftab-pane').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function updateStationBanner() {
+  const totalWards = KU.length + SI.length + YOKOHAMA.length + KAWASAKI.length + SAGAMIHARA.length;
+  const wardFilterActive = selectedWards.size > 0 && selectedWards.size < totalWards;
+  const banner = document.getElementById('station-override-banner');
+  if (banner) banner.style.display = wardFilterActive ? 'block' : 'none';
 }
 
 function buildChips() {
@@ -2064,6 +2158,11 @@ function buildChips() {
   addGroup(wc, 'ward_kawasaki',   KAWASAKI);
   addGroup(wc, 'ward_sagamihara', SAGAMIHARA);
 
+  const ac = document.getElementById('appliance-chips');
+  const pc = document.getElementById('program-chips');
+  if (ac) { ac.innerHTML = ''; APPLIANCES.forEach(f => makeChip(f, selectedFeatures, ac, applyMapFilters, f)); }
+  if (pc) { pc.innerHTML = ''; PROGRAMS.forEach(f => makeChip(f, selectedFeatures, pc, applyMapFilters, f)); }
+
   LAYOUTS.forEach(l => makeChip(l, selectedLayouts, lc, applyMapFilters, l === '4LDK以上' ? t('layout_4ldkp') : l));
 
   [['jkk', '🏠 JKK'], ['ur', '🏢 UR']].forEach(([val, lbl]) => {
@@ -2077,6 +2176,7 @@ function buildChips() {
     };
     sc.appendChild(c);
   });
+  updateStationBanner();
 }
 
 function loadConfig() {
@@ -2085,9 +2185,18 @@ function loadConfig() {
   document.getElementById('max-rent').value = d.max_rent || '';
   document.getElementById('min-size').value = d.min_size_m2 || '';
   document.getElementById('max-walk').value = d.max_walk_min || '';
-  selectedWards   = d.wards?.length   ? new Set(d.wards)   : new Set(DEFAULT_WARDS);
-  selectedLayouts = d.layouts?.length ? new Set(d.layouts) : new Set(DEFAULT_LAYOUTS);
-  filterSources   = new Set(DEFAULT_SOURCES);
+  const fpEl = document.getElementById('filter-parking');
+  const faEl = document.getElementById('filter-available-now');
+  const fmEl = document.getElementById('filter-max-age');
+  const fsEl = document.getElementById('filter-stations');
+  if (fpEl) fpEl.checked   = !!d.has_parking;
+  if (faEl) faEl.checked   = !!d.available_now;
+  if (fmEl) fmEl.value     = d.max_age_years || '';
+  if (fsEl) fsEl.value     = (d.filter_stations || []).join(', ');
+  selectedWards    = d.wards?.length   ? new Set(d.wards)   : new Set(DEFAULT_WARDS);
+  selectedLayouts  = d.layouts?.length ? new Set(d.layouts) : new Set(DEFAULT_LAYOUTS);
+  selectedFeatures = new Set(d.required_features || []);
+  filterSources    = new Set(DEFAULT_SOURCES);
   buildChips();
   applyMapFilters();
   loadUserLayers();
@@ -2100,13 +2209,23 @@ async function saveConfig() {
   btn.classList.add('saving');
   btn.textContent = t('saving');
 
+  const allWardCount = KU.length + SI.length + YOKOHAMA.length + KAWASAKI.length + SAGAMIHARA.length;
+  const savedWards   = selectedWards.size >= allWardCount ? [] : [...selectedWards];
+  const stationsRaw  = (document.getElementById('filter-stations')?.value || '').trim();
+  const stations     = stationsRaw ? stationsRaw.split(/[,\n、]+/).map(s => s.trim()).filter(Boolean) : [];
+
   const payload = {
-    min_rent:     parseInt(document.getElementById('min-rent').value) || 0,
-    max_rent:     parseInt(document.getElementById('max-rent').value) || 0,
-    layouts:      [...selectedLayouts],
-    wards:        [...selectedWards],
-    min_size_m2:  parseFloat(document.getElementById('min-size').value) || 0,
-    max_walk_min: parseInt(document.getElementById('max-walk').value) || 0,
+    min_rent:         parseInt(document.getElementById('min-rent').value) || 0,
+    max_rent:         parseInt(document.getElementById('max-rent').value) || 0,
+    layouts:          [...selectedLayouts],
+    wards:            savedWards,
+    min_size_m2:      parseFloat(document.getElementById('min-size').value) || 0,
+    max_walk_min:     parseInt(document.getElementById('max-walk').value) || 0,
+    has_parking:      document.getElementById('filter-parking')?.checked ? 1 : null,
+    available_now:    document.getElementById('filter-available-now')?.checked ? 1 : 0,
+    max_age_years:    parseInt(document.getElementById('filter-max-age')?.value) || 0,
+    required_features: [...selectedFeatures],
+    filter_stations:  savedWards.length > 0 ? [] : stations,
   };
 
   if (AUTH.token) {
@@ -2179,6 +2298,8 @@ let _pendingCount = 0;
 let _markers = {};
 let _selectedId = null;
 let _transitPolylines = [];
+const _routeCache    = new Map(); // key: `${listingId}_${dest}_${mode}` → DirectionsResult
+const _facRouteCache = new Map(); // key: `${listingId}_${lat}_${lng}` → DirectionsResult
 let _commuteDest  = '';
 let _commuteDests = [];   // server-persisted list of recent destinations
 let _savedListings = new Set(); // server-persisted saved listing IDs
@@ -2447,21 +2568,11 @@ function clearTransitPolylines() {
 }
 
 const _mapLayers = { transit: true, roadLabels: true, neighborhoods: true, parks: true };
-const _poiLayers  = { konbini: true, supermarket: true, kindergarten: true, clinic: true };
 const _facTypeLayers = {
   konbini: true, supermarket: true, kindergarten: true, school: true,
   hospital: true, clinic: true, pharmacy: true, park: true, station: true,
 };
-const _poiMarkers = { konbini: [], supermarket: [], kindergarten: [], clinic: [] };
 const POI_ZOOM_THRESHOLD = 13;
-const _poiConfig  = {
-  konbini:      { type: 'convenience_store', color: '#7C3AED' },
-  supermarket:  { type: 'supermarket',       color: '#EA580C' },
-  kindergarten: { type: 'school', keyword: '幼稚園', color: '#DB2777' },
-  clinic:       { type: 'hospital',          color: '#0369A1' },
-};
-let _placesService = null;
-let _poiRefetchTimeout = null;
 let _layerSaveTimer = null;
 
 function buildMapStyle() {
@@ -2617,77 +2728,8 @@ function _applyZoomVisibility() {
     marker.setVisible(zoomOk && _facTypeLayers[facility.type] !== false);
   });
   if (_facilityCircle) _facilityCircle.setVisible(zoomOk);
-  Object.values(_poiMarkers).forEach(arr => arr.forEach(m => m.setVisible(zoomOk)));
 }
 
-function clearPoiMarkers(layer) {
-  (_poiMarkers[layer] || []).forEach(m => m.setMap(null));
-  _poiMarkers[layer] = [];
-}
-
-const _POI_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-
-function _poiCacheKey(layer, boundsKey) {
-  return `poi:${layer}:${boundsKey}`;
-}
-
-function _renderPoiResults(layer, results) {
-  const color = (_facilityIconDefs[layer] || {}).color || '#888888';
-  _poiMarkers[layer] = results.map(place => {
-    const pos = typeof place.lat === 'number'
-      ? new google.maps.LatLng(place.lat, place.lng)
-      : place.geometry.location;
-    const marker = new google.maps.Marker({
-      position: pos, map, icon: facilityMarkerIcon(layer),
-      title: place.name, zIndex: 5,
-    });
-    marker.addListener('click', () => {
-      _facPopup.setContent(_facPopupHtml(color, place.name, facilityTypeLabel(layer), null));
-      _facPopup.open({ map, anchor: marker });
-      const ll = pos.lat ? pos : new google.maps.LatLng(place.lat, place.lng);
-      showFacilityRoute(ll.lat(), ll.lng());
-    });
-    return marker;
-  });
-  _applyZoomVisibility();
-}
-
-function fetchPoiMarkers(layer) {
-  if (!_placesService || !map?.getBounds()) return;
-  const cfg = _poiConfig[layer];
-  if (!cfg) return;
-
-  const c = map.getCenter();
-  const boundsKey = `${c.lat().toFixed(3)},${c.lng().toFixed(3)},${map.getZoom()}`;
-  const cacheKey = _poiCacheKey(layer, boundsKey);
-
-  // Check sessionStorage cache
-  try {
-    const cached = sessionStorage.getItem(cacheKey);
-    if (cached) {
-      const { ts, data } = JSON.parse(cached);
-      if (Date.now() - ts < _POI_CACHE_TTL_MS) {
-        _renderPoiResults(layer, data);
-        return;
-      }
-      sessionStorage.removeItem(cacheKey);
-    }
-  } catch (e) {}
-
-  const req = { bounds: map.getBounds(), type: cfg.type };
-  if (cfg.keyword) req.keyword = cfg.keyword;
-  _placesService.nearbySearch(req, (results, status) => {
-    if (status !== google.maps.places.PlacesServiceStatus.OK &&
-        status !== google.maps.places.PlacesServiceStatus.ZERO_RESULTS) return;
-    const items = (results || []).map(p => ({
-      name: p.name,
-      lat: p.geometry.location.lat(),
-      lng: p.geometry.location.lng(),
-    }));
-    try { sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: items })); } catch (e) {}
-    _renderPoiResults(layer, items);
-  });
-}
 
 function toggleFacType(type, on) {
   _facTypeLayers[type] = on;
@@ -2696,23 +2738,6 @@ function toggleFacType(type, on) {
   _facilityMarkerObjs.forEach(({ marker, facility }) => {
     if (facility.type === type) marker.setVisible(zoomOk && on);
   });
-  // For POI types, also control Google Places markers
-  if (type in _poiLayers) {
-    _poiLayers[type] = on;
-    clearPoiMarkers(type);
-    if (on) fetchPoiMarkers(type);
-    saveLayerPrefs();
-  }
-  if (_facilityMarkerObjs.length)
-    _renderFacilitySection(_facilityMarkerObjs.map(o => o.facility));
-}
-
-function togglePoiLayer(layer, on) {
-  _poiLayers[layer] = on;
-  if (layer in _facTypeLayers) _facTypeLayers[layer] = on;
-  clearPoiMarkers(layer);
-  if (on) fetchPoiMarkers(layer);
-  saveLayerPrefs();
   if (_facilityMarkerObjs.length)
     _renderFacilitySection(_facilityMarkerObjs.map(o => o.facility));
 }
@@ -2720,7 +2745,7 @@ function togglePoiLayer(layer, on) {
 function saveLayerPrefs() {
   clearTimeout(_layerSaveTimer);
   _layerSaveTimer = setTimeout(async () => {
-    const layers = { ..._mapLayers, ..._poiLayers };
+    const layers = { ..._mapLayers };
     if (AUTH.token) {
       try {
         await fetch(`${API}/user/map_layers`, {
@@ -2759,17 +2784,6 @@ async function loadUserLayers() {
     }
   });
   if (map) map.setOptions({ styles: buildMapStyle() });
-
-  // Apply POI layers
-  Object.keys(_poiLayers).forEach(k => {
-    if (k in layers) {
-      const was = _poiLayers[k];
-      _poiLayers[k] = !!layers[k];
-      const el = document.getElementById(`poi-${k}`);
-      if (el) el.checked = !!layers[k];
-      if (!was && !!layers[k]) fetchPoiMarkers(k);
-    }
-  });
 }
 
 // ── User profile (lang, commute dests, AI demographics) ──────────────────────
@@ -2939,27 +2953,8 @@ function initMap() {
   directionsService = new google.maps.DirectionsService();
   directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: true });
   directionsRenderer.setMap(map);
-  _placesService = new google.maps.places.PlacesService(map);
   _facPopup = new google.maps.InfoWindow({ disableAutoPan: true, maxWidth: 220 });
   window._closeFacPopup = () => { _facPopup.close(); clearDirections(); };
-
-  let _lastPoiBoundsKey = null;
-  map.addListener('idle', () => {
-    if (!Object.values(_poiLayers).some(Boolean)) return;
-    if (map.getZoom() < POI_ZOOM_THRESHOLD) return;
-    // Only re-fetch if the map centre moved by more than ~300m
-    const c = map.getCenter();
-    const boundsKey = `${c.lat().toFixed(3)},${c.lng().toFixed(3)},${map.getZoom()}`;
-    if (boundsKey === _lastPoiBoundsKey) return;
-    clearTimeout(_poiRefetchTimeout);
-    _poiRefetchTimeout = setTimeout(() => {
-      _lastPoiBoundsKey = boundsKey;
-      Object.keys(_poiLayers).filter(k => _poiLayers[k]).forEach(layer => {
-        clearPoiMarkers(layer);
-        fetchPoiMarkers(layer);
-      });
-    }, 800);
-  });
 
   map.addListener('zoom_changed', _applyZoomVisibility);
 
@@ -3288,6 +3283,28 @@ function showRoute(listingId, travelMode) {
       strokeColor: '#4285F4', strokeWeight: 5, strokeOpacity: 0.9, icons: [],
     },
   });
+
+  const _applyRouteResult = (result) => {
+    if (isWalking) {
+      directionsRenderer.setDirections({ routes: [] });
+      _renderWalkingPolylines(result);
+      const leg = result.routes[0].legs[0];
+      const allPts = leg.steps.flatMap(s => decodePolyline(s.polyline.points));
+      const mid = allPts.length ? new google.maps.LatLng(allPts[Math.floor(allPts.length / 2)].lat, allPts[Math.floor(allPts.length / 2)].lng) : null;
+      showRouteInfo(leg.distance?.text, leg.duration?.text, mid, leg.end_location);
+    } else {
+      directionsRenderer.setDirections(result);
+      const leg = result.routes[0].legs[0];
+      const path = result.routes[0].overview_path;
+      const midLatLng = path && path.length ? path[Math.floor(path.length / 2)] : null;
+      showRouteInfo(leg.distance?.text, leg.duration?.text, midLatLng, leg.end_location);
+    }
+  };
+
+  const routeKey = `${listingId}_${dest}_${travelMode}`;
+  const cachedRoute = _routeCache.get(routeKey);
+  if (cachedRoute) { _applyRouteResult(cachedRoute); return; }
+
   directionsService.route({
     origin: entry.marker.getPosition(),
     destination: dest,
@@ -3295,20 +3312,8 @@ function showRoute(listingId, travelMode) {
     region: 'JP',
   }, (result, status) => {
     if (status === 'OK') {
-      if (isWalking) {
-        directionsRenderer.setDirections({ routes: [] });
-        _renderWalkingPolylines(result);
-        const leg = result.routes[0].legs[0];
-        const allPts = leg.steps.flatMap(s => decodePolyline(s.polyline.points));
-        const mid = allPts.length ? new google.maps.LatLng(allPts[Math.floor(allPts.length / 2)].lat, allPts[Math.floor(allPts.length / 2)].lng) : null;
-        showRouteInfo(leg.distance?.text, leg.duration?.text, mid, leg.end_location);
-      } else {
-        directionsRenderer.setDirections(result);
-        const leg = result.routes[0].legs[0];
-        const path = result.routes[0].overview_path;
-        const midLatLng = path && path.length ? path[Math.floor(path.length / 2)] : null;
-        showRouteInfo(leg.distance?.text, leg.duration?.text, midLatLng, leg.end_location);
-      }
+      _routeCache.set(routeKey, result);
+      _applyRouteResult(result);
     } else {
       alert(t('route_error') + status + t('route_error_hint'));
     }
@@ -3368,6 +3373,18 @@ function showFacilityRoute(facLat, facLng) {
   if (!_facListing || !directionsService) return;
   clearTransitPolylines();
   directionsRenderer.setDirections({ routes: [] });
+
+  const facKey = `${_facListing.id}_${facLat.toFixed(4)}_${facLng.toFixed(4)}`;
+  const cachedFac = _facRouteCache.get(facKey);
+  if (cachedFac) {
+    _renderWalkingPolylines(cachedFac);
+    const leg = cachedFac.routes[0].legs[0];
+    const allPts = leg.steps.flatMap(s => decodePolyline(s.polyline.points));
+    const mid = allPts.length ? new google.maps.LatLng(allPts[Math.floor(allPts.length / 2)].lat, allPts[Math.floor(allPts.length / 2)].lng) : null;
+    showRouteInfo(leg.distance?.text, leg.duration?.text, mid, leg.end_location);
+    return;
+  }
+
   directionsService.route({
     origin:      { lat: _facListing.lat, lng: _facListing.lng },
     destination: { lat: facLat, lng: facLng },
@@ -3387,6 +3404,7 @@ function showFacilityRoute(facLat, facLng) {
       _transitPolylines.push(pl);
       return;
     }
+    _facRouteCache.set(facKey, result);
     _renderWalkingPolylines(result);
     const leg  = result.routes[0].legs[0];
     const steps = leg.steps;
@@ -3468,10 +3486,14 @@ function setViewMode(mode) {
 
 function applyMapFilters() {
   if (!map) return;
-  const minRent = parseInt(document.getElementById('min-rent').value) || 0;
-  const maxRent = parseInt(document.getElementById('max-rent').value) || 0;
-  const minSize = parseFloat(document.getElementById('min-size').value) || 0;
-  const maxWalk = parseInt(document.getElementById('max-walk').value) || 0;
+  const minRent      = parseInt(document.getElementById('min-rent').value) || 0;
+  const maxRent      = parseInt(document.getElementById('max-rent').value) || 0;
+  const minSize      = parseFloat(document.getElementById('min-size').value) || 0;
+  const maxWalk      = parseInt(document.getElementById('max-walk').value) || 0;
+  const hasParking   = document.getElementById('filter-parking')?.checked;
+  const availNow     = document.getElementById('filter-available-now')?.checked;
+  const maxAge       = parseInt(document.getElementById('filter-max-age')?.value) || 0;
+  updateStationBanner();
 
   Object.values(_markers).forEach(e => e.marker.setMap(null));
   _markers = {};
@@ -3490,6 +3512,12 @@ function applyMapFilters() {
       if (maxRent > 0 && l.rent > maxRent) return;
       if (minSize > 0 && l.size_m2 < minSize) return;
       if (maxWalk > 0 && (l.walk_min == null || l.walk_min > maxWalk)) return;
+      if (hasParking && !l.has_parking) return;
+      if (availNow && !(l.available_from || '').startsWith('随時')) return;
+      if (maxAge > 0 && l.age_years != null && l.age_years > maxAge) return;
+      for (const feat of selectedFeatures) {
+        if (!(l.features || '').includes(feat)) return;
+      }
     }
 
     _filteredListings.push(l);
@@ -4212,6 +4240,8 @@ function chatExecuteAction(action) {
     renderAvailableTable();
     renderFavouritesTable();
     applyMapFilters();
+  } else if (action.type === 'refresh_alert_filter') {
+    loadUserSettings();
   } else if (action.type === 'show_driving_route') {
     if (!map || !directionsService) return;
     clearTransitPolylines();
@@ -4648,9 +4678,18 @@ async function loadUserSettings() {
     document.getElementById('max-rent').value = d.max_rent || '';
     document.getElementById('min-size').value = d.min_size_m2 || '';
     document.getElementById('max-walk').value = d.max_walk_min || '';
-    selectedWards   = d.wards?.length   ? new Set(d.wards)   : new Set(DEFAULT_WARDS);
-    selectedLayouts = d.layouts?.length ? new Set(d.layouts) : new Set(DEFAULT_LAYOUTS);
-    filterSources   = new Set(DEFAULT_SOURCES);
+    const fpEl = document.getElementById('filter-parking');
+    const faEl = document.getElementById('filter-available-now');
+    const fmEl = document.getElementById('filter-max-age');
+    const fsEl = document.getElementById('filter-stations');
+    if (fpEl) fpEl.checked = !!d.has_parking;
+    if (faEl) faEl.checked = !!d.available_now;
+    if (fmEl) fmEl.value   = d.max_age_years || '';
+    if (fsEl) fsEl.value   = (d.filter_stations || []).join(', ');
+    selectedWards    = d.wards?.length   ? new Set(d.wards)   : new Set(DEFAULT_WARDS);
+    selectedLayouts  = d.layouts?.length ? new Set(d.layouts) : new Set(DEFAULT_LAYOUTS);
+    selectedFeatures = new Set(d.required_features || []);
+    filterSources    = new Set(DEFAULT_SOURCES);
     buildChips();
     applyMapFilters();
   } catch {}

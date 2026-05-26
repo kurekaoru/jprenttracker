@@ -96,6 +96,14 @@ def init_db() -> sqlite3.Connection:
         "  downloaded_at TEXT,"
         "  UNIQUE(listing_id, url)"
         ");"
+        "CREATE TABLE IF NOT EXISTS route_cache ("
+        "  origin      TEXT NOT NULL,"
+        "  destination TEXT NOT NULL,"
+        "  mode        TEXT NOT NULL,"
+        "  response    TEXT NOT NULL,"
+        "  cached_at   TEXT NOT NULL,"
+        "  PRIMARY KEY (origin, destination, mode)"
+        ");"
     )
     cols = {row[1] for row in con.execute("PRAGMA table_info(listings)")}
     for col, defn in [
@@ -114,6 +122,12 @@ def init_db() -> sqlite3.Connection:
         ("building_type",   "TEXT"),
         ("appliances",      "TEXT"),
         ("detail_text",     "TEXT"),
+        ("features",        "TEXT"),
+        ("has_parking",     "INTEGER DEFAULT 0"),
+        ("parking_fee",     "INTEGER DEFAULT 0"),
+        ("age_years",       "INTEGER"),
+        ("available_from",  "TEXT"),
+        ("nearby_features", "TEXT"),
     ]:
         if col not in cols:
             con.execute(f"ALTER TABLE listings ADD COLUMN {col} {defn}")
@@ -199,6 +213,27 @@ def matches_criteria(listing: dict, config: dict) -> bool:
     min_size = config.get("min_size_m2", 0)
     if min_size and listing.get("size_m2", 0) < min_size:
         return False
+    max_walk = config.get("max_walk_min", 0)
+    if max_walk and listing.get("walk_min") and listing["walk_min"] > max_walk:
+        return False
+    if config.get("has_parking") == 1 and not listing.get("has_parking"):
+        return False
+    max_age = config.get("max_age_years", 0)
+    if max_age and listing.get("age_years") and listing["age_years"] > max_age:
+        return False
+    required_features = config.get("required_features", [])
+    if required_features:
+        feature_str = listing.get("features") or ""
+        for feat in required_features:
+            if feat not in feature_str:
+                return False
+    if config.get("available_now") and not (listing.get("available_from") or "").startswith("随時"):
+        return False
+    filter_stations = config.get("filter_stations", [])
+    if filter_stations and not config.get("wards"):
+        ns = (listing.get("nearest_station") or "").rstrip("駅")
+        if ns not in filter_stations:
+            return False
     return True
 
 
@@ -355,12 +390,17 @@ def send_telegram(listing: dict, target: str) -> bool:
 def get_user_targets(con):
     cur = con.execute("""
         SELECT un.id AS notif_id, un.user_id, un.type, un.target,
-               COALESCE(us.min_rent,     0)    AS min_rent,
-               COALESCE(us.max_rent,     0)    AS max_rent,
-               COALESCE(us.min_size_m2,  0)    AS min_size_m2,
-               COALESCE(us.max_walk_min, 0)    AS max_walk_min,
-               COALESCE(us.layouts, '[]')       AS layouts,
-               COALESCE(us.wards,   '[]')       AS wards
+               COALESCE(us.min_rent,          0)    AS min_rent,
+               COALESCE(us.max_rent,          0)    AS max_rent,
+               COALESCE(us.min_size_m2,       0)    AS min_size_m2,
+               COALESCE(us.max_walk_min,      0)    AS max_walk_min,
+               COALESCE(us.layouts,       '[]')     AS layouts,
+               COALESCE(us.wards,         '[]')     AS wards,
+               COALESCE(us.has_parking,     NULL)   AS has_parking,
+               COALESCE(us.max_age_years,     0)    AS max_age_years,
+               COALESCE(us.required_features,'[]')  AS required_features,
+               COALESCE(us.filter_stations,  '[]')  AS filter_stations,
+               COALESCE(us.available_now,      0)   AS available_now
           FROM user_notifications un
           LEFT JOIN user_settings us ON us.user_id = un.user_id
          WHERE un.enabled = 1
@@ -369,8 +409,10 @@ def get_user_targets(con):
     result = []
     for r in cur.fetchall():
         d = dict(zip(cols, r))
-        d["layouts"] = json.loads(d.get("layouts") or "[]")
-        d["wards"]   = json.loads(d.get("wards")   or "[]")
+        d["layouts"]           = json.loads(d.get("layouts")           or "[]")
+        d["wards"]             = json.loads(d.get("wards")             or "[]")
+        d["required_features"] = json.loads(d.get("required_features") or "[]")
+        d["filter_stations"]   = json.loads(d.get("filter_stations")   or "[]")
         result.append(d)
     return result
 
@@ -420,6 +462,15 @@ def send_notifications(con, listing: dict, lid: str, global_config: dict) -> boo
     return notified
 
 
+# ── Module-level helpers (used by server.py) ──────────────────────────────────
+
+def backfill_images(listing_ids: list[str] | None = None, limit: int = 50) -> None:
+    """Backfill UR images. Called by server.py /api/images/backfill endpoint."""
+    scraper = next((s for s in SCRAPERS if s.source == "ur"), None)
+    if scraper:
+        scraper.backfill_images(listing_ids=listing_ids, limit=limit)
+
+
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
 def run():
@@ -429,8 +480,10 @@ def run():
 
     # Build source → scraper index for image dispatch
     scraper_by_source = {s.source: s for s in SCRAPERS}
+    _cycle = 0
 
     while True:
+        _cycle += 1
         config = load_json(CONFIG_FILE, {})
 
         all_listings   = []
@@ -501,6 +554,16 @@ def run():
                 threading.Thread(
                     target=scraper.fetch_images_batch,
                     args=(lids,),
+                    daemon=True,
+                ).start()
+
+        # Every 4 cycles (~2h), backfill UR listings that still have no images
+        if _cycle % 4 == 0:
+            ur_scraper = scraper_by_source.get("ur")
+            if ur_scraper:
+                threading.Thread(
+                    target=ur_scraper.backfill_images,
+                    kwargs={"limit": 20},
                     daemon=True,
                 ).start()
 

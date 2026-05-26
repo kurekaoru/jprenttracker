@@ -9,25 +9,23 @@ API flow per ward:
      same body plus shisya/danchi/shikibetu identifiers
      → list of currently-vacant rooms in that complex.
 
-Images are fetched post-session using a headless browser (UR pages are JS-rendered).
+Images are fetched via bukken/detail/detail_room/ API (same backend the UR website
+calls via AJAX). URL pattern: /{shisya}_{danchi}{shikibetu}_room.html?JKSS={id}
 """
 
-import re, time, random, sqlite3, logging
+import re, time, random, sqlite3, logging, json
 import html as html_lib
 import requests
-from playwright.sync_api import sync_playwright
 
 from scraper_base import BaseScraper
-from image_pipeline import (
-    CHROME_ARGS, SCRAPER_UA, reset_asyncio_loop,
-    save_images_for_listing, classify_image_heuristic,
-)
+from image_pipeline import save_images_for_listing
 
 log = logging.getLogger(__name__)
 
-UR_API_BASE      = "https://chintai.r6.ur-net.go.jp/chintai/api/"
-UR_BUKKEN_RESULT = UR_API_BASE + "bukken/result/bukken_result/"
-UR_BUKKEN_ROOM   = UR_API_BASE + "bukken/result/bukken_result_room/"
+UR_API_BASE        = "https://chintai.r6.ur-net.go.jp/chintai/api/"
+UR_BUKKEN_RESULT   = UR_API_BASE + "bukken/result/bukken_result/"
+UR_BUKKEN_ROOM     = UR_API_BASE + "bukken/result/bukken_result_room/"
+UR_BUKKEN_DETAIL   = UR_API_BASE + "bukken/detail/detail_room/"
 UR_WEB_BASE      = "https://www.ur-net.go.jp"
 
 # Each region is (tdfk, block, {ward_name: skcs})
@@ -250,86 +248,175 @@ def fetch_ur_listings(config):
 
 # ── UR image scraping ─────────────────────────────────────────────────────────
 
-_UR_IMG_SKIP = (
-    '/img/common/', '/img/ogp/', '/img/talent/', 'img_loading',
-    '_photo_s.jpg', '_TF_', 'apple-touch-icon',
-)
-
-
 def _classify_ur_image(src: str, alt: str) -> str | None:
-    """Return image_type for a UR image, or None to skip entirely."""
+    """Return image_type for a UR image, or None to skip."""
     if '間取' in alt or 'madori' in src.lower():
         return 'floor_plan'
-    if '交通図' in alt or '_TF_' in src:
-        return None  # transport diagram
-    if '外観' in alt:
+    if '交通図' in alt or '_TF_' in src or '_photo_s' in src:
+        return None  # transport diagram or thumbnail-only images
+    if '外観' in alt or '共用施設' in alt:
         return 'exterior'
     return 'interior'
 
 
-def _fetch_ur_image_urls(listing_url: str, page=None) -> list[tuple[str, str]]:
+def _parse_ur_url_params(listing_url: str) -> tuple[str, str, str, str] | None:
     """
-    Render a UR room page with a headless browser and return image URLs.
-    If `page` is given (open Playwright Page), reuse it.
-    Returns [(url, image_type), …] sorted floor_plan first, capped at 20.
+    Extract (shisya, danchi, shikibetu, room_id) from a UR room page URL.
+    URL pattern: /{shisya}_{danchi}{shikibetu}_room.html?JKSS={id}
+    e.g. /20_4130_room.html?JKSS=000070404 → ('20','413','0','000070404')
     """
-    owned   = page is None
-    browser = _pw_cm = _pw_obj = None
+    m = re.search(r'/(\d+)_(\d+)_room\.html.*JKSS=([A-Za-z0-9]+)', listing_url)
+    if not m:
+        return None
+    shisya = m.group(1)
+    danchi_shiki = m.group(2)   # e.g. "4130"
+    danchi   = danchi_shiki[:-1]  # "413"
+    shikibetu = danchi_shiki[-1]  # "0"
+    room_id = m.group(3)
+    return shisya, danchi, shikibetu, room_id
+
+
+_HTML_TAG_RE  = re.compile(r'<[^>]+>')
+_PARKING_FEE  = re.compile(r'料金[：:]\s*([\d,]+)円')
+_PARKING_NONE = re.compile(r'なし|空きなし|利用不可')
+
+def _strip_html(text: str) -> str:
+    return _HTML_TAG_RE.sub('', html_lib.unescape(text or '')).strip()
+
+def _parse_parking(raw: str) -> tuple[int, int]:
+    """Return (has_parking, fee_jpy) from parking field text."""
+    if not raw:
+        return 0, 0
+    clean = _strip_html(raw)
+    if _PARKING_NONE.search(clean):
+        return 0, 0
+    fee = 0
+    m = _PARKING_FEE.search(clean)
+    if m:
+        fee = int(m.group(1).replace(',', ''))
+    return 1, fee
+
+
+def _fetch_ur_room_data(listing_url: str) -> tuple[list[tuple[str, str]], dict]:
+    """
+    Call bukken/detail/detail_room/ and return (images, detail_dict).
+
+    images  — [(url, image_type), …] sorted exterior-first, floor_plan-last
+    detail  — structured dict with keys: features, facility, parking,
+              age_years, available_date, feature_text, notes, shikikin
+    Returns ([], {}) on failure.
+    """
+    params = _parse_ur_url_params(listing_url)
+    if not params:
+        log.debug(f"UR: could not parse URL params from {listing_url}")
+        return [], {}
+    shisya, danchi, shikibetu, room_id = params
     try:
-        if owned:
-            reset_asyncio_loop()
-            _pw_cm  = sync_playwright()
-            _pw_obj = _pw_cm.__enter__()
-            browser = _pw_obj.chromium.launch(headless=True, args=CHROME_ARGS)
-            page    = browser.new_page(user_agent=SCRAPER_UA)
+        resp = requests.post(
+            UR_BUKKEN_DETAIL,
+            data={"id": room_id, "shisya": shisya, "danchi": danchi,
+                  "shikibetu": shikibetu, "sp": ""},
+            headers=_HEADERS,
+            timeout=15,
+        )
+        data = resp.json()
+        if not data or not isinstance(data, list):
+            return [], {}
+        d = data[0]
 
-        page.goto(listing_url, timeout=30_000, wait_until="commit")
-        try:
-            page.wait_for_selector(
-                'img[src*="img_madori"], img[src*="recruit/URSI"], img[src*="img_photo/"]',
-                timeout=30_000,
-            )
-        except Exception:
-            pass
-        page.wait_for_timeout(1_000)
-
-        skip_json = str(list(_UR_IMG_SKIP)).replace("'", '"')
-        imgs = page.evaluate(f"""() => {{
-            const skip = {skip_json};
-            const keep = ['img_madori', 'recruit/URSI', 'img_photo/', 'img_room/'];
-            return Array.from(document.querySelectorAll('img'))
-                .map(img => ({{ src: img.src, alt: img.alt || '',
-                               w: img.naturalWidth, h: img.naturalHeight }}))
-                .filter(i => i.src && i.w > 80 && i.h > 80
-                          && !skip.some(s => i.src.includes(s))
-                          && keep.some(k => i.src.includes(k)));
-        }}""")
-
-        seen, results = set(), []
-        for img in imgs:
-            src = img["src"]
-            if src in seen:
+        # ── images ──────────────────────────────────────────────────────────
+        seen, images = set(), []
+        for img in (d.get("img") or []):
+            url = img.get("画像パス") or ""
+            alt = img.get("ALT") or ""
+            if not url or not url.startswith("http") or url in seen:
                 continue
-            seen.add(src)
-            img_type = _classify_ur_image(src, img["alt"])
+            seen.add(url)
+            img_type = _classify_ur_image(url, alt)
             if img_type is None:
                 continue
-            results.append((src, img_type))
+            images.append((url, img_type))
+        images.sort(key=lambda x: 2 if x[1] == "floor_plan" else 0 if x[1] == "exterior" else 1)
 
-        results.sort(key=lambda x: 0 if x[1] == "exterior" else 1 if x[1] == "interior" else 2)
-        return results[:20]
+        # ── detail ──────────────────────────────────────────────────────────
+        has_parking, parking_fee = _parse_parking(d.get("parking") or "")
+        raw_year = d.get("year") or ""
+        try:
+            age_years = int(raw_year)
+        except (ValueError, TypeError):
+            age_years = None
+        detail = {
+            "features":       d.get("feature_pickup") or [],   # list of highlight tags
+            "facility":       _strip_html(d.get("facility") or ""),
+            "parking":        _strip_html(d.get("parking") or ""),
+            "has_parking":    has_parking,
+            "parking_fee":    parking_fee,
+            "age_years":      age_years,
+            "available_date": d.get("availableDate") or "",
+            "feature_text":   _strip_html(d.get("feature") or ""),
+            "notes":          _strip_html(d.get("biko") or ""),
+            "shikikin":       d.get("shikikin") or "",
+        }
+        return images[:20], detail
 
     except Exception as e:
-        log.debug(f"UR headless image fetch failed ({listing_url}): {e}")
-        return []
-    finally:
-        if owned and browser:
-            try:
-                browser.close()
-                if _pw_cm:
-                    _pw_cm.__exit__(None, None, None)
-            except Exception:
-                pass
+        log.debug(f"UR detail_room API failed ({listing_url}): {e}")
+        return [], {}
+
+
+# Keep old name for callers that don't need detail
+def _fetch_ur_image_urls(listing_url: str) -> list[tuple[str, str]]:
+    images, _ = _fetch_ur_room_data(listing_url)
+    return images
+
+
+def _save_ur_detail(lid: str, detail: dict, con: sqlite3.Connection) -> None:
+    """Persist structured UR room detail to the listings row."""
+    if not detail:
+        return
+    features_csv = ", ".join(detail["features"]) if detail["features"] else None
+    # Build a human-readable detail_text from all fields
+    parts = []
+    if detail["features"]:
+        parts.append("特徴ピックアップ\n" + "\n".join(detail["features"]))
+    if detail["facility"]:
+        parts.append("設備\n" + detail["facility"])
+    if detail["parking"]:
+        parts.append("敷地内駐車場\n" + detail["parking"])
+    if detail["age_years"] is not None:
+        parts.append(f"管理年数\n{detail['age_years']}年")
+    if detail["available_date"]:
+        parts.append(f"入居可能時期\n{detail['available_date']}")
+    if detail["feature_text"]:
+        parts.append("特徴\n" + detail["feature_text"])
+    if detail["notes"]:
+        parts.append("備考\n" + detail["notes"])
+    detail_text = "\n\n".join(parts) if parts else None
+
+    con.execute(
+        "UPDATE listings SET "
+        "  features=COALESCE(?, features),"
+        "  appliances=COALESCE(?, appliances),"
+        "  detail_text=COALESCE(?, detail_text),"
+        "  has_parking=COALESCE(?, has_parking),"
+        "  parking_fee=COALESCE(?, parking_fee),"
+        "  age_years=COALESCE(?, age_years),"
+        "  available_from=COALESCE(?, available_from),"
+        "  nearby_features=COALESCE(?, nearby_features)"
+        " WHERE id=?",
+        (
+            features_csv,
+            detail["facility"] or None,
+            detail_text,
+            detail["has_parking"] if detail.get("has_parking") is not None else None,
+            detail["parking_fee"] if detail.get("parking_fee") else None,
+            detail["age_years"],
+            detail["available_date"] or None,
+            detail["feature_text"] or None,
+            lid,
+        ),
+    )
+    con.commit()
 
 
 # ── URScraper class ───────────────────────────────────────────────────────────
@@ -345,10 +432,9 @@ class URScraper(BaseScraper):
             return [], False
 
     def fetch_images_batch(self, new_lids: list[str]) -> int:
-        """Fetch images for new UR listings using a single Playwright session."""
+        """Fetch images for new UR listings via the detail_room API."""
         if not new_lids:
             return 0
-        reset_asyncio_loop()
         con = sqlite3.connect(self.db_file, timeout=60)
         con.execute("PRAGMA journal_mode=WAL")
         con.row_factory = sqlite3.Row
@@ -363,26 +449,19 @@ class URScraper(BaseScraper):
 
         ok = 0
         try:
-            _pw_cm  = sync_playwright()
-            _pw_obj = _pw_cm.__enter__()
-            browser = _pw_obj.chromium.launch(headless=True, args=CHROME_ARGS)
-            page    = browser.new_page(user_agent=SCRAPER_UA)
             for lid, listing_url in ur_rows:
                 try:
-                    images = _fetch_ur_image_urls(listing_url, page)
+                    images, detail = _fetch_ur_room_data(listing_url)
                     n = save_images_for_listing(lid, images, con)
+                    _save_ur_detail(lid, detail, con)
                     if n:
                         ok += 1
                         log.info(f"UR images: {n} saved for {lid[:8]}")
                 except Exception as e:
                     log.error(f"UR image pipeline failed ({listing_url}): {e}")
-                delay = random.uniform(60, 120)
-                log.debug(f"UR image: waiting {delay:.0f}s")
-                time.sleep(delay)
-            browser.close()
-            _pw_cm.__exit__(None, None, None)
+                time.sleep(random.uniform(1, 3))
         except Exception as e:
-            log.error(f"UR image batch session failed: {e}")
+            log.error(f"UR image batch failed: {e}")
         finally:
             con.close()
         return ok
@@ -390,7 +469,6 @@ class URScraper(BaseScraper):
     def backfill_images(self, listing_ids: list[str] | None = None,
                         limit: int = 50) -> None:
         """Re-scrape images for UR listings with missing image data."""
-        reset_asyncio_loop()
         con = sqlite3.connect(self.db_file, timeout=60)
         con.execute("PRAGMA journal_mode=WAL")
         con.row_factory = sqlite3.Row
@@ -432,17 +510,14 @@ class URScraper(BaseScraper):
         log.info(f"Backfill: processing {len(rows)} listing(s)…")
         ok = 0
         try:
-            _pw_cm  = sync_playwright()
-            _pw_obj = _pw_cm.__enter__()
-            browser = _pw_obj.chromium.launch(headless=True, args=CHROME_ARGS)
-            page    = browser.new_page(user_agent=SCRAPER_UA)
             for row in rows:
                 lid, url = row["id"], row["url"]
                 if not url or "ur-net.go.jp" not in url:
                     continue
                 try:
-                    images = _fetch_ur_image_urls(url, page)
+                    images, detail = _fetch_ur_room_data(url)
                     n = save_images_for_listing(lid, images, con)
+                    _save_ur_detail(lid, detail, con)
                     if n:
                         ok += 1
                         log.info(f"  ✓ {lid[:8]} — {n} image(s)")
@@ -450,14 +525,10 @@ class URScraper(BaseScraper):
                         log.warning(f"  ✗ {lid[:8]} — no images from {url}")
                 except Exception as e:
                     log.error(f"  ✗ {lid[:8]} failed: {e}")
-                delay = random.uniform(60, 120)
-                log.debug(f"Backfill: waiting {delay:.0f}s")
-                time.sleep(delay)
-            browser.close()
-            _pw_cm.__exit__(None, None, None)
+                time.sleep(random.uniform(1, 3))
             log.info(f"Backfill done: {ok}/{len(rows)} listings updated")
         except Exception as e:
-            log.error(f"Backfill Playwright session failed: {e}")
+            log.error(f"Backfill failed: {e}")
         finally:
             con.close()
 
