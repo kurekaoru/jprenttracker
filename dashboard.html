@@ -535,9 +535,10 @@
   .line-item.open .line-chev { transform:rotate(180deg); }
   .line-body { padding:4px 0 8px; }
   /* Snake */
-  .snake-wrap { --lc:#aaa; position:relative; padding:2px 1px 0; }
-  .snake-row  { display:flex; position:relative; }
-  .snake-row::before { content:''; position:absolute; left:12.5%; right:12.5%; top:9px; height:4px; background:var(--lc); opacity:.34; z-index:0; pointer-events:none; border-radius:999px; }
+  .snake-wrap { --lc:#aaa; --rows:1; position:relative; padding:2px 1px 0; }
+  .snake-track { position:absolute; inset:0 0 auto; width:100%; height:calc(var(--rows) * 31px); overflow:visible; pointer-events:none; z-index:0; }
+  .snake-track path { fill:none; stroke:var(--lc); stroke-width:4; stroke-linecap:round; stroke-linejoin:round; opacity:.34; vector-effect:non-scaling-stroke; }
+  .snake-row  { display:flex; position:relative; z-index:1; min-height:31px; }
   .snake-sta  { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; position:relative; z-index:1; padding:1px 0 5px; }
   .snake-sta.empty { cursor:default; pointer-events:none; }
   .snake-dot  { width:18px; height:18px; border-radius:50%; border:2.5px solid var(--dc,#8A8D93); background:var(--surface); transition:background .12s,transform .1s,box-shadow .12s; flex-shrink:0; box-sizing:border-box; box-shadow:0 0 0 2px var(--surface); }
@@ -546,12 +547,9 @@
   .snake-sta.empty .snake-dot,.snake-sta.empty .snake-name { visibility:hidden; }
   .snake-name { font-size:7.5px; text-align:center; line-height:1.2; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:calc(100% - 2px); }
   .snake-sta.active .snake-name { color:var(--text); font-weight:700; }
-  .snake-turn { height:13px; position:relative; overflow:hidden; }
-  .snake-turn-r::after { content:''; position:absolute; right:12.5%; top:-2px; width:calc(75% + 4px); height:22px; border:4px solid var(--lc); border-left:0; border-bottom:0; border-radius:0 13px 0 0; opacity:.34; }
-  .snake-turn-l::after { content:''; position:absolute; left:12.5%; top:-2px; width:calc(75% + 4px); height:22px; border:4px solid var(--lc); border-right:0; border-bottom:0; border-radius:13px 0 0 0; opacity:.34; }
-  .loop-wrap { --lc:#9ACD32; position:relative; height:238px; margin:4px 0 7px; }
-  .loop-ring { position:absolute; inset:18px 18px 30px; border:5px solid var(--lc); border-radius:50%; opacity:.36; }
-  .loop-sta { position:absolute; left:50%; top:50%; width:44px; display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; transform:translate(-50%,-50%) rotate(var(--a)) translateY(-94px) rotate(var(--ra)); }
+  .loop-wrap { --lc:#9ACD32; position:relative; height:286px; margin:8px -2px 10px; }
+  .loop-ring { position:absolute; left:15px; right:15px; top:18px; height:210px; border:5px solid var(--lc); border-radius:50%; opacity:.36; }
+  .loop-sta { position:absolute; width:46px; display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; transform:translate(-50%,-50%); }
   .loop-sta .snake-dot { width:16px; height:16px; }
   .loop-sta .snake-name { font-size:7px; white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; min-height:16px; }
   /* Service legend */
@@ -1419,7 +1417,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-26 21:08 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-26 21:56 JST</p>
       </div>
 
 
@@ -2279,11 +2277,14 @@ function renderLoopLine(line) {
   line.stations.forEach(([name, svc], i) => {
     const cell = document.createElement('div');
     const angle = (i / line.stations.length) * 360;
+    const rad = angle * Math.PI / 180;
+    const x = Math.sin(rad) * 96;
+    const y = -Math.cos(rad) * 105;
     cell.className = 'loop-sta snake-sta' + (selectedStations.has(name) ? ' active' : '');
     cell.dataset.sta = name;
     cell.dataset.lid = line.id;
-    cell.style.setProperty('--a', `${angle}deg`);
-    cell.style.setProperty('--ra', `${-angle}deg`);
+    cell.style.left = `calc(50% + ${x.toFixed(1)}px)`;
+    cell.style.top = `${(123 + y).toFixed(1)}px`;
     cell.style.setProperty('--dc', _sdc(svc));
     cell.title = `${name} · ${SERVICE_LABELS[svc] || SERVICE_LABELS[0]}`;
     cell.innerHTML = `<div class="snake-dot"></div><div class="snake-name">${name}</div>`;
@@ -2311,6 +2312,8 @@ function renderSnake(line) {
   const wrap = document.createElement('div');
   wrap.className = 'snake-wrap';
   wrap.style.setProperty('--lc', line.color);
+  wrap.style.setProperty('--rows', rows.length);
+  wrap.innerHTML = snakeTrackSvg(rows.length);
 
   rows.forEach((row, ri) => {
     const rowEl = document.createElement('div');
@@ -2336,13 +2339,30 @@ function renderSnake(line) {
     });
     wrap.appendChild(rowEl);
 
-    if (ri < rows.length - 1) {
-      const turn = document.createElement('div');
-      turn.className = 'snake-turn ' + (row.ltr ? 'snake-turn-r' : 'snake-turn-l');
-      wrap.appendChild(turn);
-    }
   });
   return wrap;
+}
+
+function snakeTrackSvg(rowCount) {
+  const rowH = 31, dotY = 10;
+  const left = 12.5, right = 87.5;
+  const pts = [];
+  for (let ri = 0; ri < rowCount; ri++) {
+    const y = dotY + ri * rowH;
+    pts.push({ x: ri % 2 === 0 ? left : right, y });
+    pts.push({ x: ri % 2 === 0 ? right : left, y });
+  }
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < pts.length; i++) {
+    const prev = pts[i - 1], cur = pts[i];
+    if (prev.y === cur.y) {
+      d += ` L ${cur.x} ${cur.y}`;
+    } else {
+      const outX = prev.x === right ? 96 : 4;
+      d += ` C ${outX} ${prev.y}, ${outX} ${cur.y}, ${cur.x} ${cur.y}`;
+    }
+  }
+  return `<svg class="snake-track" viewBox="0 0 100 ${rowCount * rowH}" preserveAspectRatio="none" aria-hidden="true"><path d="${d}"/></svg>`;
 }
 
 function buildLineAccordion() {
