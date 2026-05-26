@@ -1670,7 +1670,7 @@ Rules:
 - HARD RULE: Never say "Found N properties" or name properties in text without having called run_sql or search_listings in the SAME turn and gotten listing_ids back. Prior chat messages are not a source of listing data — always re-execute the query. If you described results without a tool call, the user saw no cards.
 - HARD RULE: After every search_listings or run_sql call, your text reply MUST start with a one-line filter summary before listing results. Format: "**Filters applied:** <comma-separated list of every active filter> → **N results**". Include every active filter (e.g. has_floor_plan=true, ward=23区, layout=2LDK, limit=50); omit fields left at default. For run_sql, summarise the WHERE clause in plain English instead of parameter names. Always end with → **N results** where N is the actual count returned.
 - Floor plan analysis (from get_room_stats and get_listing_details floor_plan_rooms): living_area_m2 is the combined LDK/LD/L area. kitchen_open=true means the kitchen opens to the living area with no separating door. Use these fields to answer questions about room layout and to filter searches.
-- Use update_alert_filter when the user asks to change their notification/alert settings: budget range, wards, layouts, max walk time, min size, parking requirement, building age limit, or required features (e.g. エアコン, バス・トイレ別). The current filter state is shown in your context. Only pass the fields being changed — omit others to leave them unchanged. To add a ward, pass the full new wards list (current wards + the new one). To remove a ward, pass the list without it. After calling, confirm the change in one sentence.
+- Use update_alert_filter when the user asks to change their notification/alert settings: budget range, wards, layouts, max walk time, min size, parking requirement, building age limit, or required features (e.g. エアコン, バス・トイレ別). The current filter state is shown in your context. Only pass the fields being changed — omit others to leave them unchanged. To ADD one or more wards use add_wards (never reconstruct the full list). To REMOVE wards use remove_wards. To REPLACE the entire ward list use wards (e.g. for '23区' or clearing with []). After calling, confirm the change in one sentence.
 """
 
 _CHAT_TOOLS = [
@@ -1944,7 +1944,9 @@ _CHAT_TOOLS = [
             "Call this when the user asks to change their alert settings: update budget, add or remove wards, "
             "change allowed layouts, set max walk time, or set minimum size. "
             "Only pass fields you want to change; omit any field you want to leave as-is. "
-            "To clear wards (match all) pass an empty array. To clear layouts (match all) pass an empty array. "
+            "For ward changes prefer add_wards/remove_wards over wards — they append/remove without needing the full current list. "
+            "Use wards only to replace the entire list (e.g. '23区') or to clear it (pass []). "
+            "To clear layouts (match all) pass an empty array. "
             "After calling this tool, the UI automatically refreshes the filter panel."
         ),
         "input_schema": {
@@ -1955,7 +1957,9 @@ _CHAT_TOOLS = [
                 "min_size_m2":       {"type": "number",  "description": "Min floor area m² (0 = no minimum)"},
                 "max_walk_min":      {"type": "integer", "description": "Max walk min to nearest station (0 = no limit)"},
                 "layouts":           {"type": "array", "items": {"type": "string"}, "description": "Allowed layouts e.g. ['1LDK', '2LDK']. Pass [] to match all layouts."},
-                "wards":             {"type": "array", "items": {"type": "string"}, "description": "Allowed wards e.g. ['練馬区', '板橋区']. Pass [] to match all wards."},
+                "wards":             {"type": "array", "items": {"type": "string"}, "description": "REPLACES the entire ward list. Use add_wards/remove_wards for incremental changes. Pass [] to match all wards."},
+                "add_wards":         {"type": "array", "items": {"type": "string"}, "description": "Wards/aliases to ADD to the existing list. Preferred over wards for single additions."},
+                "remove_wards":      {"type": "array", "items": {"type": "string"}, "description": "Wards to REMOVE from the existing list."},
                 "has_parking":       {"type": "boolean", "description": "If true, only alert on listings with on-site parking. Omit or false to match any."},
                 "max_age_years":     {"type": "integer", "description": "Max building age in years (0 = no limit)"},
                 "required_features": {"type": "array", "items": {"type": "string"}, "description": "Feature tags that must ALL be present, e.g. ['エアコン', 'バス・トイレ別']. Pass [] to clear."},
@@ -2881,10 +2885,23 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                     new_min_size     = inp["min_size_m2"]       if "min_size_m2"       in inp else (cur.get("min_size_m2")  or 0.0)
                     new_max_walk     = inp["max_walk_min"]      if "max_walk_min"      in inp else (cur.get("max_walk_min") or 0)
                     new_layouts      = inp["layouts"]            if "layouts"           in inp else cur_layouts
-                    raw_wards        = inp["wards"]              if "wards"             in inp else cur_wards
-                    new_wards        = []
-                    for w in raw_wards:
+                    if "wards" in inp:
+                        base_wards = inp["wards"]
+                    elif "add_wards" in inp or "remove_wards" in inp:
+                        base_wards = cur_wards
+                    else:
+                        base_wards = cur_wards
+                    new_wards = []
+                    for w in base_wards:
                         new_wards.extend(_expand_ward_alias(w))
+                    for w in (inp.get("add_wards") or []):
+                        new_wards.extend(_expand_ward_alias(w))
+                    if inp.get("remove_wards"):
+                        remove_set = set()
+                        for w in inp["remove_wards"]:
+                            remove_set.update(_expand_ward_alias(w))
+                        new_wards = [w for w in new_wards if w not in remove_set]
+                    new_wards = list(dict.fromkeys(new_wards))
                     new_has_parking  = (1 if inp["has_parking"] else None) if "has_parking" in inp else cur.get("has_parking")
                     new_max_age      = inp["max_age_years"]     if "max_age_years"     in inp else (cur.get("max_age_years") or 0)
                     new_req_features = inp["required_features"] if "required_features" in inp else cur_features
