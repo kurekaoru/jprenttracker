@@ -1417,7 +1417,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 08:20 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 08:24 JST</p>
       </div>
 
 
@@ -2294,12 +2294,11 @@ function renderLoopLine(line) {
 
 function loopPositions(count) {
   const rowH = 40, topY = 16, bottomY = topY + rowH * 12;
-  const xs = ['12.5%', '37.5%', '62.5%', '87.5%'];
   const pts = [
-    ...xs.map(x => ({ x, y: topY })),
-    ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(r => ({ x: '87.5%', y: topY + r * rowH })),
-    ...[...xs].reverse().map(x => ({ x, y: bottomY })),
-    ...[11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map(r => ({ x: '12.5%', y: topY + r * rowH })),
+    { x:'37.5%', y:topY }, { x:'62.5%', y:topY },
+    ...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(r => ({ x:'87.5%', y:topY + r * rowH })),
+    { x:'62.5%', y:bottomY }, { x:'37.5%', y:bottomY },
+    ...[12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0].map(r => ({ x:'12.5%', y:topY + r * rowH })),
   ];
   return Array.from({ length: count }, (_, i) => {
     const t = i * pts.length / count;
