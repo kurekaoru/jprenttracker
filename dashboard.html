@@ -525,29 +525,35 @@
   .station-override-banner { background:rgba(239,159,39,0.14); border:1px solid rgba(239,159,39,0.35); border-radius:6px; padding:7px 9px; font-size:10px; color:var(--warn); margin-bottom:8px; line-height:1.55; }
   /* ── Railway line accordion + snake ─────────────────────────────────────── */
   .line-item { border-bottom:1px solid rgba(255,255,255,0.06); }
-  .line-header { display:flex; align-items:center; gap:7px; padding:5px 2px; cursor:pointer; user-select:none; transition:background .12s; border-radius:4px; }
+  .line-header { display:flex; align-items:center; gap:7px; padding:6px 3px; cursor:pointer; user-select:none; transition:background .12s; border-radius:6px; }
   .line-header:hover { background:rgba(255,255,255,0.05); }
-  .line-icon { width:26px; height:16px; border-radius:3px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:7.5px; font-weight:800; color:#fff; font-family:var(--mono); letter-spacing:-.03em; }
+  .line-icon { width:24px; height:24px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+  .line-icon svg { width:24px; height:24px; display:block; filter:drop-shadow(0 1px 2px rgba(0,0,0,.18)); }
   .line-name { flex:1; font-size:11px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .line-sel  { font-size:10px; color:var(--accent); font-weight:700; flex-shrink:0; min-width:10px; text-align:right; }
   .line-chev { font-size:8px; color:var(--muted); transition:transform .15s; flex-shrink:0; margin-left:2px; }
   .line-item.open .line-chev { transform:rotate(180deg); }
   .line-body { padding:4px 0 8px; }
   /* Snake */
-  .snake-wrap { --lc:#aaa; position:relative; }
+  .snake-wrap { --lc:#aaa; position:relative; padding:2px 1px 0; }
   .snake-row  { display:flex; position:relative; }
-  .snake-row::before { content:''; position:absolute; left:12.5%; right:12.5%; top:8px; height:2px; background:var(--lc); opacity:.28; z-index:0; pointer-events:none; }
-  .snake-sta  { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; position:relative; z-index:1; padding:1px 0 3px; }
+  .snake-row::before { content:''; position:absolute; left:12.5%; right:12.5%; top:9px; height:4px; background:var(--lc); opacity:.34; z-index:0; pointer-events:none; border-radius:999px; }
+  .snake-sta  { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; position:relative; z-index:1; padding:1px 0 5px; }
   .snake-sta.empty { cursor:default; pointer-events:none; }
-  .snake-dot  { width:16px; height:16px; border-radius:50%; border:2px solid var(--dc,var(--lc)); background:transparent; transition:background .12s,transform .1s; flex-shrink:0; box-sizing:border-box; }
+  .snake-dot  { width:18px; height:18px; border-radius:50%; border:2.5px solid var(--dc,#8A8D93); background:var(--surface); transition:background .12s,transform .1s,box-shadow .12s; flex-shrink:0; box-sizing:border-box; box-shadow:0 0 0 2px var(--surface); }
   .snake-sta.active .snake-dot  { background:var(--dc,var(--lc)); }
-  .snake-sta:hover:not(.empty) .snake-dot { transform:scale(1.2); }
+  .snake-sta:hover:not(.empty) .snake-dot { transform:scale(1.16); box-shadow:0 0 0 2px var(--surface),0 0 0 5px rgba(255,255,255,.08); }
   .snake-sta.empty .snake-dot,.snake-sta.empty .snake-name { visibility:hidden; }
   .snake-name { font-size:7.5px; text-align:center; line-height:1.2; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:calc(100% - 2px); }
   .snake-sta.active .snake-name { color:var(--text); font-weight:700; }
-  .snake-turn { height:10px; position:relative; }
-  .snake-turn-r::after { content:''; position:absolute; right:12.5%; top:-1px; width:2px; height:calc(100% + 2px); background:var(--lc); opacity:.28; }
-  .snake-turn-l::after { content:''; position:absolute; left:12.5%; top:-1px; width:2px; height:calc(100% + 2px); background:var(--lc); opacity:.28; }
+  .snake-turn { height:13px; position:relative; overflow:hidden; }
+  .snake-turn-r::after { content:''; position:absolute; right:12.5%; top:-2px; width:calc(75% + 4px); height:22px; border:4px solid var(--lc); border-left:0; border-bottom:0; border-radius:0 13px 0 0; opacity:.34; }
+  .snake-turn-l::after { content:''; position:absolute; left:12.5%; top:-2px; width:calc(75% + 4px); height:22px; border:4px solid var(--lc); border-right:0; border-bottom:0; border-radius:13px 0 0 0; opacity:.34; }
+  .loop-wrap { --lc:#9ACD32; position:relative; height:238px; margin:4px 0 7px; }
+  .loop-ring { position:absolute; inset:18px 18px 30px; border:5px solid var(--lc); border-radius:50%; opacity:.36; }
+  .loop-sta { position:absolute; left:50%; top:50%; width:44px; display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; transform:translate(-50%,-50%) rotate(var(--a)) translateY(-94px) rotate(var(--ra)); }
+  .loop-sta .snake-dot { width:16px; height:16px; }
+  .loop-sta .snake-name { font-size:7px; white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; min-height:16px; }
   /* Service legend */
   .svc-legend { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:7px; padding:0 2px; }
   .svc-legend span { display:flex; align-items:center; gap:3px; font-size:8.5px; color:var(--muted); white-space:nowrap; }
@@ -1413,7 +1419,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-26 14:00 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-26 21:08 JST</p>
       </div>
 
 
@@ -2134,7 +2140,7 @@ let selectedFeatures = new Set();
 let selectedStations = new Set();
 
 // Train line data: [id, code, color, name, stations]
-// stations: [name, svcLevel] svcLevel: 0=各停, 1=準急/区間急行, 2=急行/快速, 3=特急/通勤特急
+// stations: [name, svcLevel] svcLevel is recomputed below from stop patterns.
 const TRAIN_LINES = [
   { id:'JY', code:'JY', color:'#9ACD32', name:'JR山手線', stations:[
     ['大崎',0],['五反田',0],['目黒',0],['恵比寿',0],['渋谷',0],['原宿',0],['代々木',0],['新宿',0],['新大久保',0],['高田馬場',0],['目白',0],['池袋',0],['大塚',0],['巣鴨',0],['駒込',0],['田端',0],['西日暮里',0],['日暮里',0],['鶯谷',0],['上野',0],['御徒町',0],['秋葉原',0],['神田',0],['東京',0],['有楽町',0],['新橋',0],['浜松町',0],['田町',0],['高輪ゲートウェイ',0],['品川',0]
@@ -2221,14 +2227,74 @@ const TRAIN_LINES = [
 
 function _snm(s) { return s.replace(/^(東京メトロ|都営|東急|JR)/, '').replace(/線$/, ''); }
 
-function _sdc(svcLv, lineColor) {
-  if (svcLv === 3) return '#E74C3C';
-  if (svcLv === 2) return '#F39C12';
-  if (svcLv === 1) return '#8BC34A';
-  return lineColor;
+const SERVICE_COLORS = ['#8A8D93', '#8BC34A', '#F39C12', '#E74C3C'];
+const SERVICE_LABELS = ['各停', '準急・区間急行', '急行・快速', '特急・通勤特急'];
+
+const LINE_STOP_CLASSES = {
+  JC: { 2:['東京','神田','御茶ノ水','四ツ谷','新宿','中野','三鷹','国分寺','立川','日野','豊田','八王子','西八王子','高尾'], 1:['荻窪','吉祥寺','武蔵境','東小金井','武蔵小金井','西国分寺','国立'] },
+  TY: { 3:['渋谷','中目黒','自由が丘','武蔵小杉','日吉','菊名','横浜'], 2:['学芸大学','田園調布','多摩川','綱島'] },
+  DT: { 2:['渋谷','三軒茶屋','二子玉川','溝の口','鷺沼','たまプラーザ','あざみ野','青葉台','長津田','南町田グランベリーパーク','中央林間'], 1:['池尻大橋','駒沢大学','桜新町','用賀','つくし野','すずかけ台','つきみ野'] },
+  OH: { 3:['新宿','代々木上原','下北沢','登戸','新百合ケ丘','町田','相模大野','海老名','本厚木','伊勢原','秦野','新松田','小田原'], 2:['経堂','成城学園前','向ヶ丘遊園'], 1:['祖師ケ谷大蔵','喜多見','狛江','和泉多摩川'] },
+  KO: { 3:['新宿','笹塚','明大前','千歳烏山','調布','府中','分倍河原','聖蹟桜ケ丘','高幡不動','北野','京王八王子'], 2:['桜上水','つつじケ丘','東府中'] },
+  SI: { 2:['池袋','練馬','石神井公園','ひばりヶ丘','所沢','小手指','入間市','飯能'], 1:['保谷','清瀬','秋津','西所沢'] },
+  TJ: { 2:['池袋','和光市','朝霞台','志木','ふじみ野','川越','川越市','坂戸','東松山'], 1:['成増','朝霞'] },
+  KK: { 3:['品川','京急蒲田','京急川崎','横浜','上大岡','金沢文庫','金沢八景','横須賀中央','堀ノ内'], 2:['平和島','神奈川新町','京急鶴見','京急富岡','能見台','追浜'] }
+};
+
+function applyTrainStopClasses() {
+  TRAIN_LINES.forEach(line => {
+    const cfg = LINE_STOP_CLASSES[line.id] || {};
+    const byStation = new Map();
+    Object.entries(cfg).forEach(([level, names]) => names.forEach(name => byStation.set(name, Number(level))));
+    line.stations = line.stations.map(([name]) => [name, byStation.get(name) || 0]);
+  });
+}
+applyTrainStopClasses();
+
+function _sdc(svcLv) {
+  return SERVICE_COLORS[svcLv] || SERVICE_COLORS[0];
+}
+
+function lineIconSvg(line) {
+  const code = escHtml(line.code);
+  const color = escHtml(line.color);
+  const isJR = line.id.startsWith('J');
+  const isTokyoMetro = ['G','M','H','T','C','Y','Z','N','F'].includes(line.id);
+  const isSubway = isTokyoMetro || ['A','I','S','E'].includes(line.id);
+  const textSize = code.length > 1 ? 10.5 : 13;
+  if (isJR) {
+    return `<svg viewBox="0 0 32 32" aria-hidden="true"><rect x="2.5" y="2.5" width="27" height="27" rx="6" fill="#fff" stroke="${color}" stroke-width="4"/><text x="16" y="20.5" text-anchor="middle" font-family="Arial,sans-serif" font-size="${textSize}" font-weight="700" fill="${color}">${code}</text></svg>`;
+  }
+  if (isSubway) {
+    return `<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13.5" fill="#fff" stroke="${color}" stroke-width="4"/><text x="16" y="20.7" text-anchor="middle" font-family="Arial,sans-serif" font-size="${textSize + 1}" font-weight="700" fill="${color}">${code}</text></svg>`;
+  }
+  return `<svg viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="6" width="26" height="20" rx="10" fill="${color}"/><text x="16" y="20.2" text-anchor="middle" font-family="Arial,sans-serif" font-size="${textSize}" font-weight="800" fill="#fff">${code}</text></svg>`;
+}
+
+function renderLoopLine(line) {
+  const wrap = document.createElement('div');
+  wrap.className = 'loop-wrap';
+  wrap.style.setProperty('--lc', line.color);
+  wrap.innerHTML = '<div class="loop-ring"></div>';
+  line.stations.forEach(([name, svc], i) => {
+    const cell = document.createElement('div');
+    const angle = (i / line.stations.length) * 360;
+    cell.className = 'loop-sta snake-sta' + (selectedStations.has(name) ? ' active' : '');
+    cell.dataset.sta = name;
+    cell.dataset.lid = line.id;
+    cell.style.setProperty('--a', `${angle}deg`);
+    cell.style.setProperty('--ra', `${-angle}deg`);
+    cell.style.setProperty('--dc', _sdc(svc));
+    cell.title = `${name} · ${SERVICE_LABELS[svc] || SERVICE_LABELS[0]}`;
+    cell.innerHTML = `<div class="snake-dot"></div><div class="snake-name">${name}</div>`;
+    cell.onclick = () => _staTog(cell);
+    wrap.appendChild(cell);
+  });
+  return wrap;
 }
 
 function renderSnake(line) {
+  if (line.id === 'JY') return renderLoopLine(line);
   const COLS = 4;
   const stas = line.stations;
   const rows = [];
@@ -2257,11 +2323,12 @@ function renderSnake(line) {
         cell.innerHTML = '<div class="snake-dot"></div><div class="snake-name"></div>';
       } else {
         const [name, svc] = sta;
-        const dc = _sdc(svc, line.color);
+        const dc = _sdc(svc);
         cell.className = 'snake-sta' + (selectedStations.has(name) ? ' active' : '');
         cell.dataset.sta = name;
         cell.dataset.lid = line.id;
         cell.style.setProperty('--dc', dc);
+        cell.title = `${name} · ${SERVICE_LABELS[svc] || SERVICE_LABELS[0]}`;
         cell.innerHTML = `<div class="snake-dot"></div><div class="snake-name">${name}</div>`;
         cell.onclick = () => _staTog(cell);
       }
@@ -2292,7 +2359,7 @@ function buildLineAccordion() {
     hdr.className = 'line-header';
     hdr.onclick = () => toggleLine(line.id);
     hdr.innerHTML = `
-      <div class="line-icon" style="background:${line.color}">${line.code}</div>
+      <div class="line-icon">${lineIconSvg(line)}</div>
       <span class="line-name">${line.name}</span>
       <span class="line-sel" id="lsel-${line.id}">${selCount > 0 ? selCount : ''}</span>
       <span class="line-chev">▼</span>`;
