@@ -536,9 +536,9 @@
   .line-body { padding:4px 0 8px; }
   /* Snake */
   .snake-wrap { --lc:#aaa; --rows:1; position:relative; padding:2px 1px 0; }
-  .snake-track { position:absolute; inset:0 0 auto; width:100%; height:calc(var(--rows) * 34px); overflow:visible; pointer-events:none; z-index:0; }
+  .snake-track { position:absolute; inset:0 0 auto; width:100%; height:calc(var(--rows) * 38px); overflow:visible; pointer-events:none; z-index:0; }
   .snake-track path { fill:none; stroke:var(--lc); stroke-width:4; stroke-linecap:round; stroke-linejoin:round; opacity:.34; vector-effect:non-scaling-stroke; }
-  .snake-row  { display:grid; grid-template-columns:repeat(4, 1fr); position:relative; z-index:1; height:34px; }
+  .snake-row  { display:grid; grid-template-columns:repeat(4, 1fr); position:relative; z-index:1; height:38px; }
   .snake-sta  { min-width:0; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; position:relative; z-index:1; padding:1px 0 0; }
   .snake-sta.empty { cursor:default; pointer-events:none; }
   .snake-dot  { width:18px; height:18px; border-radius:50%; border:2.5px solid var(--dc,#8A8D93); background:var(--surface); transition:background .12s,transform .1s,box-shadow .12s; flex-shrink:0; box-sizing:border-box; box-shadow:0 0 0 2px var(--surface); }
@@ -547,8 +547,8 @@
   .snake-sta.empty .snake-dot,.snake-sta.empty .snake-name { visibility:hidden; }
   .snake-name { font-size:7.5px; text-align:center; line-height:1.2; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:calc(100% - 2px); min-height:9px; }
   .snake-sta.active .snake-name { color:var(--text); font-weight:700; }
-  .loop-wrap { --lc:#9ACD32; --rows:10; position:relative; height:calc(var(--rows) * 36px); margin:10px 1px 12px; }
-  .loop-ring { position:absolute; inset:12px 12.5% 32px; border:4px solid var(--lc); border-radius:28px; opacity:.36; pointer-events:none; }
+  .loop-wrap { --lc:#9ACD32; position:relative; height:536px; margin:12px 1px 14px; }
+  .loop-ring { position:absolute; inset:16px 12.5% 40px; border:4px solid var(--lc); border-radius:32px; opacity:.36; pointer-events:none; }
   .loop-sta { position:absolute; width:25%; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; transform:translate(-50%,-50%); padding:1px 0 0; }
   .loop-sta .snake-dot { width:16px; height:16px; }
   .loop-sta .snake-name { font-size:7px; line-height:1.15; white-space:nowrap; min-height:9px; max-width:58px; text-overflow:ellipsis; overflow:hidden; }
@@ -1417,7 +1417,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-26 22:05 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-26 22:09 JST</p>
       </div>
 
 
@@ -2293,13 +2293,13 @@ function renderLoopLine(line) {
 }
 
 function loopPositions(count) {
-  const rows = 10, rowH = 36, topY = 12, bottomY = (rows - 1) * rowH - 12;
+  const rowH = 40, topY = 16, bottomY = topY + rowH * 12;
   const xs = ['12.5%', '37.5%', '62.5%', '87.5%'];
   const pts = [
     ...xs.map(x => ({ x, y: topY })),
-    ...[1, 2, 3, 4, 5, 6, 7, 8].map(r => ({ x: '87.5%', y: r * rowH })),
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(r => ({ x: '87.5%', y: topY + r * rowH })),
     ...[...xs].reverse().map(x => ({ x, y: bottomY })),
-    ...[8, 7, 6, 5, 4, 3, 2, 1].map(r => ({ x: '12.5%', y: r * rowH })),
+    ...[11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map(r => ({ x: '12.5%', y: topY + r * rowH })),
   ];
   return Array.from({ length: count }, (_, i) => {
     const t = i * pts.length / count;
@@ -2364,7 +2364,7 @@ function renderSnake(line) {
 }
 
 function snakeTrackSvg(rowCount) {
-  const rowH = 34, dotY = 10;
+  const rowH = 38, dotY = 10;
   const left = 12.5, right = 87.5;
   const pts = [];
   for (let ri = 0; ri < rowCount; ri++) {
