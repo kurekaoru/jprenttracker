@@ -522,7 +522,36 @@
   .ftab-content { flex:1; min-width:0; padding:10px 0 4px 12px; overflow-y:auto; max-height:calc(100vh - 205px); }
   .ftab-pane { display:none; }
   .ftab-pane.active { display:block; }
-  .station-override-banner { background:rgba(239,159,39,0.14); border:1px solid rgba(239,159,39,0.35); border-radius:6px; padding:7px 9px; font-size:10px; color:var(--warn); margin-bottom:10px; line-height:1.55; }
+  .station-override-banner { background:rgba(239,159,39,0.14); border:1px solid rgba(239,159,39,0.35); border-radius:6px; padding:7px 9px; font-size:10px; color:var(--warn); margin-bottom:8px; line-height:1.55; }
+  /* ── Railway line accordion + snake ─────────────────────────────────────── */
+  .line-item { border-bottom:1px solid rgba(255,255,255,0.06); }
+  .line-header { display:flex; align-items:center; gap:7px; padding:5px 2px; cursor:pointer; user-select:none; transition:background .12s; border-radius:4px; }
+  .line-header:hover { background:rgba(255,255,255,0.05); }
+  .line-icon { width:26px; height:16px; border-radius:3px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:7.5px; font-weight:800; color:#fff; font-family:var(--mono); letter-spacing:-.03em; }
+  .line-name { flex:1; font-size:11px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .line-sel  { font-size:10px; color:var(--accent); font-weight:700; flex-shrink:0; min-width:10px; text-align:right; }
+  .line-chev { font-size:8px; color:var(--muted); transition:transform .15s; flex-shrink:0; margin-left:2px; }
+  .line-item.open .line-chev { transform:rotate(180deg); }
+  .line-body { padding:4px 0 8px; }
+  /* Snake */
+  .snake-wrap { --lc:#aaa; position:relative; }
+  .snake-row  { display:flex; position:relative; }
+  .snake-row::before { content:''; position:absolute; left:12.5%; right:12.5%; top:8px; height:2px; background:var(--lc); opacity:.28; z-index:0; pointer-events:none; }
+  .snake-sta  { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; position:relative; z-index:1; padding:1px 0 3px; }
+  .snake-sta.empty { cursor:default; pointer-events:none; }
+  .snake-dot  { width:16px; height:16px; border-radius:50%; border:2px solid var(--dc,var(--lc)); background:transparent; transition:background .12s,transform .1s; flex-shrink:0; box-sizing:border-box; }
+  .snake-sta.active .snake-dot  { background:var(--dc,var(--lc)); }
+  .snake-sta:hover:not(.empty) .snake-dot { transform:scale(1.2); }
+  .snake-sta.empty .snake-dot,.snake-sta.empty .snake-name { visibility:hidden; }
+  .snake-name { font-size:7.5px; text-align:center; line-height:1.2; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:calc(100% - 2px); }
+  .snake-sta.active .snake-name { color:var(--text); font-weight:700; }
+  .snake-turn { height:10px; position:relative; }
+  .snake-turn-r::after { content:''; position:absolute; right:12.5%; top:-1px; width:2px; height:calc(100% + 2px); background:var(--lc); opacity:.28; }
+  .snake-turn-l::after { content:''; position:absolute; left:12.5%; top:-1px; width:2px; height:calc(100% + 2px); background:var(--lc); opacity:.28; }
+  /* Service legend */
+  .svc-legend { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:7px; padding:0 2px; }
+  .svc-legend span { display:flex; align-items:center; gap:3px; font-size:8.5px; color:var(--muted); white-space:nowrap; }
+  .svc-legend b { width:8px; height:8px; border-radius:50%; flex-shrink:0; display:inline-block; }
   .prop-tab-btn {
     writing-mode: vertical-rl;
     background: none; border: none; cursor: pointer;
@@ -1100,9 +1129,13 @@
             <!-- Station -->
             <div class="ftab-pane" id="ftab-station">
               <div class="station-override-banner" id="station-override-banner" style="display:none;">⚠ 区が選択されているため、駅フィルターは通知では無効です</div>
-              <p class="section-label" style="margin-bottom:4px;">駅名（通知フィルター用）</p>
-              <p style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.5;">カンマ区切りで入力。マップ表示には適用されません。</p>
-              <textarea id="filter-stations" rows="4" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);font-family:var(--font);font-size:12px;resize:vertical;" placeholder="例: 新宿, 渋谷, 大手町"></textarea>
+              <div class="svc-legend">
+                <span><b style="background:#E74C3C"></b>特急・通勤特急</span>
+                <span><b style="background:#F39C12"></b>急行・快速</span>
+                <span><b style="background:#8BC34A"></b>準急・区間急行</span>
+                <span><b style="border:1.5px solid #888;background:transparent"></b>各停</span>
+              </div>
+              <div id="line-accordion"></div>
             </div>
 
             <!-- Facilities -->
@@ -1380,7 +1413,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-26 11:55 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-26 14:00 JST</p>
       </div>
 
 
@@ -2098,6 +2131,212 @@ let selectedWards    = new Set(DEFAULT_WARDS);
 let selectedLayouts  = new Set(DEFAULT_LAYOUTS);
 let filterSources    = new Set(DEFAULT_SOURCES);
 let selectedFeatures = new Set();
+let selectedStations = new Set();
+
+// Train line data: [id, code, color, name, stations]
+// stations: [name, svcLevel] svcLevel: 0=各停, 1=準急/区間急行, 2=急行/快速, 3=特急/通勤特急
+const TRAIN_LINES = [
+  { id:'JY', code:'JY', color:'#9ACD32', name:'JR山手線', stations:[
+    ['大崎',0],['五反田',0],['目黒',0],['恵比寿',0],['渋谷',0],['原宿',0],['代々木',0],['新宿',0],['新大久保',0],['高田馬場',0],['目白',0],['池袋',0],['大塚',0],['巣鴨',0],['駒込',0],['田端',0],['西日暮里',0],['日暮里',0],['鶯谷',0],['上野',0],['御徒町',0],['秋葉原',0],['神田',0],['東京',0],['有楽町',0],['新橋',0],['浜松町',0],['田町',0],['高輪ゲートウェイ',0],['品川',0]
+  ]},
+  { id:'JC', code:'JC', color:'#F15A22', name:'JR中央快速線', stations:[
+    ['東京',0],['神田',0],['御茶ノ水',2],['四ツ谷',2],['新宿',2],['中野',2],['荻窪',2],['吉祥寺',2],['三鷹',2],['武蔵境',2],['東小金井',2],['武蔵小金井',2],['国分寺',2],['西国分寺',2],['国立',2],['立川',2],['日野',0],['豊田',0],['八王子',0],['西八王子',0],['高尾',0]
+  ]},
+  { id:'JK', code:'JK', color:'#00B2E2', name:'JR京浜東北線', stations:[
+    ['大宮',0],['さいたま新都心',0],['与野',0],['北浦和',0],['浦和',0],['南浦和',0],['蕨',0],['西川口',0],['川口',0],['赤羽',0],['東十条',0],['王子',0],['上中里',0],['田端',0],['西日暮里',0],['日暮里',0],['鶯谷',0],['上野',0],['秋葉原',0],['神田',0],['東京',0],['有楽町',0],['新橋',0],['浜松町',0],['田町',0],['高輪ゲートウェイ',0],['品川',0],['大井町',0],['大森',0],['蒲田',0],['川崎',0],['鶴見',0],['新子安',0],['東神奈川',0],['横浜',0],['桜木町',0],['関内',0],['石川町',0],['山手',0],['根岸',0],['磯子',0],['新杉田',0],['洋光台',0],['港南台',0],['本郷台',0],['大船',0]
+  ]},
+  { id:'JO', code:'JO', color:'#006DBB', name:'JR総武快速線', stations:[
+    ['千葉',2],['市川',2],['新小岩',2],['錦糸町',2],['馬喰町',2],['新日本橋',2],['東京',2],['新橋',2],['品川',2],['西大井',2],['武蔵小杉',2],['新川崎',2],['横浜',2],['保土ケ谷',2],['東戸塚',2],['戸塚',2],['大船',2]
+  ]},
+  { id:'JB', code:'JB', color:'#F9A11B', name:'JR総武各停線', stations:[
+    ['三鷹',0],['吉祥寺',0],['西荻窪',0],['荻窪',0],['阿佐ケ谷',0],['高円寺',0],['中野',0],['東中野',0],['大久保',0],['新宿',0],['代々木',0],['千駄ケ谷',0],['信濃町',0],['四ツ谷',0],['市ケ谷',0],['飯田橋',0],['水道橋',0],['御茶ノ水',0],['秋葉原',0],['浅草橋',0],['両国',0],['錦糸町',0],['亀戸',0],['平井',0],['新小岩',0],['小岩',0],['市川',0],['本八幡',0],['下総中山',0],['西船橋',0],['船橋',0],['津田沼',0],['千葉',0]
+  ]},
+  { id:'JA', code:'JA', color:'#228B22', name:'JR埼京線', stations:[
+    ['大宮',0],['北与野',0],['与野本町',0],['南与野',0],['中浦和',0],['武蔵浦和',0],['西浦和',0],['北赤羽',0],['浮間舟渡',0],['赤羽',0],['十条',0],['板橋',0],['池袋',0],['新宿',0],['渋谷',0],['恵比寿',0],['大崎',0],['武蔵小杉',0],['西大井',0],['大井町',0],['大森',0],['蒲田',0],['川崎',0],['横浜',0],['新川崎',0]
+  ]},
+  { id:'G',  code:'G',  color:'#F39400', name:'東京メトロ銀座線', stations:[
+    ['渋谷',0],['表参道',0],['外苑前',0],['青山一丁目',0],['赤坂見附',0],['溜池山王',0],['虎ノ門',0],['新橋',0],['銀座',0],['京橋',0],['日本橋',0],['三越前',0],['神田',0],['末広町',0],['上野広小路',0],['上野',0],['稲荷町',0],['田原町',0],['浅草',0]
+  ]},
+  { id:'M',  code:'M',  color:'#E60012', name:'東京メトロ丸ノ内線', stations:[
+    ['荻窪',0],['南阿佐ケ谷',0],['新高円寺',0],['東高円寺',0],['新中野',0],['中野坂上',0],['西新宿',0],['新宿',0],['新宿三丁目',0],['新宿御苑前',0],['四谷三丁目',0],['四ツ谷',0],['赤坂見附',0],['国会議事堂前',0],['霞ケ関',0],['銀座',0],['東京',0],['大手町',0],['淡路町',0],['御茶ノ水',0],['本郷三丁目',0],['後楽園',0],['茗荷谷',0],['新大塚',0],['池袋',0]
+  ]},
+  { id:'H',  code:'H',  color:'#9D9E9E', name:'東京メトロ日比谷線', stations:[
+    ['中目黒',0],['恵比寿',0],['広尾',0],['六本木',0],['神谷町',0],['霞ケ関',0],['日比谷',0],['銀座',0],['東銀座',0],['築地',0],['八丁堀',0],['茅場町',0],['人形町',0],['小伝馬町',0],['秋葉原',0],['仲御徒町',0],['上野',0],['入谷',0],['三ノ輪',0],['南千住',0],['北千住',0]
+  ]},
+  { id:'T',  code:'T',  color:'#009BBF', name:'東京メトロ東西線', stations:[
+    ['中野',0],['落合',0],['高田馬場',0],['早稲田',0],['神楽坂',0],['飯田橋',0],['九段下',0],['竹橋',0],['大手町',0],['日本橋',0],['茅場町',0],['門前仲町',0],['木場',0],['東陽町',0],['南砂町',0],['西葛西',0],['葛西',0],['浦安',0],['南行徳',0],['行徳',0],['妙典',0],['原木中山',0],['西船橋',0]
+  ]},
+  { id:'C',  code:'C',  color:'#00A55B', name:'東京メトロ千代田線', stations:[
+    ['代々木上原',0],['代々木公園',0],['明治神宮前',0],['表参道',0],['乃木坂',0],['赤坂',0],['国会議事堂前',0],['霞ケ関',0],['日比谷',0],['二重橋前',0],['大手町',0],['新御茶ノ水',0],['湯島',0],['根津',0],['千駄木',0],['西日暮里',0],['町屋',0],['北千住',0],['綾瀬',0],['北綾瀬',0]
+  ]},
+  { id:'Y',  code:'Y',  color:'#C1A900', name:'東京メトロ有楽町線', stations:[
+    ['和光市',0],['地下鉄成増',0],['地下鉄赤塚',0],['平和台',0],['氷川台',0],['小竹向原',0],['千川',0],['要町',0],['池袋',0],['東池袋',0],['護国寺',0],['江戸川橋',0],['飯田橋',0],['市ケ谷',0],['麹町',0],['永田町',0],['桜田門',0],['有楽町',0],['銀座一丁目',0],['新富町',0],['月島',0],['豊洲',0],['辰巳',0],['新木場',0]
+  ]},
+  { id:'Z',  code:'Z',  color:'#8F76D6', name:'東京メトロ半蔵門線', stations:[
+    ['渋谷',0],['表参道',0],['青山一丁目',0],['永田町',0],['半蔵門',0],['九段下',0],['神保町',0],['大手町',0],['三越前',0],['水天宮前',0],['清澄白河',0],['住吉',0],['錦糸町',0],['押上',0]
+  ]},
+  { id:'N',  code:'N',  color:'#00AC9B', name:'東京メトロ南北線', stations:[
+    ['目黒',0],['白金台',0],['白金高輪',0],['麻布十番',0],['六本木一丁目',0],['溜池山王',0],['永田町',0],['四ツ谷',0],['市ケ谷',0],['飯田橋',0],['後楽園',0],['東大前',0],['本駒込',0],['駒込',0],['西ケ原',0],['王子神谷',0],['王子',0],['志茂',0],['赤羽岩淵',0]
+  ]},
+  { id:'F',  code:'F',  color:'#9C5E31', name:'東京メトロ副都心線', stations:[
+    ['和光市',0],['地下鉄成増',0],['地下鉄赤塚',0],['平和台',0],['氷川台',0],['小竹向原',0],['千川',0],['要町',0],['池袋',0],['雑司が谷',0],['西早稲田',0],['東新宿',0],['新宿三丁目',0],['北参道',0],['明治神宮前',0],['渋谷',0]
+  ]},
+  { id:'A',  code:'A',  color:'#E84545', name:'都営浅草線', stations:[
+    ['西馬込',0],['馬込',0],['中延',0],['戸越',0],['五反田',0],['高輪台',0],['泉岳寺',0],['三田',0],['大門',0],['新橋',0],['東銀座',0],['宝町',0],['日本橋',0],['人形町',0],['東日本橋',0],['浅草橋',0],['蔵前',0],['浅草',0],['本所吾妻橋',0],['押上',0]
+  ]},
+  { id:'I',  code:'I',  color:'#0079C2', name:'都営三田線', stations:[
+    ['目黒',0],['白金台',0],['白金高輪',0],['三田',0],['芝公園',0],['御成門',0],['内幸町',0],['日比谷',0],['大手町',0],['神保町',0],['水道橋',0],['春日',0],['白山',0],['千石',0],['巣鴨',0],['西巣鴨',0],['新板橋',0],['板橋区役所前',0],['板橋本町',0],['本蓮沼',0],['志村坂上',0],['志村三丁目',0],['蓮根',0],['西台',0],['高島平',0],['新高島平',0],['西高島平',0]
+  ]},
+  { id:'S',  code:'S',  color:'#6CBB5A', name:'都営新宿線', stations:[
+    ['新宿',0],['新宿三丁目',0],['曙橋',0],['市ケ谷',0],['九段下',0],['神保町',0],['小川町',0],['岩本町',0],['馬喰横山',0],['浜町',0],['森下',0],['菊川',0],['住吉',0],['西大島',0],['大島',0],['東大島',0],['船堀',0],['一之江',0],['瑞江',0],['篠崎',0],['本八幡',0]
+  ]},
+  { id:'E',  code:'E',  color:'#C5007C', name:'都営大江戸線', stations:[
+    ['都庁前',0],['新宿西口',0],['東新宿',0],['若松河田',0],['牛込柳町',0],['牛込神楽坂',0],['飯田橋',0],['春日',0],['本郷三丁目',0],['上野御徒町',0],['新御徒町',0],['蔵前',0],['両国',0],['森下',0],['清澄白河',0],['門前仲町',0],['月島',0],['勝どき',0],['築地市場',0],['汐留',0],['大門',0],['赤羽橋',0],['麻布十番',0],['六本木',0],['青山一丁目',0],['国立競技場',0],['代々木',0],['新宿',0],['都庁前',0]
+  ]},
+  { id:'TY', code:'TY', color:'#E60012', name:'東急東横線', stations:[
+    ['渋谷',0],['代官山',0],['中目黒',0],['祐天寺',0],['学芸大学',0],['都立大学',0],['自由が丘',2],['田園調布',2],['多摩川',2],['新丸子',2],['武蔵小杉',2],['元住吉',0],['日吉',2],['綱島',2],['大倉山',0],['菊名',2],['妙蓮寺',0],['白楽',0],['東白楽',0],['反町',0],['横浜',0]
+  ]},
+  { id:'DT', code:'DT', color:'#00A550', name:'東急田園都市線', stations:[
+    ['渋谷',0],['池尻大橋',0],['三軒茶屋',1],['駒沢大学',0],['桜新町',0],['用賀',0],['二子玉川',2],['二子新地',0],['高津',0],['溝の口',2],['梶が谷',0],['宮崎台',0],['宮前平',0],['鷺沼',2],['たまプラーザ',2],['あざみ野',2],['江田',0],['市が尾',0],['藤が丘',0],['青葉台',2],['田奈',0],['長津田',2],['つくし野',0],['すずかけ台',0],['南町田グランベリーパーク',0],['つきみ野',0],['中央林間',0]
+  ]},
+  { id:'OH', code:'OH', color:'#0070BC', name:'小田急線', stations:[
+    ['新宿',0],['南新宿',0],['参宮橋',0],['代々木八幡',0],['代々木上原',1],['東北沢',0],['下北沢',1],['世田谷代田',0],['梅ヶ丘',0],['豪徳寺',0],['経堂',1],['千歳船橋',0],['祖師ケ谷大蔵',1],['成城学園前',2],['喜多見',0],['狛江',0],['和泉多摩川',0],['登戸',2],['向ヶ丘遊園',2],['生田',0],['読売ランド前',0],['百合ケ丘',0],['新百合ケ丘',3],['柿生',0],['鶴川',0],['玉川学園前',0],['町田',2],['相模大野',2],['小田急相模原',0],['相武台前',0],['座間',0],['海老名',2],['厚木',0],['本厚木',2],['愛甲石田',0],['伊勢原',2],['鶴巻温泉',0],['東海大学前',0],['秦野',0],['渋沢',0],['新松田',0],['松田',0],['東山北',0],['山北',0],['谷峨',0],['駿河小山',0],['足柄',0],['小田原',0]
+  ]},
+  { id:'KO', code:'KO', color:'#0070C0', name:'京王線', stations:[
+    ['新宿',0],['笹塚',1],['代田橋',0],['明大前',1],['下高井戸',0],['桜上水',0],['上北沢',0],['八幡山',0],['芦花公園',0],['千歳烏山',1],['仙川',0],['つつじケ丘',2],['柴崎',0],['国領',0],['布田',0],['調布',3],['西調布',0],['飛田給',0],['武蔵野台',0],['多磨霊園',0],['東府中',0],['府中',2],['分倍河原',0],['中河原',0],['聖蹟桜ケ丘',2],['百草園',0],['高幡不動',2],['南平',0],['平山城址公園',0],['長沼',0],['北野',2],['京王八王子',0]
+  ]},
+  { id:'SI', code:'SI', color:'#D3A200', name:'西武池袋線', stations:[
+    ['池袋',0],['椎名町',0],['東長崎',0],['江古田',0],['桜台',0],['練馬',1],['中村橋',0],['富士見台',0],['練馬高野台',0],['石神井公園',1],['大泉学園',0],['保谷',0],['ひばりヶ丘',1],['東久留米',0],['清瀬',0],['秋津',0],['所沢',2],['西所沢',0],['小手指',0],['狭山ヶ丘',0],['武蔵藤沢',0],['稲荷山公園',0],['入間市',0],['仏子',0],['元加治',0],['飯能',0]
+  ]},
+  { id:'TJ', code:'TJ', color:'#F68B1E', name:'東武東上線', stations:[
+    ['池袋',0],['北池袋',0],['下板橋',0],['大山',0],['中板橋',0],['ときわ台',0],['上板橋',0],['東武練馬',0],['下赤塚',0],['成増',1],['和光市',1],['朝霞',0],['朝霞台',1],['志木',1],['柳瀬川',0],['みずほ台',0],['鶴瀬',0],['ふじみ野',0],['上福岡',0],['新河岸',0],['川越',1],['川越市',0],['霞ケ関',0],['鶴ヶ島',0],['若葉',0],['坂戸',0],['北坂戸',0],['高坂',0],['東松山',0]
+  ]},
+  { id:'KK', code:'KK', color:'#E60012', name:'京急線', stations:[
+    ['品川',0],['北品川',0],['新馬場',0],['青物横丁',0],['鮫洲',0],['立会川',0],['大森海岸',0],['平和島',1],['大森町',0],['梅屋敷',0],['京急蒲田',2],['雑色',0],['六郷土手',0],['京急川崎',2],['八丁畷',0],['鶴見市場',0],['京急鶴見',1],['花月総持寺',0],['生麦',0],['京急新子安',0],['子安',0],['神奈川新町',1],['仲木戸',0],['神奈川',0],['横浜',2],['戸部',0],['日ノ出町',0],['黄金町',0],['南太田',0],['井土ケ谷',0],['弘明寺',0],['上大岡',2],['屏風浦',0],['杉田',0],['京急富岡',0],['能見台',0],['金沢文庫',2],['金沢八景',1],['追浜',0],['京急田浦',0],['安針塚',0],['逸見',0],['汐入',0],['横須賀中央',2],['県立大学',0],['堀ノ内',1],['京急大津',0],['馬堀海岸',0],['浦賀',0]
+  ]},
+  { id:'TM', code:'TM', color:'#0068B7', name:'多摩モノレール', stations:[
+    ['上北台',0],['桜街道',0],['玉川上水',0],['砂川七番',0],['泉体育館',0],['武蔵砂川',0],['西武立川',0],['立飛',0],['高松',0],['立川北',0],['立川南',0],['柴崎体育館',0],['甲州街道',0],['万葉台',0],['中央大学・明星大学',0],['大塚・帝京大学',0],['松が谷',0],['多摩センター',0]
+  ]}
+];
+
+function _snm(s) { return s.replace(/^(東京メトロ|都営|東急|JR)/, '').replace(/線$/, ''); }
+
+function _sdc(svcLv, lineColor) {
+  if (svcLv === 3) return '#E74C3C';
+  if (svcLv === 2) return '#F39C12';
+  if (svcLv === 1) return '#8BC34A';
+  return lineColor;
+}
+
+function renderSnake(line) {
+  const COLS = 4;
+  const stas = line.stations;
+  const rows = [];
+  let i = 0, ltr = true;
+  while (i < stas.length) {
+    const chunk = stas.slice(i, i + COLS);
+    if (!ltr) chunk.reverse();
+    while (chunk.length < COLS) chunk.push(null);
+    rows.push({ cells: chunk, ltr });
+    ltr = !ltr;
+    i += COLS;
+  }
+
+  const wrap = document.createElement('div');
+  wrap.className = 'snake-wrap';
+  wrap.style.setProperty('--lc', line.color);
+
+  rows.forEach((row, ri) => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'snake-row';
+
+    row.cells.forEach(sta => {
+      const cell = document.createElement('div');
+      if (!sta) {
+        cell.className = 'snake-sta empty';
+        cell.innerHTML = '<div class="snake-dot"></div><div class="snake-name"></div>';
+      } else {
+        const [name, svc] = sta;
+        const dc = _sdc(svc, line.color);
+        cell.className = 'snake-sta' + (selectedStations.has(name) ? ' active' : '');
+        cell.dataset.sta = name;
+        cell.dataset.lid = line.id;
+        cell.style.setProperty('--dc', dc);
+        cell.innerHTML = `<div class="snake-dot"></div><div class="snake-name">${name}</div>`;
+        cell.onclick = () => _staTog(cell);
+      }
+      rowEl.appendChild(cell);
+    });
+    wrap.appendChild(rowEl);
+
+    if (ri < rows.length - 1) {
+      const turn = document.createElement('div');
+      turn.className = 'snake-turn ' + (row.ltr ? 'snake-turn-r' : 'snake-turn-l');
+      wrap.appendChild(turn);
+    }
+  });
+  return wrap;
+}
+
+function buildLineAccordion() {
+  const acc = document.getElementById('line-accordion');
+  if (!acc) return;
+  acc.innerHTML = '';
+  TRAIN_LINES.forEach(line => {
+    const item = document.createElement('div');
+    item.className = 'line-item';
+    item.id = 'li-' + line.id;
+
+    const selCount = line.stations.filter(([n]) => selectedStations.has(n)).length;
+    const hdr = document.createElement('div');
+    hdr.className = 'line-header';
+    hdr.onclick = () => toggleLine(line.id);
+    hdr.innerHTML = `
+      <div class="line-icon" style="background:${line.color}">${line.code}</div>
+      <span class="line-name">${line.name}</span>
+      <span class="line-sel" id="lsel-${line.id}">${selCount > 0 ? selCount : ''}</span>
+      <span class="line-chev">▼</span>`;
+
+    const body = document.createElement('div');
+    body.className = 'line-body';
+    body.style.display = 'none';
+    body.id = 'lb-' + line.id;
+    body.appendChild(renderSnake(line));
+
+    item.appendChild(hdr);
+    item.appendChild(body);
+    acc.appendChild(item);
+  });
+}
+
+function toggleLine(id) {
+  const item = document.getElementById('li-' + id);
+  const body = document.getElementById('lb-' + id);
+  if (!item || !body) return;
+  const open = item.classList.toggle('open');
+  body.style.display = open ? 'block' : 'none';
+}
+
+function _staTog(el) {
+  const name = el.dataset.sta;
+  const lid  = el.dataset.lid;
+  if (selectedStations.has(name)) {
+    selectedStations.delete(name);
+    el.classList.remove('active');
+  } else {
+    selectedStations.add(name);
+    el.classList.add('active');
+  }
+  _updateLineSel(lid);
+}
+
+function _updateLineSel(lid) {
+  const line = TRAIN_LINES.find(l => l.id === lid);
+  if (!line) return;
+  const cnt = line.stations.filter(([n]) => selectedStations.has(n)).length;
+  const el = document.getElementById('lsel-' + lid);
+  if (el) el.textContent = cnt > 0 ? cnt : '';
+}
 
 const APPLIANCES = ['エアコン','浴室乾燥機','追い焚き','自動お湯張り','ウォシュレット','乾燥機','食洗機','BS・CS'];
 const PROGRAMS   = ['近居割','子育て割','高齢者割引','バリアフリー','大学連携'];
@@ -2188,16 +2427,16 @@ function loadConfig() {
   const fpEl = document.getElementById('filter-parking');
   const faEl = document.getElementById('filter-available-now');
   const fmEl = document.getElementById('filter-max-age');
-  const fsEl = document.getElementById('filter-stations');
   if (fpEl) fpEl.checked   = !!d.has_parking;
   if (faEl) faEl.checked   = !!d.available_now;
   if (fmEl) fmEl.value     = d.max_age_years || '';
-  if (fsEl) fsEl.value     = (d.filter_stations || []).join(', ');
+  selectedStations = new Set(d.filter_stations || []);
   selectedWards    = d.wards?.length   ? new Set(d.wards)   : new Set(DEFAULT_WARDS);
   selectedLayouts  = d.layouts?.length ? new Set(d.layouts) : new Set(DEFAULT_LAYOUTS);
   selectedFeatures = new Set(d.required_features || []);
   filterSources    = new Set(DEFAULT_SOURCES);
   buildChips();
+  buildLineAccordion();
   applyMapFilters();
   loadUserLayers();
   // If logged in, server settings will override this via loadUserSettings()
@@ -2211,8 +2450,7 @@ async function saveConfig() {
 
   const allWardCount = KU.length + SI.length + YOKOHAMA.length + KAWASAKI.length + SAGAMIHARA.length;
   const savedWards   = selectedWards.size >= allWardCount ? [] : [...selectedWards];
-  const stationsRaw  = (document.getElementById('filter-stations')?.value || '').trim();
-  const stations     = stationsRaw ? stationsRaw.split(/[,\n、]+/).map(s => s.trim()).filter(Boolean) : [];
+  const stations     = [...selectedStations];
 
   const payload = {
     min_rent:         parseInt(document.getElementById('min-rent').value) || 0,
@@ -4681,16 +4919,16 @@ async function loadUserSettings() {
     const fpEl = document.getElementById('filter-parking');
     const faEl = document.getElementById('filter-available-now');
     const fmEl = document.getElementById('filter-max-age');
-    const fsEl = document.getElementById('filter-stations');
     if (fpEl) fpEl.checked = !!d.has_parking;
     if (faEl) faEl.checked = !!d.available_now;
     if (fmEl) fmEl.value   = d.max_age_years || '';
-    if (fsEl) fsEl.value   = (d.filter_stations || []).join(', ');
+    selectedStations = new Set(d.filter_stations || []);
     selectedWards    = d.wards?.length   ? new Set(d.wards)   : new Set(DEFAULT_WARDS);
     selectedLayouts  = d.layouts?.length ? new Set(d.layouts) : new Set(DEFAULT_LAYOUTS);
     selectedFeatures = new Set(d.required_features || []);
     filterSources    = new Set(DEFAULT_SOURCES);
     buildChips();
+    buildLineAccordion();
     applyMapFilters();
   } catch {}
   loadUserLayers();
