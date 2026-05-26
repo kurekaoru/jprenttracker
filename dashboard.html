@@ -536,22 +536,22 @@
   .line-body { padding:4px 0 8px; }
   /* Snake */
   .snake-wrap { --lc:#aaa; --rows:1; position:relative; padding:2px 1px 0; }
-  .snake-track { position:absolute; inset:0 0 auto; width:100%; height:calc(var(--rows) * 31px); overflow:visible; pointer-events:none; z-index:0; }
+  .snake-track { position:absolute; inset:0 0 auto; width:100%; height:calc(var(--rows) * 34px); overflow:visible; pointer-events:none; z-index:0; }
   .snake-track path { fill:none; stroke:var(--lc); stroke-width:4; stroke-linecap:round; stroke-linejoin:round; opacity:.34; vector-effect:non-scaling-stroke; }
-  .snake-row  { display:flex; position:relative; z-index:1; min-height:31px; }
-  .snake-sta  { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; position:relative; z-index:1; padding:1px 0 5px; }
+  .snake-row  { display:grid; grid-template-columns:repeat(4, 1fr); position:relative; z-index:1; height:34px; }
+  .snake-sta  { min-width:0; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; position:relative; z-index:1; padding:1px 0 0; }
   .snake-sta.empty { cursor:default; pointer-events:none; }
   .snake-dot  { width:18px; height:18px; border-radius:50%; border:2.5px solid var(--dc,#8A8D93); background:var(--surface); transition:background .12s,transform .1s,box-shadow .12s; flex-shrink:0; box-sizing:border-box; box-shadow:0 0 0 2px var(--surface); }
   .snake-sta.active .snake-dot  { background:var(--dc,var(--lc)); }
   .snake-sta:hover:not(.empty) .snake-dot { transform:scale(1.16); box-shadow:0 0 0 2px var(--surface),0 0 0 5px rgba(255,255,255,.08); }
   .snake-sta.empty .snake-dot,.snake-sta.empty .snake-name { visibility:hidden; }
-  .snake-name { font-size:7.5px; text-align:center; line-height:1.2; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:calc(100% - 2px); }
+  .snake-name { font-size:7.5px; text-align:center; line-height:1.2; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:calc(100% - 2px); min-height:9px; }
   .snake-sta.active .snake-name { color:var(--text); font-weight:700; }
-  .loop-wrap { --lc:#9ACD32; position:relative; height:286px; margin:8px -2px 10px; }
-  .loop-ring { position:absolute; left:15px; right:15px; top:18px; height:210px; border:5px solid var(--lc); border-radius:50%; opacity:.36; }
-  .loop-sta { position:absolute; width:46px; display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; transform:translate(-50%,-50%); }
+  .loop-wrap { --lc:#9ACD32; --rows:8; position:relative; height:calc(var(--rows) * 34px); margin:8px 1px 10px; }
+  .loop-ring { position:absolute; inset:10px 12.5% 28px; border:4px solid var(--lc); border-radius:24px; opacity:.36; pointer-events:none; }
+  .loop-sta { position:absolute; width:25%; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; transform:translate(-50%,-50%); padding:1px 0 0; }
   .loop-sta .snake-dot { width:16px; height:16px; }
-  .loop-sta .snake-name { font-size:7px; white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; min-height:16px; }
+  .loop-sta .snake-name { font-size:7px; line-height:1.15; white-space:nowrap; min-height:9px; }
   /* Service legend */
   .svc-legend { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:7px; padding:0 2px; }
   .svc-legend span { display:flex; align-items:center; gap:3px; font-size:8.5px; color:var(--muted); white-space:nowrap; }
@@ -1417,7 +1417,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-26 21:56 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-26 22:01 JST</p>
       </div>
 
 
@@ -2274,17 +2274,15 @@ function renderLoopLine(line) {
   wrap.className = 'loop-wrap';
   wrap.style.setProperty('--lc', line.color);
   wrap.innerHTML = '<div class="loop-ring"></div>';
+  const positions = loopPositions(line.stations.length);
   line.stations.forEach(([name, svc], i) => {
     const cell = document.createElement('div');
-    const angle = (i / line.stations.length) * 360;
-    const rad = angle * Math.PI / 180;
-    const x = Math.sin(rad) * 96;
-    const y = -Math.cos(rad) * 105;
+    const pos = positions[i];
     cell.className = 'loop-sta snake-sta' + (selectedStations.has(name) ? ' active' : '');
     cell.dataset.sta = name;
     cell.dataset.lid = line.id;
-    cell.style.left = `calc(50% + ${x.toFixed(1)}px)`;
-    cell.style.top = `${(123 + y).toFixed(1)}px`;
+    cell.style.left = pos.x;
+    cell.style.top = pos.y;
     cell.style.setProperty('--dc', _sdc(svc));
     cell.title = `${name} · ${SERVICE_LABELS[svc] || SERVICE_LABELS[0]}`;
     cell.innerHTML = `<div class="snake-dot"></div><div class="snake-name">${name}</div>`;
@@ -2292,6 +2290,28 @@ function renderLoopLine(line) {
     wrap.appendChild(cell);
   });
   return wrap;
+}
+
+function loopPositions(count) {
+  const rows = 8, rowH = 34, topY = 10, bottomY = (rows - 1) * rowH - 4;
+  const xs = ['12.5%', '37.5%', '62.5%', '87.5%'];
+  const pts = [
+    ...xs.map(x => ({ x, y: topY })),
+    ...[1, 2, 3, 4, 5, 6].map(r => ({ x: '87.5%', y: r * rowH })),
+    ...[...xs].reverse().map(x => ({ x, y: bottomY })),
+    ...[6, 5, 4, 3, 2, 1].map(r => ({ x: '12.5%', y: r * rowH })),
+  ];
+  return Array.from({ length: count }, (_, i) => {
+    const t = i * pts.length / count;
+    const a = pts[Math.floor(t) % pts.length];
+    const b = pts[(Math.floor(t) + 1) % pts.length];
+    const f = t - Math.floor(t);
+    const ax = parseFloat(a.x), bx = parseFloat(b.x);
+    return {
+      x: `${(ax + (bx - ax) * f).toFixed(3)}%`,
+      y: `${(a.y + (b.y - a.y) * f).toFixed(1)}px`,
+    };
+  });
 }
 
 function renderSnake(line) {
@@ -2344,7 +2364,7 @@ function renderSnake(line) {
 }
 
 function snakeTrackSvg(rowCount) {
-  const rowH = 31, dotY = 10;
+  const rowH = 34, dotY = 10;
   const left = 12.5, right = 87.5;
   const pts = [];
   for (let ri = 0; ri < rowCount; ri++) {
