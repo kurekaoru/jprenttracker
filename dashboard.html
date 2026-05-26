@@ -1417,7 +1417,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-26 22:09 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-26 22:12 JST</p>
       </div>
 
 
@@ -2333,7 +2333,7 @@ function renderSnake(line) {
   wrap.className = 'snake-wrap';
   wrap.style.setProperty('--lc', line.color);
   wrap.style.setProperty('--rows', rows.length);
-  wrap.innerHTML = snakeTrackSvg(rows.length);
+  wrap.innerHTML = snakeTrackSvg(rows);
 
   rows.forEach((row, ri) => {
     const rowEl = document.createElement('div');
@@ -2363,26 +2363,25 @@ function renderSnake(line) {
   return wrap;
 }
 
-function snakeTrackSvg(rowCount) {
+function snakeTrackSvg(rows) {
   const rowH = 38, dotY = 10;
-  const left = 12.5, right = 87.5;
+  const colXs = [12.5, 37.5, 62.5, 87.5];
   const pts = [];
-  for (let ri = 0; ri < rowCount; ri++) {
-    const y = dotY + ri * rowH;
-    pts.push({ x: ri % 2 === 0 ? left : right, y });
-    pts.push({ x: ri % 2 === 0 ? right : left, y });
-  }
+  rows.forEach((row, ri) => row.cells.forEach((sta, ci) => {
+    if (sta) pts.push({ x: colXs[ci], y: dotY + ri * rowH });
+  }));
+  if (!pts.length) return '';
   let d = `M ${pts[0].x} ${pts[0].y}`;
   for (let i = 1; i < pts.length; i++) {
     const prev = pts[i - 1], cur = pts[i];
     if (prev.y === cur.y) {
       d += ` L ${cur.x} ${cur.y}`;
     } else {
-      const outX = prev.x === right ? 96 : 4;
+      const outX = prev.x > 50 ? 96 : 4;
       d += ` C ${outX} ${prev.y}, ${outX} ${cur.y}, ${cur.x} ${cur.y}`;
     }
   }
-  return `<svg class="snake-track" viewBox="0 0 100 ${rowCount * rowH}" preserveAspectRatio="none" aria-hidden="true"><path d="${d}"/></svg>`;
+  return `<svg class="snake-track" viewBox="0 0 100 ${rows.length * rowH}" preserveAspectRatio="none" aria-hidden="true"><path d="${d}"/></svg>`;
 }
 
 function buildLineAccordion() {
