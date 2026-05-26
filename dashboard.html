@@ -1417,7 +1417,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-26 22:12 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 08:20 JST</p>
       </div>
 
 
@@ -2322,9 +2322,12 @@ function renderSnake(line) {
   let i = 0, ltr = true;
   while (i < stas.length) {
     const chunk = stas.slice(i, i + COLS);
-    if (!ltr) chunk.reverse();
-    while (chunk.length < COLS) chunk.push(null);
-    rows.push({ cells: chunk, ltr });
+    const cells = ltr ? [...chunk] : [...chunk].reverse();
+    while (cells.length < COLS) {
+      if (ltr) cells.push(null);
+      else cells.unshift(null);
+    }
+    rows.push({ cells, ltr });
     ltr = !ltr;
     i += COLS;
   }
@@ -2367,9 +2370,12 @@ function snakeTrackSvg(rows) {
   const rowH = 38, dotY = 10;
   const colXs = [12.5, 37.5, 62.5, 87.5];
   const pts = [];
-  rows.forEach((row, ri) => row.cells.forEach((sta, ci) => {
-    if (sta) pts.push({ x: colXs[ci], y: dotY + ri * rowH });
-  }));
+  rows.forEach((row, ri) => {
+    const indices = row.ltr ? [0, 1, 2, 3] : [3, 2, 1, 0];
+    indices.forEach(ci => {
+      if (row.cells[ci]) pts.push({ x: colXs[ci], y: dotY + ri * rowH });
+    });
+  });
   if (!pts.length) return '';
   let d = `M ${pts[0].x} ${pts[0].y}`;
   for (let i = 1; i < pts.length; i++) {
