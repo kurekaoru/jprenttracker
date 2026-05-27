@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 23:57 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 00:00 JST</p>
       </div>
 
 
@@ -2496,7 +2496,7 @@ function lineGraphLayout(line) {
   const nodes = [];
   const edges = [];
   const labels = [];
-  const placePath = (pathStations, startRow, cols, startLtr = true, branch = false, forceRowStartNames = new Set()) => {
+  const placePath = (pathStations, startRow, cols, startLtr = true, branch = false, forceRowStartNames = new Set(), rowEndNames = new Set()) => {
     let ltr = startLtr;
     const rowSize = cols.length;
     const rows = [];
@@ -2511,6 +2511,9 @@ function lineGraphLayout(line) {
       if (forceRowStartNames.has(sta[0]) && current.length) {
         pushRow();
         ltr = true;
+      }
+      if (rowEndNames.has(sta[0]) && current.length && current.length < rowSize - 1) {
+        while (current.length < rowSize - 1) current.push(null);
       }
       current.push(sta);
       if (current.length === rowSize) pushRow();
@@ -2541,7 +2544,7 @@ function lineGraphLayout(line) {
       const suffix = stas.slice(firstBranchIdx + 1);
       const prefixRows = placePath(prefix, 0, fullCols, true, false);
       const laterBranchNames = new Set(branches.slice(1).map(branch => branch.from));
-      const suffixRows = placePath(suffix, prefixRows, trunkCols, prefixRows % 2 === 0, false, laterBranchNames);
+      const suffixRows = placePath(suffix, prefixRows, trunkCols, prefixRows % 2 === 0, false, laterBranchNames, laterBranchNames);
       mainRows = prefixRows + suffixRows;
     } else {
       mainRows = placePath(stas, 0, trunkCols, true, false);
