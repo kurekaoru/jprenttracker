@@ -545,13 +545,13 @@
   .snake-sta.active .snake-dot  { background:var(--dc,var(--lc)); }
   .snake-sta:hover:not(.empty) .snake-dot { transform:scale(1.16); box-shadow:0 0 0 2px var(--surface),0 0 0 5px rgba(255,255,255,.08); }
   .snake-sta.empty .snake-dot,.snake-sta.empty .snake-name { visibility:hidden; }
-  .snake-name { font-size:8px; text-align:center; line-height:1.2; color:rgba(255,255,255,.62); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:calc(100% - 2px); min-height:10px; font-weight:600; }
+  .snake-name { font-size:8.5px; text-align:center; line-height:1.2; color:rgba(255,255,255,.62); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:calc(100% - 2px); min-height:11px; font-weight:600; }
   .snake-sta.active .snake-name { color:#fff; font-weight:800; }
   .loop-wrap { --lc:#9ACD32; position:relative; height:608px; margin:12px 1px 14px; }
   .loop-ring { position:absolute; inset:14px calc(12.5% - 2px) 30px; border:4px solid var(--lc); border-radius:36px; opacity:.36; pointer-events:none; }
   .loop-sta { position:absolute; width:25%; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; transform:translate(-50%,-9px); padding:1px 0 0; }
   .loop-sta .snake-dot { width:16px; height:16px; }
-  .loop-sta .snake-name { font-size:7.5px; line-height:1.15; white-space:nowrap; min-height:10px; max-width:58px; text-overflow:ellipsis; overflow:hidden; }
+  .loop-sta .snake-name { font-size:8px; line-height:1.15; white-space:nowrap; min-height:11px; max-width:58px; text-overflow:ellipsis; overflow:hidden; }
   /* Service legend */
   .svc-legend { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:7px; padding:0 2px; }
   .svc-legend span { display:flex; align-items:center; gap:3px; font-size:8.5px; color:var(--muted); white-space:nowrap; }
@@ -1417,7 +1417,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 09:15 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 09:20 JST</p>
       </div>
 
 
@@ -2426,6 +2426,11 @@ function toggleLine(id) {
   if (!item || !body) return;
   const open = item.classList.toggle('open');
   body.style.display = open ? 'block' : 'none';
+  if (open) {
+    showTrainLineOverlay(id);
+  } else if (_activeTrainMapLine === id) {
+    clearTrainLineOverlay();
+  }
 }
 
 function _staTog(el) {
@@ -2447,6 +2452,108 @@ function _updateLineSel(lid) {
   const cnt = line.stations.filter(([n]) => selectedStations.has(n)).length;
   const el = document.getElementById('lsel-' + lid);
   if (el) el.textContent = cnt > 0 ? cnt : '';
+}
+
+const TRAIN_STATION_COORDS_KEY = 'jkkTrainStationCoords:v1';
+let _trainLinePolyline = null;
+let _trainStationMarkers = [];
+let _trainGeocoder = null;
+let _activeTrainMapLine = null;
+let _trainMapToken = 0;
+
+function _readTrainStationCoords() {
+  try { return JSON.parse(localStorage.getItem(TRAIN_STATION_COORDS_KEY) || '{}'); }
+  catch (_) { return {}; }
+}
+
+function _writeTrainStationCoords(coords) {
+  try { localStorage.setItem(TRAIN_STATION_COORDS_KEY, JSON.stringify(coords)); }
+  catch (_) {}
+}
+
+function clearTrainLineOverlay() {
+  _trainMapToken++;
+  _activeTrainMapLine = null;
+  if (_trainLinePolyline) {
+    _trainLinePolyline.setMap(null);
+    _trainLinePolyline = null;
+  }
+  _trainStationMarkers.forEach(marker => marker.setMap(null));
+  _trainStationMarkers = [];
+}
+
+function _drawTrainLineOverlay(line, points) {
+  if (!map || points.length < 2) return;
+  if (_trainLinePolyline) _trainLinePolyline.setMap(null);
+  _trainStationMarkers.forEach(marker => marker.setMap(null));
+  _trainStationMarkers = [];
+
+  const positions = points.map(p => p.position);
+  const path = line.id === 'JY' ? [...positions, positions[0]] : positions;
+  _trainLinePolyline = new google.maps.Polyline({
+    path,
+    geodesic: false,
+    strokeColor: line.color,
+    strokeOpacity: 0.92,
+    strokeWeight: 5,
+    zIndex: 18,
+    map
+  });
+  _trainStationMarkers = points.map(point => new google.maps.Marker({
+    position: point.position,
+    map,
+    title: `${line.name} ${point.name}`,
+    clickable: false,
+    zIndex: 19,
+    icon: {
+      path: google.maps.SymbolPath.CIRCLE,
+      scale: 4,
+      fillColor: '#ffffff',
+      fillOpacity: 1,
+      strokeColor: line.color,
+      strokeWeight: 2
+    }
+  }));
+}
+
+function _geocodeTrainStation(name, line, cache, attempt = 0) {
+  const key = `${name}駅`;
+  if (cache[key]) return Promise.resolve(cache[key]);
+  if (!_trainGeocoder) _trainGeocoder = new google.maps.Geocoder();
+  return new Promise(resolve => {
+    _trainGeocoder.geocode({ address: `${name}駅 日本`, region: 'jp' }, (results, status) => {
+      if (status === 'OVER_QUERY_LIMIT' && attempt < 2) {
+        setTimeout(() => resolve(_geocodeTrainStation(name, line, cache, attempt + 1)), 350);
+        return;
+      }
+      if (status !== 'OK' || !results?.[0]?.geometry?.location) return resolve(null);
+      const loc = results[0].geometry.location;
+      const point = { lat: loc.lat(), lng: loc.lng() };
+      cache[key] = point;
+      _writeTrainStationCoords(cache);
+      resolve(point);
+    });
+  });
+}
+
+async function showTrainLineOverlay(id) {
+  const line = TRAIN_LINES.find(l => l.id === id);
+  if (!line || !map || !window.google?.maps?.Geocoder) return;
+  clearTrainLineOverlay();
+  _activeTrainMapLine = id;
+  const token = _trainMapToken;
+  const cache = _readTrainStationCoords();
+  const points = [];
+
+  for (const [name] of line.stations) {
+    const point = await _geocodeTrainStation(name, line, cache);
+    if (token !== _trainMapToken || _activeTrainMapLine !== id) return;
+    if (point) {
+      points.push({ name, position: point });
+      if (points.length >= 2) _drawTrainLineOverlay(line, points);
+    }
+    await new Promise(resolve => setTimeout(resolve, 60));
+  }
 }
 
 const APPLIANCES = ['エアコン','浴室乾燥機','追い焚き','自動お湯張り','ウォシュレット','乾燥機','食洗機','BS・CS'];
@@ -4210,6 +4317,7 @@ function openPanel(name) {
     document.getElementById(`panel-${n}`)?.classList.toggle('active', n === name);
   });
   panel.style.width = (name === 'listings' || name === 'favourites') ? '864px' : (name === 'filter' ? '338px' : '260px');
+  if (name !== 'filter') clearTrainLineOverlay();
   document.getElementById('panel-title').textContent = _panelTitles[name] ? t(_panelTitles[name]) : '';
   panel.classList.add('open');
   backdrop.classList.add('open');
@@ -4219,6 +4327,7 @@ function openPanel(name) {
 
 function closePanel() {
   _activePanel = null;
+  clearTrainLineOverlay();
   document.getElementById('side-panel').classList.remove('open');
   document.getElementById('panel-backdrop').classList.remove('open');
   _allPanels.forEach(n => document.getElementById(`rail-${n}`)?.classList.remove('active'));
