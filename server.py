@@ -968,6 +968,16 @@ def get_listing_facilities(listing_id):
         " WHERE listing_id=? ORDER BY distance_m",
         (listing_id,),
     ).fetchall()
+    if not rows:
+        # Not cached yet — fetch live from Overpass now so the user sees something
+        lst = con.execute("SELECT lat, lng FROM listings WHERE id=?", (listing_id,)).fetchone()
+        if lst and lst["lat"] and lst["lng"]:
+            _fetch_and_store_facilities(listing_id, lst["lat"], lst["lng"], con)
+            rows = con.execute(
+                "SELECT type, name, lat, lng, distance_m FROM listing_facilities "
+                " WHERE listing_id=? ORDER BY distance_m",
+                (listing_id,),
+            ).fetchall()
     con.close()
     return jsonify({"facilities": [dict(r) for r in rows]})
 

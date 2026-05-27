@@ -514,6 +514,33 @@ def update_scrape_completeness(con):
     log.info(f"Completeness: {done}/{total} listings fully scraped.")
 
 
+def update_listing_completeness(con, lid: str) -> None:
+    """Re-evaluate scrape_complete for a single listing (called on-the-fly after detail scrape)."""
+    r = con.execute("""
+        SELECT l.lat, l.lng, l.detail_text, l.age_years, l.floor_plan_data,
+               (SELECT COUNT(*) FROM listing_images li
+                WHERE li.listing_id=l.id AND li.local_path IS NOT NULL
+                  AND li.image_type != 'floor_plan') as photo_count,
+               (SELECT COUNT(*) FROM listing_images li
+                WHERE li.listing_id=l.id AND li.local_path IS NOT NULL
+                  AND li.image_type = 'floor_plan') as fp_img_count
+        FROM listings l WHERE l.id=?
+    """, (lid,)).fetchone()
+    if not r:
+        return
+    issues = []
+    if not r["lat"] or not r["lng"]:         issues.append("no_geocoding")
+    if r["photo_count"] == 0:                issues.append("no_photos")
+    if not (r["floor_plan_data"] or r["fp_img_count"] > 0): issues.append("no_floor_plan")
+    if not r["detail_text"] or len(r["detail_text"]) < 100: issues.append("no_detail_text")
+    if r["age_years"] is None:               issues.append("no_age_years")
+    complete   = 1 if not issues else 0
+    issues_str = ",".join(issues) if issues else None
+    con.execute("UPDATE listings SET scrape_complete=?, data_issues=? WHERE id=?",
+                (complete, issues_str, lid))
+    con.commit()
+
+
 def run():
     log.info("JKK + UR Monitor started ✓")
     con = init_db()

@@ -18,7 +18,7 @@
   var ml = (l==='ja'||l==='en'||l==='uk') ? l : 'ja';
   document.documentElement.lang=l;
   var s=document.createElement('script');s.async=true;
-  s.src='https://maps.googleapis.com/maps/api/js?key=AIzaSyBHw3d6FU73jXiJxUJoZ4MlDGu2CmhC4i8&libraries=places&language='+ml+'&callback=initMap';
+  s.src='https://maps.googleapis.com/maps/api/js?key=AIzaSyBHw3d6FU73jXiJxUJoZ4MlDGu2CmhC4i8&language='+ml+'&callback=initMap';
   document.head.appendChild(s);
 })();
 </script>

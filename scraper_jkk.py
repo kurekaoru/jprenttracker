@@ -130,7 +130,7 @@ class JKKScraper(BaseScraper):
                 log.info(f"Total expected: {total_expected} listings")
 
                 # Open DB for image + detail collection during pagination
-                from scraper4 import listing_id as lid_fn
+                from scraper4 import listing_id as lid_fn, upsert_listing, update_listing_completeness
                 con = sqlite3.connect(self.db_file, timeout=60)
                 con.execute("PRAGMA journal_mode=WAL")
                 lids_done = {
@@ -153,13 +153,15 @@ class JKKScraper(BaseScraper):
                         all_listings.extend(new)
                         log.info(f"Page {page_num}: {len(new)} listings (total: {len(all_listings)})")
 
-                        # Collect images + detail text for new listings on this page
+                        # Commit each listing to DB immediately so progress survives a crash
                         for lst in new:
                             lid = lid_fn(lst)
+                            upsert_listing(con, lid, lst)  # always write basic row first
                             if lid not in lids_done:
                                 try:
                                     self._process_listing_detail(popup, ctx, lid, lst, con)
                                     lids_done.add(lid)
+                                    update_listing_completeness(con, lid)
                                 except Exception as e:
                                     log.warning(f"Detail scrape failed for {lst.get('name')}: {e}")
 

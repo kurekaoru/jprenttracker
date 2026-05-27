@@ -1153,7 +1153,6 @@
             <!-- District -->
             <div class="ftab-pane active" id="ftab-district">
               <div class="location-filter-section" id="area-filter-section">
-              <p class="section-label" style="margin-bottom:6px;" data-i18n="area">エリア（区・市）</p>
               <div id="ward-chips"></div>
               </div>
             </div>
@@ -1162,6 +1161,9 @@
             <div class="ftab-pane" id="ftab-station">
               <div class="location-filter-section" id="train-filter-section">
               <div class="station-override-banner" id="station-override-banner" style="display:none;">Area filters are active. Open a line to pause area filters.</div>
+              <div style="display:flex;justify-content:flex-end;padding:0 2px 5px;">
+                <button id="all-stations-btn" type="button" class="line-action" onclick="toggleAllStations()">全ON</button>
+              </div>
               <div class="svc-legend">
                 <span><b style="background:#E74C3C"></b>特急・通勤特急</span>
                 <span><b style="background:#F39C12"></b>急行・快速</span>
@@ -1451,7 +1453,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 18:30 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 20:06 JST</p>
       </div>
 
 
@@ -2121,6 +2123,17 @@ const KAWASAKI = [
 const SAGAMIHARA = ['相模原市緑区','相模原市中央区','相模原市南区'];
 const SAITAMA_BORDER = ['川口市','蕨市','戸田市','和光市','朝霞市','新座市','草加市','八潮市','三郷市','所沢市'];
 const CHIBA_BORDER   = ['市川市','松戸市','浦安市'];
+
+const WARD_GROUPS = [
+  { id: 'ku',         labelKey: 'ward_ku',         wards: KU,             color: '#1D9E75' },
+  { id: 'si',         labelKey: 'ward_si',         wards: SI,             color: '#D3A200' },
+  { id: 'yokohama',   labelKey: 'ward_yokohama',   wards: YOKOHAMA,       color: '#1565C0' },
+  { id: 'kawasaki',   labelKey: 'ward_kawasaki',   wards: KAWASAKI,       color: '#C62828' },
+  { id: 'sagamihara', labelKey: 'ward_sagamihara', wards: SAGAMIHARA,     color: '#6A1B9A' },
+  { id: 'saitama',    labelKey: 'ward_saitama',    wards: SAITAMA_BORDER, color: '#E65100' },
+  { id: 'chiba',      labelKey: 'ward_chiba',      wards: CHIBA_BORDER,   color: '#00838F' },
+];
+let _wardGroupOpen = new Set(['ku']);
 const WARD_EN = {
   // 23 Tokyo Wards
   '千代田区':'Chiyoda','中央区':'Chuo','港区':'Minato','新宿区':'Shinjuku',
@@ -2636,17 +2649,18 @@ function buildLineAccordion() {
     body.id = 'lb-' + line.id;
     const actions = document.createElement('div');
     actions.className = 'line-actions';
-    actions.innerHTML = `
-      <button type="button" class="line-action" data-act="all">Choose all</button>
-      <button type="button" class="line-action" data-act="none">Remove all</button>`;
-    actions.querySelector('[data-act="all"]').onclick = e => {
+    const allSelNow = line.stations.every(([n]) => selectedStations.has(n));
+    const togBtn = document.createElement('button');
+    togBtn.type = 'button';
+    togBtn.className = 'line-action';
+    togBtn.id = 'ltog-' + line.id;
+    togBtn.textContent = allSelNow ? '全OFF' : '全ON';
+    togBtn.onclick = e => {
       e.stopPropagation();
-      setLineStationsSelected(line.id, true);
+      const isAll = line.stations.every(([n]) => selectedStations.has(n));
+      setLineStationsSelected(line.id, !isAll);
     };
-    actions.querySelector('[data-act="none"]').onclick = e => {
-      e.stopPropagation();
-      setLineStationsSelected(line.id, false);
-    };
+    actions.appendChild(togBtn);
     body.appendChild(actions);
     body.appendChild(renderSnake(line));
     if (_openTrainLineIds.has(line.id)) item.classList.add('open');
@@ -2733,6 +2747,9 @@ function _updateLineSel(lid) {
   const cnt = line.stations.filter(([n]) => selectedStations.has(n)).length;
   const el = document.getElementById('lsel-' + lid);
   if (el) el.textContent = cnt > 0 ? cnt : '';
+  const btn = document.getElementById('ltog-' + lid);
+  if (btn) btn.textContent = cnt === line.stations.length ? '全OFF' : '全ON';
+  _updateAllStationsBtnText();
 }
 
 const TRAIN_STATION_DB = 'jkk-local-db';
@@ -3147,33 +3164,102 @@ function updateStationBanner() {
   updateLocationModeUi();
 }
 
-function buildChips() {
+function buildDistrictAccordion() {
   const wc = document.getElementById('ward-chips');
-  const lc = document.getElementById('layout-chips');
-  const sc = document.getElementById('source-chips');
+  if (!wc) return;
   wc.innerHTML = '';
-  lc.innerHTML = '';
-  sc.innerHTML = '';
-
-  function addGroup(parent, labelKey, wards, marginTop) {
-    addSectionLabel(parent, t(labelKey), marginTop ?? 8);
+  WARD_GROUPS.forEach(group => {
+    const selCount = group.wards.filter(w => selectedWards.has(w)).length;
+    const item = document.createElement('div');
+    item.className = 'line-item' + (_wardGroupOpen.has(group.id) ? ' open' : '');
+    item.id = 'wgi-' + group.id;
+    const hdr = document.createElement('div');
+    hdr.className = 'line-header';
+    hdr.onclick = () => {
+      const it = document.getElementById('wgi-' + group.id);
+      const bd = document.getElementById('wgb-' + group.id);
+      const open = it.classList.toggle('open');
+      bd.style.display = open ? 'block' : 'none';
+      if (open) _wardGroupOpen.add(group.id); else _wardGroupOpen.delete(group.id);
+    };
+    hdr.innerHTML = `
+      <div class="line-icon"><span style="width:12px;height:12px;border-radius:50%;background:${group.color};display:block;flex-shrink:0;"></span></div>
+      <span class="line-name">${t(group.labelKey)}</span>
+      <span class="line-sel" id="wgsel-${group.id}">${selCount > 0 ? selCount : ''}</span>
+      <span class="line-chev">▼</span>`;
+    const body = document.createElement('div');
+    body.className = 'line-body';
+    body.style.display = _wardGroupOpen.has(group.id) ? 'block' : 'none';
+    body.id = 'wgb-' + group.id;
+    const acts = document.createElement('div');
+    acts.className = 'line-actions';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'line-action';
+    btn.id = 'wgbtn-' + group.id;
+    btn.textContent = selCount === group.wards.length ? '全OFF' : '全ON';
+    btn.onclick = e => { e.stopPropagation(); _setWardGroupSelected(group.id); };
+    acts.appendChild(btn);
+    body.appendChild(acts);
     const row = document.createElement('div');
     row.className = 'chips';
-    wards.forEach(w => makeChip(w, selectedWards, row, () => {
+    group.wards.forEach(w => makeChip(w, selectedWards, row, () => {
       if (!ensureLocationFilterMode('area')) return false;
+      _updateWardGroupSel(group.id);
       applyMapFilters();
       return true;
     }, wardLabel(w)));
-    parent.appendChild(row);
-  }
+    body.appendChild(row);
+    item.appendChild(hdr);
+    item.appendChild(body);
+    wc.appendChild(item);
+  });
+}
 
-  addGroup(wc, 'ward_ku',         KU,          2);
-  addGroup(wc, 'ward_si',         SI);
-  addGroup(wc, 'ward_yokohama',   YOKOHAMA);
-  addGroup(wc, 'ward_kawasaki',   KAWASAKI);
-  addGroup(wc, 'ward_sagamihara', SAGAMIHARA);
-  addGroup(wc, 'ward_saitama',    SAITAMA_BORDER);
-  addGroup(wc, 'ward_chiba',      CHIBA_BORDER);
+function _updateWardGroupSel(id) {
+  const group = WARD_GROUPS.find(g => g.id === id);
+  if (!group) return;
+  const cnt = group.wards.filter(w => selectedWards.has(w)).length;
+  const el = document.getElementById('wgsel-' + id);
+  const btn = document.getElementById('wgbtn-' + id);
+  if (el) el.textContent = cnt > 0 ? cnt : '';
+  if (btn) btn.textContent = cnt === group.wards.length ? '全OFF' : '全ON';
+}
+
+function _setWardGroupSelected(id) {
+  if (!ensureLocationFilterMode('area')) return;
+  const group = WARD_GROUPS.find(g => g.id === id);
+  if (!group) return;
+  const allSel = group.wards.every(w => selectedWards.has(w));
+  group.wards.forEach(w => allSel ? selectedWards.delete(w) : selectedWards.add(w));
+  buildDistrictAccordion();
+  applyMapFilters();
+}
+
+function toggleAllStations() {
+  if (!ensureLocationFilterMode('line')) return;
+  const allSta = [...new Set(TRAIN_LINES.flatMap(l => l.stations.map(([n]) => n)))];
+  const anyOn = allSta.some(n => selectedStations.has(n));
+  allSta.forEach(n => _setStationSelected(n, !anyOn));
+  TRAIN_LINES.forEach(l => _updateLineSel(l.id));
+  applyMapFilters();
+  refreshTrainStationMarkers();
+}
+
+function _updateAllStationsBtnText() {
+  const btn = document.getElementById('all-stations-btn');
+  if (!btn) return;
+  const anyOn = TRAIN_LINES.some(l => l.stations.some(([n]) => selectedStations.has(n)));
+  btn.textContent = anyOn ? '全OFF' : '全ON';
+}
+
+function buildChips() {
+  const lc = document.getElementById('layout-chips');
+  const sc = document.getElementById('source-chips');
+  lc.innerHTML = '';
+  sc.innerHTML = '';
+
+  buildDistrictAccordion();
 
   const ac = document.getElementById('appliance-chips');
   const pc = document.getElementById('program-chips');
@@ -4052,7 +4138,10 @@ async function loadAreaBoundaries() {
       if (!r.ok) return;
       const gj = await r.json();
       Object.entries(cityColors).forEach(([city, color]) => {
-        const filtered = { ...gj, features: gj.features.filter(f => f.properties?.N03_003 === city) };
+        // N03_003 = designated city name; N03_004 = regular municipality name
+        const filtered = { ...gj, features: gj.features.filter(f =>
+          f.properties?.N03_003 === city || f.properties?.N03_004 === city
+        )};
         if (filtered.features.length) _addBoundaryLayer(filtered, color);
       });
     } catch (_) {}
