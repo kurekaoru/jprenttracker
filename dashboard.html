@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 00:14 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 00:22 JST</p>
       </div>
 
 
@@ -2498,7 +2498,7 @@ function lineGraphLayout(line) {
   const nodes = [];
   const edges = [];
   const labels = [];
-  const placePath = (pathStations, startRow, cols, startLtr = true, branch = false, forceRowStartNames = new Set(), rowEndNames = new Set()) => {
+  const placePath = (pathStations, startRow, cols, startLtr = true, branch = false, forceRowStartNames = new Set(), rowEndNames = new Set(), group = 'trunk', escapeCol = null) => {
     let ltr = startLtr;
     const rowSize = cols.length;
     const rows = [];
@@ -2531,14 +2531,32 @@ function lineGraphLayout(line) {
       }
       const row = startRow + rowOffset;
       cells.forEach((sta, idx) => {
-        if (sta) nodes.push({ name: sta[0], svc: sta[1], row, col: cols[idx], branch });
+        if (sta) nodes.push({ name: sta[0], svc: sta[1], row, col: cols[idx], branch, group, escapeCol });
       });
     });
     return rows.length;
   };
 
   let mainRows;
-  if (branches.length) {
+  if (multiBranch) {
+    const firstBranchIdx = stas.findIndex(([name]) => name === branches[0].from);
+    if (firstBranchIdx >= 0) {
+      const prefix = stas.slice(0, firstBranchIdx + 1);
+      const suffix = stas.slice(firstBranchIdx + 1);
+      const prefixRows = placePath(prefix, 0, fullCols, true, false, new Set(), new Set([branches[0].from]));
+      let nextRow = prefixRows + 1;
+
+      labels.push({ text: `${branches[0].from} branch`, row: nextRow - 0.72 });
+      const firstBranchRows = placePath(branches[0].stations, nextRow, [3, 2, 1, 0], true, true, new Set(), new Set(), 'branch0', 3);
+      nextRow += firstBranchRows + branchGap;
+
+      const laterBranchNames = new Set(branches.slice(1).map(branch => branch.from));
+      const suffixRows = placePath(suffix, nextRow, [4, 3, 2, 1, 0], true, true, new Set(), laterBranchNames, 'main', 4);
+      mainRows = nextRow + suffixRows;
+    } else {
+      mainRows = placePath(stas, 0, trunkCols, true, false);
+    }
+  } else if (branches.length) {
     const branchNames = new Set(branches.map(branch => branch.from));
     const firstBranchIdx = stas.findIndex(([name]) => branchNames.has(name));
     if (firstBranchIdx >= 0) {
@@ -2558,12 +2576,13 @@ function lineGraphLayout(line) {
 
   let nextBranchRow = mainRows + (branches.length ? 1 : 0);
   const byName = new Map(nodes.map(node => [node.name, node]));
-  branches.forEach(branch => {
+  branches.slice(multiBranch ? 1 : 0).forEach((branch, idx) => {
     const base = byName.get(branch.from);
     if (!base) return;
     labels.push({ text: `${branch.from} branch`, row: nextBranchRow - 0.72 });
     const escapeRight = multiBranch ? base.col >= 3 : base.col > 1;
-    const branchRows = placePath(branch.stations, nextBranchRow, branchCols, !escapeRight, true);
+    const cols = multiBranch && escapeRight ? [4, 3, 2, 1, 0] : branchCols;
+    const branchRows = placePath(branch.stations, nextBranchRow, cols, true, true, new Set(), new Set(), `branch${idx + 1}`, cols[0]);
     branch.stations.forEach(([name]) => byName.set(name, nodes.find(node => node.name === name)));
     nextBranchRow += branchRows + branchGap;
   });
@@ -2615,11 +2634,12 @@ function graphTrackSvg(graph) {
     if (!a || !b) return '';
     const ax = colXs[a.col], ay = dotY + a.row * rowH;
     const bx = colXs[b.col], by = dotY + b.row * rowH;
-    const branchLink = !!b.branch && !a.branch;
+    const branchLink = !!b.branch && a.group !== b.group;
     if (ay === by) return { d: `M ${ax} ${ay} L ${bx} ${by}`, branchLink };
     if (branchLink) {
-      const escapeRight = b.col > Math.floor((colXs.length - 1) / 2);
-      const escapeX = escapeRight ? colXs[colXs.length - 1] : colXs[0];
+      const escapeCol = b.escapeCol ?? b.col;
+      const escapeRight = escapeCol > Math.floor((colXs.length - 1) / 2);
+      const escapeX = colXs[escapeCol];
       const r = 8, dir = by > ay ? 1 : -1;
       const leadX = escapeX + (escapeRight ? -r : r);
       return {
