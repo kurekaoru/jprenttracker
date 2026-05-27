@@ -1459,7 +1459,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 22:31 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 23:01 JST</p>
       </div>
 
 
@@ -4310,26 +4310,45 @@ function renderDetailTab(listingId) {
   if (listing.detail_text) {
     const sections = _parseDetailSections(listing.detail_text);
     const FIELD_MAP = {
-      '設備':           t('detail_amenities'),
-      '敷地内駐車場':   t('detail_parking'),
-      '管理年数':       t('age_label'),
-      '入居可能時期':   t('detail_avail'),
-      'デザイン':       t('detail_structure'),
-      '割引制度':       t('detail_systems'),
-      '敷金':           t('detail_deposit'),
-      '特徴':           t('detail_nearby'),
-      '備考':           t('detail_notes'),
+      // UR fields
+      '設備':             t('detail_amenities'),
+      '敷地内駐車場':     t('detail_parking'),
+      '管理年数':         t('age_label'),
+      '入居可能時期':     t('detail_avail'),
+      'デザイン':         t('detail_structure'),
+      '割引制度':         t('detail_systems'),
+      '敷金':             t('detail_deposit'),
+      '特徴':             t('detail_nearby'),
+      '備考':             t('detail_notes'),
+      // JKK fields
+      '住宅種別':         '住宅種別',
+      '優先募集種別':     '申込区分',
+      '募集名称':         '募集方式',
+      '定借期限・期間':   '定借期間',
+      '交通':             '交通',
+      '特記事項':         '備考',
+      '階層':             '階層',
+      '総戸数':           '総戸数',
+      '棟数':             '棟数',
+      'キャンペーン等':   'キャンペーン',
+      '提携不動産会社取扱': '不動産会社',
     };
-    // Skip sections already shown from structured fields
+    // Skip sections already shown from structured fields, plus JKK noise fields
     const SKIP = new Set(
       [listing.building_type && 'デザイン',
        listing.age_years != null && '管理年数',
+       listing.age_years != null && '竣工年月日',
        listing.available_from && '入居可能時期',
        (listing.has_parking || listing.parking_fee) && '敷地内駐車場',
        listing.nearby_features && '特徴',
       ].filter(Boolean)
     );
-    SKIP.add('特徴ピックアップ'); // shown as feature chips below
+    // JKK fields to suppress (table column headers, internal codes, duplicates)
+    for (const f of ['特徴ピックアップ','住宅名','申込区分','法人契約種別','詳細情報',
+                     'より詳しい住宅の情報はこちら',
+                     '間取り図','部屋番号','申込世帯[人]','住戸型式','間取り','建物',
+                     '向き','家賃[円]','(月収基準)','敷金[円]','共益費[円]','住所',
+                     '入居','可能日','床面積[m2]','階']) SKIP.add(f);
     for (const { header, body } of sections) {
       if (!body || SKIP.has(header)) continue;
       const label = FIELD_MAP[header] || header || t('detail_notes');
@@ -4364,19 +4383,30 @@ function renderDetailTab(listingId) {
 function _parseDetailSections(text) {
   const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
   const sections = [];
-  let cur = null;
-  for (const line of lines) {
-    // A section header: short, no commas/colons, and not starting a bullet
-    const isHeader = line.length <= 12 && !line.includes('、') && !line.includes('：') && !line.startsWith('・') && !line.match(/^\d/);
-    if (isHeader) {
-      if (cur) sections.push(cur);
-      cur = { header: line, body: '' };
+  // A header candidate: short, no bullet/note chars, not starting with digit
+  const isHdr = (l) => l.length <= 16 && !l.includes('、') && !l.includes('：')
+                    && !l.startsWith('・') && !l.startsWith('※') && !l.match(/^\d/);
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (isHdr(line)) {
+      i++;
+      const bodyLines = [];
+      // Greedy: always take at least one value line (even if it looks header-like)
+      if (i < lines.length) {
+        bodyLines.push(lines[i++]);
+        // Then collect additional non-header continuation lines
+        while (i < lines.length && !isHdr(lines[i])) {
+          bodyLines.push(lines[i++]);
+        }
+      }
+      // Remove duplicate adjacent/repeated lines (JKK sometimes repeats value twice)
+      const unique = bodyLines.filter((l, idx) => bodyLines.indexOf(l) === idx);
+      sections.push({ header: line, body: unique.join('\n') });
     } else {
-      if (!cur) cur = { header: null, body: '' };
-      cur.body += (cur.body ? '\n' : '') + line;
+      i++;
     }
   }
-  if (cur) sections.push(cur);
   return sections;
 }
 
