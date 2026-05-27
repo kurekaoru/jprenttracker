@@ -364,11 +364,25 @@ def _nearest_station(lat, lng):
         return None
 
 
-_KANAGAWA_PREFIXES = ("横浜市", "川崎市", "相模原市")
+_PREF_MAP = {
+    # Kanagawa
+    "横浜市": "神奈川県", "川崎市": "神奈川県", "相模原市": "神奈川県",
+    # Saitama
+    "川口市": "埼玉県", "さいたま市": "埼玉県", "川越市": "埼玉県",
+    "所沢市": "埼玉県", "越谷市": "埼玉県", "草加市": "埼玉県",
+    "新座市": "埼玉県", "三郷市": "埼玉県", "八潮市": "埼玉県",
+    "朝霞市": "埼玉県", "和光市": "埼玉県", "志木市": "埼玉県",
+    "富士見市": "埼玉県", "ふじみ野市": "埼玉県",
+    # Chiba
+    "市川市": "千葉県", "松戸市": "千葉県", "千葉市": "千葉県",
+    "船橋市": "千葉県", "柏市": "千葉県", "浦安市": "千葉県",
+    "流山市": "千葉県", "野田市": "千葉県", "我孫子市": "千葉県",
+}
 
 def _prefecture(ward):
-    if any(ward.startswith(p) for p in _KANAGAWA_PREFIXES):
-        return "神奈川県"
+    for prefix, pref in _PREF_MAP.items():
+        if ward.startswith(prefix):
+            return pref
     return "東京都"
 
 def _build_geocode_query(row):
