@@ -1075,6 +1075,11 @@
   <div class="topbar-main">
     <span class="topbar-title">JKK Monitor</span>
     <span style="flex:1;"></span>
+    <div style="display:flex;gap:3px;margin-right:10px;">
+      <button class="view-toggle-btn active" id="vtb-all"      onclick="setViewMode('all')"      data-i18n="view_all"      style="padding:3px 9px;font-size:11px;">All</button>
+      <button class="view-toggle-btn"         id="vtb-filtered" onclick="setViewMode('filtered')" data-i18n="view_filtered" style="padding:3px 9px;font-size:11px;">Filtered</button>
+      <button class="view-toggle-btn"         id="vtb-starred"  onclick="setViewMode('starred')"  data-i18n="view_saved"    style="padding:3px 9px;font-size:11px;">★ Saved</button>
+    </div>
     <div class="topbar-legend">
       <span class="tl-item"><span class="tl-dot" style="background:#dc2626;"></span>JKK</span>
       <span class="tl-item"><span class="tl-dot" style="background:#3a86ff;"></span>UR</span>
@@ -1134,17 +1139,6 @@
 
       <!-- Filter page -->
       <div class="panel-page" id="panel-filter">
-        <div style="padding:6px 0 4px;">
-          <input id="name-search" type="search" autocomplete="off"
-            placeholder="検索 / Search…"
-            oninput="applyFilters()"
-            style="width:100%;box-sizing:border-box;padding:5px 9px;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:6px;font-size:12px;font-family:inherit;outline:none;" />
-        </div>
-        <div class="view-toggle">
-          <button class="view-toggle-btn active" id="vtb-all"      onclick="setViewMode('all')"      data-i18n="view_all">All</button>
-          <button class="view-toggle-btn"         id="vtb-starred"  onclick="setViewMode('starred')"  data-i18n="view_saved">★ Saved</button>
-          <button class="view-toggle-btn"         id="vtb-filtered" onclick="setViewMode('filtered')" data-i18n="view_filtered">Filtered</button>
-        </div>
         <div class="ftabs">
           <div class="ftab-bar">
             <button class="ftab-btn active" onclick="switchFTab(this,'ftab-district')" data-i18n="ftab_district">地区</button>
@@ -1379,6 +1373,12 @@
 
       <!-- Listings page -->
       <div class="panel-page" id="panel-listings">
+        <div style="padding:6px 0 8px;">
+          <input id="name-search" type="search" autocomplete="off"
+            placeholder="検索 / Search…"
+            oninput="applyFilters()"
+            style="width:100%;box-sizing:border-box;padding:5px 9px;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:6px;font-size:12px;font-family:inherit;outline:none;" />
+        </div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
           <p class="section-label" style="margin:0;" data-i18n="vacancies">空室一覧</p>
           <span id="available-count" style="font-size:11px;color:var(--muted);"></span>
@@ -1459,7 +1459,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 21:42 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 21:49 JST</p>
       </div>
 
 
