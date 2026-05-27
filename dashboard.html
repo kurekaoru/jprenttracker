@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 00:11 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 00:14 JST</p>
       </div>
 
 
@@ -2492,7 +2492,7 @@ function lineGraphLayout(line) {
   const branchGap = 1;
   const colXs = multiBranch ? [4, 28, 50, 72, 96] : [12.5, 37.5, 62.5, 87.5];
   const fullCols = multiBranch ? [0, 1, 2, 3, 4] : [0, 1, 2, 3];
-  const trunkCols = multiBranch ? [1, 2, 3] : [1, 2, 3];
+  const trunkCols = multiBranch ? [0, 1, 2, 3] : [1, 2, 3];
   const branchCols = multiBranch ? [0, 1, 2, 3, 4] : [0, 1, 2, 3];
   const stas = _lineMainStations(line);
   const nodes = [];
@@ -2562,7 +2562,7 @@ function lineGraphLayout(line) {
     const base = byName.get(branch.from);
     if (!base) return;
     labels.push({ text: `${branch.from} branch`, row: nextBranchRow - 0.72 });
-    const escapeRight = base.col > 1;
+    const escapeRight = multiBranch ? base.col >= 3 : base.col > 1;
     const branchRows = placePath(branch.stations, nextBranchRow, branchCols, !escapeRight, true);
     branch.stations.forEach(([name]) => byName.set(name, nodes.find(node => node.name === name)));
     nextBranchRow += branchRows + branchGap;
