@@ -1438,7 +1438,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 14:24 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 14:33 JST</p>
       </div>
 
 
@@ -2398,7 +2398,7 @@ function updateLocationModeUi() {
 }
 
 function lineGraphLayout(line) {
-  const branchGap = line.branches?.length ? 2 : 1;
+  const branchGap = 1;
   const fullCols = [0, 1, 2, 3];
   const trunkCols = [1, 2, 3];
   const branchCols = [0, 1, 2, 3];
@@ -2406,24 +2406,40 @@ function lineGraphLayout(line) {
   const nodes = [];
   const edges = [];
   const labels = [];
-  const placePath = (pathStations, startRow, cols, startLtr = true, branch = false) => {
-    let i = 0, ltr = startLtr;
+  const placePath = (pathStations, startRow, cols, startLtr = true, branch = false, forceRowStartNames = new Set()) => {
+    let ltr = startLtr;
     const rowSize = cols.length;
-    while (i < pathStations.length) {
-      const chunk = pathStations.slice(i, i + rowSize);
-      const cells = ltr ? [...chunk] : [...chunk].reverse();
+    const rows = [];
+    let current = [];
+    const pushRow = () => {
+      if (!current.length) return;
+      rows.push({ stations: current, ltr });
+      current = [];
+      ltr = !ltr;
+    };
+    pathStations.forEach(sta => {
+      if (forceRowStartNames.has(sta[0]) && current.length) {
+        pushRow();
+        ltr = true;
+      }
+      current.push(sta);
+      if (current.length === rowSize) pushRow();
+    });
+    pushRow();
+    rows.forEach((entry, rowOffset) => {
+      const chunk = entry.stations;
+      const rowLtr = entry.ltr;
+      const cells = rowLtr ? [...chunk] : [...chunk].reverse();
       while (cells.length < rowSize) {
-        if (ltr) cells.push(null);
+        if (rowLtr) cells.push(null);
         else cells.unshift(null);
       }
-      const row = startRow + Math.floor(i / rowSize);
+      const row = startRow + rowOffset;
       cells.forEach((sta, idx) => {
         if (sta) nodes.push({ name: sta[0], svc: sta[1], row, col: cols[idx], branch });
       });
-      ltr = !ltr;
-      i += rowSize;
-    }
-    return Math.ceil(pathStations.length / rowSize);
+    });
+    return rows.length;
   };
 
   let mainRows;
@@ -2434,7 +2450,8 @@ function lineGraphLayout(line) {
       const prefix = stas.slice(0, firstBranchIdx + 1);
       const suffix = stas.slice(firstBranchIdx + 1);
       const prefixRows = placePath(prefix, 0, fullCols, true, false);
-      const suffixRows = placePath(suffix, prefixRows, trunkCols, prefixRows % 2 === 0, false);
+      const laterBranchNames = new Set(line.branches.slice(1).map(branch => branch.from));
+      const suffixRows = placePath(suffix, prefixRows, trunkCols, prefixRows % 2 === 0, false, laterBranchNames);
       mainRows = prefixRows + suffixRows;
     } else {
       mainRows = placePath(stas, 0, trunkCols, true, false);
@@ -2444,12 +2461,12 @@ function lineGraphLayout(line) {
   }
   lineGraphEdges(line, false).forEach(edge => edges.push(edge));
 
-  let nextBranchRow = mainRows + (line.branches?.length ? 2 : 0);
+  let nextBranchRow = mainRows + (line.branches?.length ? 1 : 0);
   const byName = new Map(nodes.map(node => [node.name, node]));
   (line.branches || []).forEach(branch => {
     const base = byName.get(branch.from);
     if (!base) return;
-    labels.push({ text: `${branch.from} branch`, row: nextBranchRow - 1 });
+    labels.push({ text: `${branch.from} branch`, row: nextBranchRow - 0.72 });
     const branchRows = placePath(branch.stations, nextBranchRow, branchCols, true, true);
     branch.stations.forEach(([name]) => byName.set(name, nodes.find(node => node.name === name)));
     nextBranchRow += branchRows + branchGap;
@@ -2503,7 +2520,10 @@ function graphTrackSvg(graph) {
     const bx = colXs[b.col], by = dotY + b.row * rowH;
     const branchLink = !!b.branch && !a.branch;
     if (ay === by) return { d: `M ${ax} ${ay} L ${bx} ${by}`, branchLink };
-    if (branchLink) return { d: `M ${ax} ${ay} L ${colXs[0]} ${ay} L ${colXs[0]} ${by}`, branchLink };
+    if (branchLink) {
+      const turnX = colXs[0], r = 8, dir = by > ay ? 1 : -1;
+      return { d: `M ${ax} ${ay} L ${turnX + r} ${ay} Q ${turnX} ${ay} ${turnX} ${ay + dir * r} L ${turnX} ${by}`, branchLink };
+    }
     const sideX = branchLink ? 4 : (graph.hasBranches && !a.branch && !b.branch && a.col === 1 ? 28 : (ax > 50 ? 96 : 4));
     return { d: `M ${ax} ${ay} C ${sideX} ${ay}, ${sideX} ${by}, ${bx} ${by}`, branchLink };
   }).filter(Boolean);
