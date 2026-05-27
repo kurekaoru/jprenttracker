@@ -126,6 +126,17 @@ def db():
         ("walk_m",          "INTEGER"),
         ("nearest_station", "TEXT"),
         ("thumbnail_url",   "TEXT"),
+        ("floor_plan_data", "TEXT"),
+        ("priority",        "TEXT"),
+        ("building_type",   "TEXT"),
+        ("appliances",      "TEXT"),
+        ("detail_text",     "TEXT"),
+        ("features",        "TEXT"),
+        ("has_parking",     "INTEGER DEFAULT 0"),
+        ("parking_fee",     "INTEGER DEFAULT 0"),
+        ("age_years",       "INTEGER"),
+        ("available_from",  "TEXT"),
+        ("nearby_features", "TEXT"),
     ]:
         if col not in cols:
             con.execute(f"ALTER TABLE listings ADD COLUMN {col} {defn}")
@@ -1493,26 +1504,89 @@ def get_listings():
     max_age_min = request.args.get("max_age_min", default=90, type=int)
     cutoff      = (datetime.now() - timedelta(minutes=max_age_min)).isoformat()
 
+    # ── Optional server-side filters ──────────────────────────────────────────
+    wards_raw     = request.args.get("wards", "")
+    layouts_raw   = request.args.get("layouts", "")
+    source_filter = request.args.get("source", "")
+    min_rent      = request.args.get("min_rent",      default=0,   type=int)
+    max_rent      = request.args.get("max_rent",      default=0,   type=int)
+    min_size      = request.args.get("min_size_m2",   default=0.0, type=float)
+    max_walk      = request.args.get("max_walk_min",  default=0,   type=int)
+    has_parking   = request.args.get("has_parking",   default=0,   type=int)
+    avail_now     = request.args.get("available_now", default=0,   type=int)
+    max_age_yrs   = request.args.get("max_age_years", default=0,   type=int)
+    stations_raw  = request.args.get("filter_stations",  "")
+    features_raw  = request.args.get("required_features", "")
+
+    conds  = ["last_seen >= ?"]
+    params = [cutoff]
+
+    if wards_raw:
+        wards = [w.strip() for w in wards_raw.split(",") if w.strip()]
+        if wards:
+            conds.append(f"ward IN ({','.join('?'*len(wards))})")
+            params.extend(wards)
+
+    if layouts_raw:
+        layouts = [l.strip() for l in layouts_raw.split(",") if l.strip()]
+        if layouts:
+            conds.append(f"layout IN ({','.join('?'*len(layouts))})")
+            params.extend(layouts)
+
+    if source_filter in ("jkk", "ur"):
+        conds.append("COALESCE(source,'jkk') = ?")
+        params.append(source_filter)
+
+    if min_rent:
+        conds.append("rent >= ?");   params.append(min_rent)
+    if max_rent:
+        conds.append("rent <= ?");   params.append(max_rent)
+    if min_size:
+        conds.append("size_m2 >= ?"); params.append(min_size)
+    if max_walk:
+        conds.append("(walk_min IS NULL OR walk_min <= ?)"); params.append(max_walk)
+    if has_parking:
+        conds.append("has_parking = 1")
+    if avail_now:
+        conds.append("available_from LIKE '%随時%'")
+    if max_age_yrs:
+        conds.append("(age_years IS NULL OR age_years <= ?)"); params.append(max_age_yrs)
+
+    # filter_stations: nearest_station contains station name
+    if stations_raw:
+        stations = [s.strip() for s in stations_raw.split(",") if s.strip()]
+        if stations:
+            conds.append(f"({' OR '.join(['nearest_station LIKE ?']*len(stations))})")
+            params.extend(f"%{s}%" for s in stations)
+
+    # required_features: all tags must appear in features OR appliances
+    if features_raw:
+        for feat in [f.strip() for f in features_raw.split(",") if f.strip()]:
+            conds.append("(COALESCE(features,'') LIKE ? OR COALESCE(appliances,'') LIKE ?)")
+            params.extend([f"%{feat}%", f"%{feat}%"])
+
+    where = " AND ".join(conds)
+
     con = db()
     cur = con.execute(
-        "SELECT id,name,ward,layout,rent,size_m2,url,first_seen,last_seen,"
-        "       COALESCE(source,'jkk') AS source,"
-        "       COALESCE(address, ward) AS address, lat, lng, geocoded_at,"
-        "       disappeared_at, walk_min, walk_m, nearest_station, thumbnail_url,"
-        "       priority, building_type, appliances,"
-        "       has_parking, age_years, available_from, features,"
-        "       CASE WHEN thumbnail_url IS NOT NULL AND ("
-        "         lower(thumbnail_url) LIKE '%madori%' OR"
-        "         lower(thumbnail_url) LIKE '%floor_plan%' OR"
-        "         lower(thumbnail_url) LIKE '%floorplan%' OR"
-        "         lower(thumbnail_url) LIKE '%floor-plan%' OR"
-        "         lower(thumbnail_url) LIKE '%arrnormal%' OR"
-        "         lower(thumbnail_url) LIKE '%img_madori%'"
-        "       ) THEN 1 ELSE 0 END AS thumbnail_is_floor_plan "
-        "  FROM listings "
-        " WHERE last_seen >= ? "
-        " ORDER BY last_seen DESC",
-        (cutoff,),
+        f"SELECT id,name,ward,layout,rent,size_m2,url,first_seen,last_seen,"
+        f"       COALESCE(source,'jkk') AS source,"
+        f"       COALESCE(address, ward) AS address, lat, lng, geocoded_at,"
+        f"       disappeared_at, walk_min, walk_m, nearest_station, thumbnail_url,"
+        f"       priority, building_type, appliances,"
+        f"       has_parking, parking_fee, age_years, available_from, features,"
+        f"       CASE WHEN thumbnail_url IS NOT NULL AND ("
+        f"         lower(thumbnail_url) LIKE '%madori%' OR"
+        f"         lower(thumbnail_url) LIKE '%floor_plan%' OR"
+        f"         lower(thumbnail_url) LIKE '%floorplan%' OR"
+        f"         lower(thumbnail_url) LIKE '%floor-plan%' OR"
+        f"         lower(thumbnail_url) LIKE '%arrnormal%' OR"
+        f"         lower(thumbnail_url) LIKE '%img_madori%'"
+        f"       ) THEN 1 ELSE 0 END AS thumbnail_is_floor_plan "
+        f"  FROM listings "
+        f" WHERE {where} "
+        f" ORDER BY last_seen DESC",
+        params,
     )
     rows = [dict(r) for r in cur.fetchall()]
     con.close()
@@ -1555,6 +1629,39 @@ def get_disappeared():
     rows = [dict(r) for r in cur.fetchall()]
     con.close()
     return jsonify({"listings": rows})
+
+
+@app.route("/api/stations")
+def get_stations():
+    if not os.path.exists(DB_FILE):
+        return jsonify({"stations": []})
+    con = db()
+    rows = con.execute(
+        "SELECT nearest_station, COUNT(*) AS count FROM listings "
+        "WHERE nearest_station IS NOT NULL AND nearest_station != '' "
+        "  AND disappeared_at IS NULL "
+        "GROUP BY nearest_station ORDER BY count DESC"
+    ).fetchall()
+    con.close()
+    return jsonify({"stations": [{"name": r["nearest_station"], "count": r["count"]} for r in rows]})
+
+
+@app.route("/api/appliance-types")
+def get_appliance_types():
+    if not os.path.exists(DB_FILE):
+        return jsonify({"types": []})
+    con = db()
+    rows = con.execute(
+        "SELECT appliances FROM listings WHERE appliances IS NOT NULL AND appliances != ''"
+    ).fetchall()
+    con.close()
+    seen = set()
+    for r in rows:
+        for item in (r["appliances"] or "").split(","):
+            t = item.strip()
+            if t:
+                seen.add(t)
+    return jsonify({"types": sorted(seen)})
 
 
 def _round_origin(origin: str) -> str:
