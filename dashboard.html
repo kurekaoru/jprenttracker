@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 00:35 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 00:46 JST</p>
       </div>
 
 
@@ -2342,7 +2342,9 @@ function dimLineColor(hex, alpha = 0.36) {
   const r = parseInt(full.slice(0, 2), 16);
   const g = parseInt(full.slice(2, 4), 16);
   const b = parseInt(full.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
+  const bg = [64, 64, 66];
+  const mix = (value, idx) => Math.round(value * alpha + bg[idx] * (1 - alpha));
+  return `rgb(${mix(r, 0)},${mix(g, 1)},${mix(b, 2)})`;
 }
 
 function lineIconSvg(line) {
@@ -2500,7 +2502,7 @@ function updateLocationModeUi() {
 function lineGraphLayout(line) {
   const branches = schematicBranches(line);
   const multiBranch = branches.length > 1;
-  const branchGap = 1;
+  const branchGap = 0.6;
   const colXs = multiBranch ? [11, 31, 50, 69, 89] : [12.5, 37.5, 62.5, 87.5];
   const fullCols = multiBranch ? [0, 1, 2, 3, 4] : [0, 1, 2, 3];
   const trunkCols = multiBranch ? [0, 1, 2, 3] : [1, 2, 3];
@@ -2570,9 +2572,8 @@ function lineGraphLayout(line) {
         nextRow += placePath(beforeSecond, nextRow, [4, 3, 2, 1, 0], true, true, new Set(), new Set(), 'main-before-second', 4);
         nextRow += placePath([secondStation], nextRow, [4, 3, 2, 1, 0], false, true, new Set(), new Set(), 'main-before-second', 4);
 
-        labels.push({ text: `${secondBranch.from} branch`, row: nextRow + 0.28 });
-        nextRow += 1;
-        const secondBranchRows = placePath(secondBranch.stations, nextRow, [1, 2, 3, 4], true, true, new Set(), new Set(), 'branch1', 4);
+        labels.push({ text: `${secondBranch.from} branch`, row: nextRow - 0.42 });
+        const secondBranchRows = placePath(secondBranch.stations, nextRow, [4, 3, 2, 1], true, true, new Set(), new Set(), 'branch1', 4);
         nextRow += secondBranchRows + branchGap;
 
         const odawaraRows = placePath(afterSecond, nextRow, [0, 1, 2, 3, 4], true, true, new Set(), new Set(), 'odawara', 0);
@@ -2675,6 +2676,9 @@ function graphTrackSvg(graph) {
         d: `M ${ax} ${ay} L ${leadX} ${ay} Q ${escapeX} ${ay} ${escapeX} ${ay + dir * r} L ${escapeX} ${by - dir * r} Q ${escapeX} ${by} ${leadX} ${by} L ${bx} ${by}`,
         branchLink
       };
+    }
+    if (from === '町田' && to === '相模大野') {
+      return { d: `M ${ax} ${ay} L ${bx} ${ay} L ${bx} ${by}`, branchLink };
     }
     const sideX = branchLink ? colXs[0] : (graph.hasBranches && !a.branch && !b.branch && a.col === 1 ? colXs[1] : (ax > 50 ? colXs[colXs.length - 1] : colXs[0]));
     return { d: `M ${ax} ${ay} C ${sideX} ${ay}, ${sideX} ${by}, ${bx} ${by}`, branchLink };
