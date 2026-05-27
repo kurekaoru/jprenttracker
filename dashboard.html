@@ -1421,7 +1421,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 10:49 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 11:54 JST</p>
       </div>
 
 
@@ -2333,7 +2333,7 @@ function _stationSvc(line, name) {
   return found ? found[1] : 0;
 }
 
-function lineGraphEdges(line) {
+function lineGraphEdges(line, includeExtra = true) {
   const stas = _lineMainStations(line);
   const edges = stas.slice(1).map((sta, idx) => [stas[idx][0], sta[0]]);
   (line.branches || []).forEach(branch => {
@@ -2343,7 +2343,7 @@ function lineGraphEdges(line) {
       prev = name;
     });
   });
-  (line.extraEdges || []).forEach(edge => edges.push(edge));
+  if (includeExtra) (line.extraEdges || []).forEach(edge => edges.push(edge));
   return edges;
 }
 
@@ -2352,36 +2352,36 @@ function lineGraphLayout(line) {
   const stas = _lineMainStations(line);
   const nodes = [];
   const edges = [];
-  let i = 0, ltr = true;
-  while (i < stas.length) {
-    const chunk = stas.slice(i, i + COLS);
-    const cells = ltr ? [...chunk] : [...chunk].reverse();
-    while (cells.length < COLS) {
-      if (ltr) cells.push(null);
-      else cells.unshift(null);
+  const placePath = (pathStations, startRow, startLtr = true, branch = false) => {
+    let i = 0, ltr = startLtr;
+    while (i < pathStations.length) {
+      const chunk = pathStations.slice(i, i + COLS);
+      const cells = ltr ? [...chunk] : [...chunk].reverse();
+      while (cells.length < COLS) {
+        if (ltr) cells.push(null);
+        else cells.unshift(null);
+      }
+      const row = startRow + Math.floor(i / COLS);
+      cells.forEach((sta, col) => {
+        if (sta) nodes.push({ name: sta[0], svc: sta[1], row, col, branch });
+      });
+      ltr = !ltr;
+      i += COLS;
     }
-    const row = Math.floor(i / COLS);
-    cells.forEach((sta, col) => {
-      if (sta) nodes.push({ name: sta[0], svc: sta[1], row, col });
-    });
-    ltr = !ltr;
-    i += COLS;
-  }
-  lineGraphEdges(line).forEach(edge => edges.push(edge));
+    return Math.ceil(pathStations.length / COLS);
+  };
 
+  const mainRows = placePath(stas, 0, true, false);
+  lineGraphEdges(line, false).forEach(edge => edges.push(edge));
+
+  let nextBranchRow = mainRows + (line.branches?.length ? 1 : 0);
   const byName = new Map(nodes.map(node => [node.name, node]));
   (line.branches || []).forEach(branch => {
     const base = byName.get(branch.from);
     if (!base) return;
-    const dir = base.col >= 2 ? -1 : 1;
-    let prev = branch.from;
-    branch.stations.forEach(([name, svc], bi) => {
-      const col = Math.max(0, Math.min(COLS - 1, base.col + dir * (bi + 1)));
-      const row = base.row + 1 + bi;
-      nodes.push({ name, svc, row, col, branch: true });
-      byName.set(name, nodes[nodes.length - 1]);
-      prev = name;
-    });
+    const branchRows = placePath(branch.stations, nextBranchRow, base.col < 2, true);
+    branch.stations.forEach(([name]) => byName.set(name, nodes.find(node => node.name === name)));
+    nextBranchRow += branchRows + 1;
   });
 
   return { nodes, edges, rows: Math.max(1, ...nodes.map(node => node.row + 1)) };
