@@ -1501,8 +1501,7 @@ def get_listings():
     if not os.path.exists(DB_FILE):
         return jsonify({"listings": [], "geocoded_now": 0})
 
-    max_age_min = request.args.get("max_age_min", default=90, type=int)
-    cutoff      = (datetime.now() - timedelta(minutes=max_age_min)).isoformat()
+    max_age_min = request.args.get("max_age_min", default=0, type=int)
 
     # ── Optional server-side filters ──────────────────────────────────────────
     wards_raw     = request.args.get("wards", "")
@@ -1518,8 +1517,13 @@ def get_listings():
     stations_raw  = request.args.get("filter_stations",  "")
     features_raw  = request.args.get("required_features", "")
 
-    conds  = ["last_seen >= ?"]
-    params = [cutoff]
+    conds  = ["disappeared_at IS NULL"]
+    params = []
+
+    if max_age_min > 0:
+        cutoff = (datetime.now() - timedelta(minutes=max_age_min)).isoformat()
+        conds.append("last_seen >= ?")
+        params.append(cutoff)
 
     if wards_raw:
         wards = [w.strip() for w in wards_raw.split(",") if w.strip()]
