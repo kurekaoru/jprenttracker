@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 23:49 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 23:53 JST</p>
       </div>
 
 
@@ -2987,16 +2987,56 @@ function refreshTrainStationMarkers() {
   });
 }
 
+function _orderedTrainMapPaths(line, byName) {
+  const namesToPath = names => names.map(name => byName.get(name)).filter(Boolean);
+  if (line.id === 'JY') return [namesToPath(line.stations.map(([name]) => name).concat(line.stations[0][0]))];
+
+  const paths = [namesToPath(_lineMainStations(line).map(([name]) => name))];
+  (line.branches || []).forEach(branch => {
+    paths.push(namesToPath([branch.from, ...branch.stations.map(([name]) => name)]));
+  });
+  (line.extraEdges || []).forEach(edge => paths.push(namesToPath(edge)));
+  return paths.filter(path => path.length >= 2);
+}
+
+function _smoothTrainMapPath(path, samples = 8) {
+  if (path.length < 3) return path;
+  const out = [];
+  const val = (point, key) => typeof point[key] === 'function' ? point[key]() : point[key];
+  const catmull = (p0, p1, p2, p3, t) => {
+    const t2 = t * t, t3 = t2 * t;
+    return 0.5 * (
+      (2 * p1) +
+      (-p0 + p2) * t +
+      (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
+      (-p0 + 3 * p1 - 3 * p2 + p3) * t3
+    );
+  };
+  for (let i = 0; i < path.length - 1; i++) {
+    const p0 = path[Math.max(0, i - 1)];
+    const p1 = path[i];
+    const p2 = path[i + 1];
+    const p3 = path[Math.min(path.length - 1, i + 2)];
+    for (let j = 0; j < samples; j++) {
+      const t = j / samples;
+      out.push({
+        lat: catmull(val(p0, 'lat'), val(p1, 'lat'), val(p2, 'lat'), val(p3, 'lat'), t),
+        lng: catmull(val(p0, 'lng'), val(p1, 'lng'), val(p2, 'lng'), val(p3, 'lng'), t)
+      });
+    }
+  }
+  out.push(path[path.length - 1]);
+  return out;
+}
+
 function _drawTrainLineOverlay(line, points) {
   if (!map || points.length < 2) return;
   clearTrainLineOverlay(line.id);
 
   const byName = new Map(points.map(point => [point.name, point.position]));
-  const paths = line.id === 'JY'
-    ? [points.map(p => p.position).concat(points[0].position)]
-    : lineGraphEdges(line).map(([from, to]) => [byName.get(from), byName.get(to)]).filter(path => path[0] && path[1]);
+  const paths = _orderedTrainMapPaths(line, byName);
   const polylines = paths.map(path => new google.maps.Polyline({
-    path,
+    path: _smoothTrainMapPath(path),
     geodesic: false,
     strokeColor: line.color,
     strokeOpacity: 0.92,
