@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 00:46 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 00:53 JST</p>
       </div>
 
 
@@ -2503,7 +2503,7 @@ function lineGraphLayout(line) {
   const branches = schematicBranches(line);
   const multiBranch = branches.length > 1;
   const branchGap = 0.6;
-  const colXs = multiBranch ? [11, 31, 50, 69, 89] : [12.5, 37.5, 62.5, 87.5];
+  const colXs = multiBranch ? [15, 33, 50, 67, 85] : [12.5, 37.5, 62.5, 87.5];
   const fullCols = multiBranch ? [0, 1, 2, 3, 4] : [0, 1, 2, 3];
   const trunkCols = multiBranch ? [0, 1, 2, 3] : [1, 2, 3];
   const branchCols = multiBranch ? [0, 1, 2, 3, 4] : [0, 1, 2, 3];
@@ -2616,7 +2616,7 @@ function lineGraphLayout(line) {
     nextBranchRow += branchRows + branchGap;
   });
 
-  return { nodes, edges, labels, colXs, cellW: multiBranch ? 20 : 25, hasBranches: !!branches.length, rows: Math.max(1, ...nodes.map(node => node.row + 1)) };
+  return { nodes, edges, labels, colXs, cellW: multiBranch ? 18 : 25, hasBranches: !!branches.length, rows: Math.max(1, ...nodes.map(node => node.row + 1)) };
 }
 
 function renderGraphLine(line) {
@@ -2668,20 +2668,14 @@ function graphTrackSvg(graph) {
     if (ay === by) return { d: `M ${ax} ${ay} L ${bx} ${by}`, branchLink };
     if (branchLink) {
       const escapeCol = b.escapeCol ?? b.col;
-      const escapeRight = escapeCol > Math.floor((colXs.length - 1) / 2);
       const escapeX = colXs[escapeCol];
-      const r = 8, dir = by > ay ? 1 : -1;
-      const leadX = escapeX + (escapeRight ? -r : r);
       return {
-        d: `M ${ax} ${ay} L ${leadX} ${ay} Q ${escapeX} ${ay} ${escapeX} ${ay + dir * r} L ${escapeX} ${by - dir * r} Q ${escapeX} ${by} ${leadX} ${by} L ${bx} ${by}`,
+        d: `M ${ax} ${ay} L ${escapeX} ${ay} L ${escapeX} ${by} L ${bx} ${by}`,
         branchLink
       };
     }
-    if (from === '町田' && to === '相模大野') {
-      return { d: `M ${ax} ${ay} L ${bx} ${ay} L ${bx} ${by}`, branchLink };
-    }
-    const sideX = branchLink ? colXs[0] : (graph.hasBranches && !a.branch && !b.branch && a.col === 1 ? colXs[1] : (ax > 50 ? colXs[colXs.length - 1] : colXs[0]));
-    return { d: `M ${ax} ${ay} C ${sideX} ${ay}, ${sideX} ${by}, ${bx} ${by}`, branchLink };
+    const sideX = graph.hasBranches && !a.branch && !b.branch && a.col === 1 ? colXs[1] : (ax > 50 ? colXs[colXs.length - 1] : colXs[0]);
+    return { d: `M ${ax} ${ay} L ${sideX} ${ay} L ${sideX} ${by} L ${bx} ${by}`, branchLink };
   }).filter(Boolean);
   return `<svg class="graph-track" viewBox="0 0 100 ${graph.rows * rowH}" preserveAspectRatio="none" aria-hidden="true">${paths.map(path => `<path class="${path.branchLink ? 'branch-link' : ''}" d="${path.d}"/>`).join('')}</svg>`;
 }
