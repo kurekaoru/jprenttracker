@@ -547,6 +547,10 @@
   .snake-sta.empty .snake-dot,.snake-sta.empty .snake-name { visibility:hidden; }
   .snake-name { font-size:8.5px; text-align:center; line-height:1.2; color:rgba(255,255,255,.62); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:calc(100% - 2px); min-height:11px; font-weight:600; }
   .snake-sta.active .snake-name { color:#fff; font-weight:800; }
+  .graph-wrap { --lc:#aaa; --rows:1; position:relative; height:calc(var(--rows) * 38px); padding:2px 1px 0; }
+  .graph-track { position:absolute; inset:0 0 auto; width:100%; height:calc(var(--rows) * 38px); overflow:visible; pointer-events:none; z-index:0; }
+  .graph-track path { fill:none; stroke:var(--lc); stroke-width:4; stroke-linecap:round; stroke-linejoin:round; opacity:.34; vector-effect:non-scaling-stroke; }
+  .graph-sta { position:absolute; width:25%; transform:translate(-50%, 0); }
   .loop-wrap { --lc:#9ACD32; position:relative; height:608px; margin:12px 1px 14px; }
   .loop-ring { position:absolute; inset:14px calc(12.5% - 2px) 30px; border:4px solid var(--lc); border-radius:36px; opacity:.36; pointer-events:none; }
   .loop-sta { position:absolute; width:25%; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; transform:translate(-50%,-9px); padding:1px 0 0; }
@@ -1417,7 +1421,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 10:38 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 10:42 JST</p>
       </div>
 
 
@@ -2172,7 +2176,7 @@ const TRAIN_LINES = [
   ]},
   { id:'C',  code:'C',  color:'#00A55B', name:'東京メトロ千代田線', stations:[
     ['代々木上原',0],['代々木公園',0],['明治神宮前',0],['表参道',0],['乃木坂',0],['赤坂',0],['国会議事堂前',0],['霞ケ関',0],['日比谷',0],['二重橋前',0],['大手町',0],['新御茶ノ水',0],['湯島',0],['根津',0],['千駄木',0],['西日暮里',0],['町屋',0],['北千住',0],['綾瀬',0],['北綾瀬',0]
-  ]},
+  ], branches:[{ from:'綾瀬', stations:[['北綾瀬',0]] }] },
   { id:'Y',  code:'Y',  color:'#C1A900', name:'東京メトロ有楽町線', stations:[
     ['和光市',0],['地下鉄成増',0],['地下鉄赤塚',0],['平和台',0],['氷川台',0],['小竹向原',0],['千川',0],['要町',0],['池袋',0],['東池袋',0],['護国寺',0],['江戸川橋',0],['飯田橋',0],['市ケ谷',0],['麹町',0],['永田町',0],['桜田門',0],['有楽町',0],['銀座一丁目',0],['新富町',0],['月島',0],['豊洲',0],['辰巳',0],['新木場',0]
   ]},
@@ -2315,9 +2319,25 @@ function loopPositions(count) {
 
 function renderSnake(line) {
   if (line.id === 'JY') return renderLoopLine(line);
+  return renderGraphLine(line);
+}
+
+function _lineMainStations(line) {
+  if (!line.branches?.length) return line.stations;
+  const branchNames = new Set(line.branches.flatMap(branch => branch.stations.map(([name]) => name)));
+  return line.stations.filter(([name]) => !branchNames.has(name));
+}
+
+function _stationSvc(line, name) {
+  const found = line.stations.find(([station]) => station === name);
+  return found ? found[1] : 0;
+}
+
+function lineGraphLayout(line) {
   const COLS = 4;
-  const stas = line.stations;
-  const rows = [];
+  const stas = _lineMainStations(line);
+  const nodes = [];
+  const edges = [];
   let i = 0, ltr = true;
   while (i < stas.length) {
     const chunk = stas.slice(i, i + COLS);
@@ -2326,43 +2346,73 @@ function renderSnake(line) {
       if (ltr) cells.push(null);
       else cells.unshift(null);
     }
-    rows.push({ cells, ltr });
+    const row = Math.floor(i / COLS);
+    cells.forEach((sta, col) => {
+      if (sta) nodes.push({ name: sta[0], svc: sta[1], row, col });
+    });
     ltr = !ltr;
     i += COLS;
   }
+  stas.slice(1).forEach((sta, idx) => edges.push([stas[idx][0], sta[0]]));
 
-  const wrap = document.createElement('div');
-  wrap.className = 'snake-wrap';
-  wrap.style.setProperty('--lc', line.color);
-  wrap.style.setProperty('--rows', rows.length);
-  wrap.innerHTML = snakeTrackSvg(rows);
-
-  rows.forEach((row, ri) => {
-    const rowEl = document.createElement('div');
-    rowEl.className = 'snake-row';
-
-    row.cells.forEach(sta => {
-      const cell = document.createElement('div');
-      if (!sta) {
-        cell.className = 'snake-sta empty';
-        cell.innerHTML = '<div class="snake-dot"></div><div class="snake-name"></div>';
-      } else {
-        const [name, svc] = sta;
-        const dc = _sdc(svc);
-        cell.className = 'snake-sta' + (selectedStations.has(name) ? ' active' : '');
-        cell.dataset.sta = name;
-        cell.dataset.lid = line.id;
-        cell.style.setProperty('--dc', dc);
-        cell.title = `${name} · ${SERVICE_LABELS[svc] || SERVICE_LABELS[0]}`;
-        cell.innerHTML = `<div class="snake-dot"></div><div class="snake-name">${name}</div>`;
-        cell.onclick = () => _staTog(cell);
-      }
-      rowEl.appendChild(cell);
+  const byName = new Map(nodes.map(node => [node.name, node]));
+  (line.branches || []).forEach(branch => {
+    const base = byName.get(branch.from);
+    if (!base) return;
+    const dir = base.col >= 2 ? -1 : 1;
+    let prev = branch.from;
+    branch.stations.forEach(([name, svc], bi) => {
+      const col = Math.max(0, Math.min(COLS - 1, base.col + dir * (bi + 1)));
+      const row = base.row + 1 + bi;
+      nodes.push({ name, svc, row, col, branch: true });
+      byName.set(name, nodes[nodes.length - 1]);
+      edges.push([prev, name]);
+      prev = name;
     });
-    wrap.appendChild(rowEl);
+  });
 
+  return { nodes, edges, rows: Math.max(1, ...nodes.map(node => node.row + 1)) };
+}
+
+function renderGraphLine(line) {
+  const graph = lineGraphLayout(line);
+  const wrap = document.createElement('div');
+  wrap.className = 'graph-wrap';
+  wrap.style.setProperty('--lc', line.color);
+  wrap.style.setProperty('--rows', graph.rows);
+  wrap.innerHTML = graphTrackSvg(graph);
+
+  graph.nodes.forEach(node => {
+    const cell = document.createElement('div');
+    const svc = _stationSvc(line, node.name);
+    cell.className = 'graph-sta snake-sta' + (selectedStations.has(node.name) ? ' active' : '');
+    cell.dataset.sta = node.name;
+    cell.dataset.lid = line.id;
+    cell.style.left = `${12.5 + node.col * 25}%`;
+    cell.style.top = `${node.row * 38 + 1}px`;
+    cell.style.setProperty('--dc', _sdc(svc));
+    cell.title = `${node.name} · ${SERVICE_LABELS[svc] || SERVICE_LABELS[0]}`;
+    cell.innerHTML = `<div class="snake-dot"></div><div class="snake-name">${node.name}</div>`;
+    cell.onclick = () => _staTog(cell);
+    wrap.appendChild(cell);
   });
   return wrap;
+}
+
+function graphTrackSvg(graph) {
+  const rowH = 38, dotY = 10;
+  const colXs = [12.5, 37.5, 62.5, 87.5];
+  const byName = new Map(graph.nodes.map(node => [node.name, node]));
+  const paths = graph.edges.map(([from, to]) => {
+    const a = byName.get(from), b = byName.get(to);
+    if (!a || !b) return '';
+    const ax = colXs[a.col], ay = dotY + a.row * rowH;
+    const bx = colXs[b.col], by = dotY + b.row * rowH;
+    if (ay === by) return `M ${ax} ${ay} L ${bx} ${by}`;
+    const sideX = ax > 50 ? 96 : 4;
+    return `M ${ax} ${ay} C ${sideX} ${ay}, ${sideX} ${by}, ${bx} ${by}`;
+  }).filter(Boolean);
+  return `<svg class="graph-track" viewBox="0 0 100 ${graph.rows * rowH}" preserveAspectRatio="none" aria-hidden="true">${paths.map(d => `<path d="${d}"/>`).join('')}</svg>`;
 }
 
 function snakeTrackSvg(rows) {
