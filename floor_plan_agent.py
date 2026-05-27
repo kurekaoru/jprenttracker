@@ -191,6 +191,8 @@ class FloorPlanResult:
     model: str = ""
     total_area_m2: Optional[float] = None   # listing's stated area (from DB)
     inferred_rooms: list[str] = field(default_factory=list)  # labels filled by Phase 2
+    gap_m2: Optional[float] = None          # listed - extracted indoor sum (negative = overcount)
+    quality_flags: list[str] = field(default_factory=list)  # warnings/errors from validation
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -318,10 +320,18 @@ class FloorPlanAgent:
         else:
             return []
 
+        if scale <= 0:
+            log.error(f"_apply_pixel_ratio: non-positive scale={scale:.3f} — skipping pixel fill")
+            return []
+
         inferred = []
         for r in rooms:
             if r.area_m2 is None and r.pixel_fraction_of_ld and r.pixel_fraction_of_ld > 0:
-                r.inferred_area_m2 = round(scale * r.pixel_fraction_of_ld, 2)
+                val = round(scale * r.pixel_fraction_of_ld, 2)
+                if val < 0:
+                    log.error(f"  Negative inferred area for '{r.label}': {val} (scale={scale:.3f}, frac={r.pixel_fraction_of_ld})")
+                    continue
+                r.inferred_area_m2 = val
                 inferred.append(r.label)
         return inferred
 
@@ -332,11 +342,19 @@ class FloorPlanAgent:
 
         raw = self._call_vision(image_path)
 
+        quality_flags: list[str] = []
+
         rooms: list[Room] = []
         for rd in raw.get("rooms", []):
+            area = _float_or_none(rd.get("area_m2"))
+            label = rd.get("label", "")
+            if area is not None and area < 0:
+                log.error(f"NEGATIVE AREA from model for '{label}': {area} — nulling and flagging")
+                quality_flags.append(f"negative_area:{label}:{area}")
+                area = None  # treat as missing; pixel ratio will fill it
             rooms.append(Room(
-                label                = rd.get("label", ""),
-                area_m2              = _float_or_none(rd.get("area_m2")),
+                label                = label,
+                area_m2              = area,
                 inferred_area_m2     = None,
                 dim_calc             = rd.get("dim_calc"),
                 has_window           = bool(rd.get("has_window", False)),
@@ -387,6 +405,60 @@ class FloorPlanAgent:
 
         inferred = self._apply_pixel_ratio(rooms, envelope_area=envelope_area)
 
+        # ── Gap / over-count validation ───────────────────────────────────────
+        indoor_sum = round(sum((r.best_area_m2 or 0) for r in rooms if not r.is_outdoor), 2)
+        gap_m2: float | None = None
+
+        if total_area_m2 and total_area_m2 > 0:
+            gap_m2 = round(total_area_m2 - indoor_sum, 2)
+            tolerance = total_area_m2 * 0.05  # 5 %
+
+            if gap_m2 < -tolerance:
+                # Extracted indoor area EXCEEDS listed size → negative space
+                excess = -gap_m2
+                log.error(
+                    f"NEGATIVE SPACE [{image_path}]: extracted {indoor_sum:.2f}m² "
+                    f"> listed {total_area_m2:.2f}m² (excess={excess:.2f}m²). "
+                    f"Normalising inferred rooms."
+                )
+                quality_flags.append(f"negative_space:excess={excess:.2f}m²")
+
+                # Hard failure guard: if excess is >50% of listed area, something
+                # is fundamentally wrong (e.g. shared corridor counted, doubled rooms).
+                if excess > total_area_m2 * 0.50:
+                    quality_flags.append("hard_fail:excess>50pct")
+                    log.error(
+                        f"  HARD FAIL: excess {excess:.2f}m² is >50% of listed "
+                        f"{total_area_m2:.2f}m². Result unreliable."
+                    )
+                else:
+                    # Normalise: scale inferred rooms down so indoor_sum ≈ total_area_m2.
+                    # Only touch inferred (Phase 2) rooms — leave dimension-line rooms alone.
+                    known_indoor = round(
+                        sum((r.area_m2 or 0) for r in rooms
+                            if not r.is_outdoor and r.area_m2 is not None),
+                        2,
+                    )
+                    inferred_total = round(
+                        sum((r.inferred_area_m2 or 0) for r in rooms
+                            if not r.is_outdoor and r.inferred_area_m2 is not None
+                            and r.area_m2 is None),
+                        2,
+                    )
+                    target_inferred = total_area_m2 - known_indoor
+                    if inferred_total > 0 and target_inferred > 0:
+                        factor = target_inferred / inferred_total
+                        for r in rooms:
+                            if (not r.is_outdoor
+                                    and r.inferred_area_m2 is not None
+                                    and r.area_m2 is None):
+                                r.inferred_area_m2 = round(r.inferred_area_m2 * factor, 2)
+                        indoor_sum = round(
+                            sum((r.best_area_m2 or 0) for r in rooms if not r.is_outdoor), 2
+                        )
+                        gap_m2 = round(total_area_m2 - indoor_sum, 2)
+                        log.info(f"  After normalisation: indoor_sum={indoor_sum:.2f}m², gap={gap_m2:.2f}m²")
+
         result = FloorPlanResult(
             rooms            = rooms,
             living_area_m2   = _float_or_none(raw.get("living_area_m2")),
@@ -399,6 +471,8 @@ class FloorPlanAgent:
             model            = self.model,
             total_area_m2    = total_area_m2,
             inferred_rooms   = inferred,
+            gap_m2           = gap_m2,
+            quality_flags    = quality_flags,
         )
         return result
 
@@ -437,14 +511,18 @@ if __name__ == "__main__":
         print(f"\n{'─'*55}")
         print(f"  Floor plan: {args.image}")
         if args.total_area:
-            indoor = sum(
-                (r.best_area_m2 or 0) for r in result.rooms if not r.is_outdoor
-            )
-            print(f"  Listed: {args.total_area} m²  |  Extracted: {indoor:.1f} m²  |  Gap: {args.total_area - indoor:.1f} m²")
+            indoor = sum((r.best_area_m2 or 0) for r in result.rooms if not r.is_outdoor)
+            gap = args.total_area - indoor
+            gap_str = f"{gap:+.1f} m²"
+            if gap < -args.total_area * 0.05:
+                gap_str += " ⚠ NEGATIVE SPACE (over-counted)"
+            print(f"  Listed: {args.total_area} m²  |  Extracted: {indoor:.1f} m²  |  Gap: {gap_str}")
         print(f"  LD area: {result.living_area_m2} m²  |  Kitchen open: {result.kitchen_open}")
         print(f"  WC: {result.toilet_count}  |  Bath: {result.bathroom_count}")
         if result.inferred_rooms:
             print(f"  Pixel-inferred: {', '.join(result.inferred_rooms)}")
+        if result.quality_flags:
+            print(f"  ⚠ Quality flags: {', '.join(result.quality_flags)}")
         print(f"{'─'*55}")
         print(result.summary())
         print(f"{'─'*55}\n")
