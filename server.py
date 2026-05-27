@@ -630,6 +630,23 @@ def me():
     return jsonify(dict(user))
 
 
+@app.route("/api/auth/avatar", methods=["POST"])
+@jwt_required()
+def upload_avatar():
+    user_id  = int(get_jwt_identity())
+    data     = request.get_json() or {}
+    data_url = data.get("data_url", "")
+    if not data_url.startswith("data:image/"):
+        return jsonify({"error": "Invalid image data"}), 400
+    if len(data_url) > 200_000:  # ~150KB base64 max
+        return jsonify({"error": "Image too large"}), 400
+    con = db()
+    con.execute("UPDATE users SET avatar_url=? WHERE id=?", (data_url, user_id))
+    con.commit()
+    con.close()
+    return jsonify({"avatar_url": data_url})
+
+
 @app.route("/api/auth/change-password", methods=["POST"])
 @jwt_required()
 def change_password():
