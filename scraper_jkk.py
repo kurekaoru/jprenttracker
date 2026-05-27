@@ -133,9 +133,18 @@ class JKKScraper(BaseScraper):
                 from scraper4 import listing_id as lid_fn, upsert_listing, update_listing_completeness
                 con = sqlite3.connect(self.db_file, timeout=60)
                 con.execute("PRAGMA journal_mode=WAL")
+                # A listing is "done" only if it has BOTH local images AND saved detail text.
+                # Missing detail_text means the first-pass UPDATE silently failed (row didn't
+                # exist yet), so we must re-visit the detail page to capture text + floor plan.
                 lids_done = {
-                    row[0] for row in
-                    con.execute("SELECT DISTINCT listing_id FROM listing_images").fetchall()
+                    row[0] for row in con.execute("""
+                        SELECT l.id FROM listings l
+                        WHERE l.detail_text IS NOT NULL AND length(l.detail_text) > 50
+                          AND EXISTS (
+                            SELECT 1 FROM listing_images li
+                            WHERE li.listing_id = l.id AND li.local_path IS NOT NULL
+                          )
+                    """).fetchall()
                 }
 
                 # Paginate — process detail pages inline
@@ -179,6 +188,18 @@ class JKKScraper(BaseScraper):
                         next_btn.click(timeout=60_000)
                         self._wait_stable(popup)
                 finally:
+                    # Backfill floor_plan_data for any listing that has a floor plan image
+                    # but no JSON analysis yet (e.g. analysis crashed on a previous run).
+                    from image_pipeline import run_floor_plan_analysis
+                    missing_fp = con.execute("""
+                        SELECT DISTINCT l.id FROM listings l
+                        JOIN listing_images li ON li.listing_id = l.id
+                        WHERE li.image_type = 'floor_plan' AND li.local_path IS NOT NULL
+                          AND l.floor_plan_data IS NULL
+                    """).fetchall()
+                    for (lid,) in missing_fp:
+                        log.info(f"Backfilling floor plan analysis for {lid[:8]}")
+                        run_floor_plan_analysis(lid, con)
                     con.close()
 
                 browser.close()
