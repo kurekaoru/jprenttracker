@@ -545,13 +545,13 @@
   .snake-sta.active .snake-dot  { background:var(--dc,var(--lc)); }
   .snake-sta:hover:not(.empty) .snake-dot { transform:scale(1.16); box-shadow:0 0 0 2px var(--surface),0 0 0 5px rgba(255,255,255,.08); }
   .snake-sta.empty .snake-dot,.snake-sta.empty .snake-name { visibility:hidden; }
-  .snake-name { font-size:7.5px; text-align:center; line-height:1.2; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:calc(100% - 2px); min-height:9px; }
-  .snake-sta.active .snake-name { color:var(--text); font-weight:700; }
+  .snake-name { font-size:8px; text-align:center; line-height:1.2; color:rgba(255,255,255,.62); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:calc(100% - 2px); min-height:10px; font-weight:600; }
+  .snake-sta.active .snake-name { color:#fff; font-weight:800; }
   .loop-wrap { --lc:#9ACD32; position:relative; height:608px; margin:12px 1px 14px; }
   .loop-ring { position:absolute; inset:14px calc(12.5% - 2px) 30px; border:4px solid var(--lc); border-radius:36px; opacity:.36; pointer-events:none; }
   .loop-sta { position:absolute; width:25%; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; transform:translate(-50%,-9px); padding:1px 0 0; }
   .loop-sta .snake-dot { width:16px; height:16px; }
-  .loop-sta .snake-name { font-size:7px; line-height:1.15; white-space:nowrap; min-height:9px; max-width:58px; text-overflow:ellipsis; overflow:hidden; }
+  .loop-sta .snake-name { font-size:7.5px; line-height:1.15; white-space:nowrap; min-height:10px; max-width:58px; text-overflow:ellipsis; overflow:hidden; }
   /* Service legend */
   .svc-legend { display:flex; gap:7px; flex-wrap:wrap; margin-bottom:7px; padding:0 2px; }
   .svc-legend span { display:flex; align-items:center; gap:3px; font-size:8.5px; color:var(--muted); white-space:nowrap; }
@@ -1417,7 +1417,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 09:10 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 09:15 JST</p>
       </div>
 
 
