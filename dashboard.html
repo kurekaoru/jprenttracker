@@ -1134,6 +1134,12 @@
 
       <!-- Filter page -->
       <div class="panel-page" id="panel-filter">
+        <div style="padding:6px 0 4px;">
+          <input id="name-search" type="search" autocomplete="off"
+            placeholder="検索 / Search…"
+            oninput="applyFilters()"
+            style="width:100%;box-sizing:border-box;padding:5px 9px;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:6px;font-size:12px;font-family:inherit;outline:none;" />
+        </div>
         <div class="view-toggle">
           <button class="view-toggle-btn active" id="vtb-all"      onclick="setViewMode('all')"      data-i18n="view_all">All</button>
           <button class="view-toggle-btn"         id="vtb-starred"  onclick="setViewMode('starred')"  data-i18n="view_saved">★ Saved</button>
@@ -1453,7 +1459,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 20:21 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 21:04 JST</p>
       </div>
 
 
@@ -2035,6 +2041,17 @@ const STRINGS = {
   tab_fac:              { ja:'施設',                    en:'Nearby',            uk:'Поруч' },
   tab_photos:           { ja:'写真',                    en:'Photos',            uk:'Фото' },
   tab_floorplan:        { ja:'間取り',                  en:'Floor Plan',        uk:'Планування' },
+  tab_details:          { ja:'詳細',                    en:'Details',           uk:'Деталі' },
+  detail_structure:     { ja:'構造',                    en:'Structure',         uk:'Конструкція' },
+  detail_avail:         { ja:'入居可能',                 en:'Available',         uk:'Заселення' },
+  detail_parking:       { ja:'駐車場',                  en:'Parking',           uk:'Паркінг' },
+  detail_nearby:        { ja:'周辺環境',                 en:'Surroundings',      uk:'Оточення' },
+  detail_features:      { ja:'特徴',                    en:'Features',          uk:'Особливості' },
+  detail_amenities:     { ja:'設備',                    en:'Amenities',         uk:'Обладнання' },
+  detail_notes:         { ja:'備考',                    en:'Notes',             uk:'Примітки' },
+  age_label:            { ja:'築年数',                   en:'Building age',      uk:'Вік будинку' },
+  years_suffix:         { ja:'年',                      en:'yrs',               uk:'р.' },
+  no_detail:            { ja:'詳細情報なし',              en:'No details available', uk:'Деталі відсутні' },
   no_photos:            { ja:'写真なし',                 en:'No photos',         uk:'Немає фото' },
   // Facility table
   col_type:             { ja:'種別',                    en:'Type',              uk:'Тип' },
@@ -4209,6 +4226,7 @@ function popupHtml(l) {
           <button class="prop-tab-btn active" data-tab="fac" onclick="switchPropTab('fac')">${t('tab_fac')}</button>
           <button class="prop-tab-btn" data-tab="floorplan" onclick="switchPropTab('floorplan')">${t('tab_floorplan')}</button>
           <button class="prop-tab-btn" data-tab="photos" onclick="switchPropTab('photos')">${t('tab_photos')}</button>
+          <button class="prop-tab-btn" data-tab="details" onclick="switchPropTab('details')">${t('tab_details')}</button>
           <button class="prop-tab-btn" data-tab="route" onclick="switchPropTab('route')">${t('tab_route')}</button>
         </div>
         <div class="prop-tab-content">
@@ -4236,6 +4254,9 @@ function popupHtml(l) {
           <div class="prop-tab-pane" id="prop-tab-photos">
             <div class="prop-photos-grid" id="prop-photos-grid"></div>
           </div>
+          <div class="prop-tab-pane" id="prop-tab-details">
+            <div id="prop-details-content" style="font-size:12px;line-height:1.6;color:var(--text);"></div>
+          </div>
           <div class="prop-tab-pane active" id="prop-tab-fac">
             <div id="fac-section"></div>
           </div>
@@ -4253,7 +4274,73 @@ function switchPropTab(tab) {
     loadPropPhotos(_selectedId, 'prop-floorplan-grid', ['floor_plan']);
     loadFloorPlanAnalysis(_selectedId);
   }
-  if (tab === 'photos')    loadPropPhotos(_selectedId, 'prop-photos-grid',    ['exterior', 'interior']);
+  if (tab === 'photos')   loadPropPhotos(_selectedId, 'prop-photos-grid', ['exterior', 'interior']);
+  if (tab === 'details')  renderDetailTab(_selectedId);
+}
+
+function renderDetailTab(listingId) {
+  const el = document.getElementById('prop-details-content');
+  if (!el) return;
+  const listing = _allListings?.find(l => l.id === listingId);
+  if (!listing) { el.innerHTML = ''; return; }
+
+  const row = (label, val) => val
+    ? `<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);">
+         <div style="color:var(--muted);flex-shrink:0;width:90px;">${label}</div>
+         <div style="flex:1;word-break:break-word;">${escHtml(val)}</div>
+       </div>`
+    : '';
+
+  let html = '';
+
+  // Structured fields
+  if (listing.building_type) html += row(t('detail_structure'),  listing.building_type);
+  if (listing.age_years != null) html += row(t('age_label'),     `${listing.age_years} ${t('years_suffix')}`);
+  if (listing.available_from)  html += row(t('detail_avail'),    listing.available_from);
+  if (listing.has_parking)     html += row(t('detail_parking'),  listing.has_parking === 1 ? '○' : '—');
+  if (listing.parking_fee)     html += row(t('detail_parking'),  listing.parking_fee);
+
+  // Features / nearby
+  if (listing.nearby_features) html += row(t('detail_nearby'),   listing.nearby_features);
+  if (listing.features)        html += row(t('detail_features'), listing.features);
+  if (listing.appliances)      html += row(t('detail_amenities'),listing.appliances);
+
+  // Raw detail_text — parse into labelled sections
+  if (listing.detail_text) {
+    const lines = listing.detail_text.split('\n').map(s => s.trim()).filter(Boolean);
+    // Group consecutive lines into labelled sections where a short line ≤12 chars is a header
+    const sections = [];
+    let cur = null;
+    for (const line of lines) {
+      if (line.length <= 14 && !line.includes('：') && !line.includes('、') && cur?.body.length === 0) {
+        if (cur) sections.push(cur);
+        cur = { header: line, body: [] };
+      } else {
+        if (!cur) cur = { header: null, body: [] };
+        cur.body.push(line);
+      }
+    }
+    if (cur) sections.push(cur);
+
+    // Only show sections not already covered by structured fields
+    const skip = new Set(['特徴ピックアップ','設備','特徴','備考']);
+    for (const sec of sections) {
+      const h = sec.header;
+      const body = sec.body.join('\n');
+      if (!body) continue;
+      if (h && skip.has(h)) continue;
+      html += row(h || t('detail_notes'), body);
+    }
+
+    // Always show 備考 (notes/remarks) at the bottom
+    const bikouIdx = lines.indexOf('備考');
+    if (bikouIdx !== -1) {
+      const bikou = lines.slice(bikouIdx + 1).join('\n');
+      if (bikou) html += row('備考', bikou);
+    }
+  }
+
+  el.innerHTML = html || `<div style="color:var(--muted);padding:12px 0;">${t('no_detail')}</div>`;
 }
 
 async function loadPropPhotos(listingId, gridId, filterTypes) {
@@ -4633,6 +4720,7 @@ function applyMapFilters() {
   const hasParking   = document.getElementById('filter-parking')?.checked;
   const availNow     = document.getElementById('filter-available-now')?.checked;
   const maxAge       = parseInt(document.getElementById('filter-max-age')?.value) || 0;
+  const nameQ        = (document.getElementById('name-search')?.value || '').trim().toLowerCase();
   updateStationBanner();
 
   Object.values(_markers).forEach(e => e.marker.setMap(null));
@@ -4643,6 +4731,11 @@ function applyMapFilters() {
 
   _allListings.forEach(l => {
     if (l.disappeared_at) return;
+    if (nameQ) {
+      const haystack = [l.name, l.ward, l.address, l.detail_text, l.appliances, l.features, l.nearby_features]
+        .filter(Boolean).join(' ').toLowerCase();
+      if (!haystack.includes(nameQ)) return;
+    }
     if (_viewMode === 'starred' && !_savedListings.has(l.id)) return;
     if (_viewMode === 'filtered') {
       if (!filterSources.has(l.source)) return;
