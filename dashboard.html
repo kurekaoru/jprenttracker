@@ -1451,7 +1451,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 18:09 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 18:16 JST</p>
       </div>
 
 
@@ -4019,24 +4019,32 @@ function initMap() {
   loadListings();
 }
 
-async function loadAreaBoundary(url, color) {
-  try {
-    const r = await fetch(url);
-    if (!r.ok) return;
-    const gj = await r.json();
-    const layer = new google.maps.Data({ map });
-    layer.addGeoJson(gj);
-    layer.setStyle({ strokeColor: color, strokeWeight: 1.5, strokeOpacity: 0.45,
-                     fillColor: color, fillOpacity: 0.04, clickable: false });
-  } catch (_) {}
+function _addBoundaryLayer(gj, color) {
+  const layer = new google.maps.Data({ map });
+  layer.addGeoJson(gj);
+  layer.setStyle({ strokeColor: color, strokeWeight: 1.5, strokeOpacity: 0.4,
+                   fillColor: color, fillOpacity: 0.04, clickable: false });
 }
 
-function loadAreaBoundaries() {
-  const BASE = 'https://raw.githubusercontent.com/niiyz/JapanCityGeoJson/master/geojson/cities/';
-  loadAreaBoundary('https://raw.githubusercontent.com/dataofjapan/land/master/tokyo.geojson', '#1D9E75');
-  loadAreaBoundary(BASE + '14100.geojson', '#1565C0'); // Yokohama — blue
-  loadAreaBoundary(BASE + '14130.geojson', '#C62828'); // Kawasaki — red
-  loadAreaBoundary(BASE + '14150.geojson', '#6A1B9A'); // Sagamihara — purple
+async function loadAreaBoundaries() {
+  // Tokyo — single prefecture polygon
+  try {
+    const r = await fetch('https://raw.githubusercontent.com/dataofjapan/land/master/tokyo.geojson');
+    if (r.ok) _addBoundaryLayer(await r.json(), '#1D9E75');
+  } catch (_) {}
+
+  // Kanagawa cities — ward-level features filtered by city name
+  const KANAGAWA = 'https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/data/municipality/geojson/s0010/N03-21_14_210101.json';
+  try {
+    const r = await fetch(KANAGAWA);
+    if (!r.ok) return;
+    const gj = await r.json();
+    const cities = { '横浜市': '#1565C0', '川崎市': '#C62828', '相模原市': '#6A1B9A' };
+    Object.entries(cities).forEach(([city, color]) => {
+      const filtered = { ...gj, features: gj.features.filter(f => f.properties?.N03_003 === city) };
+      if (filtered.features.length) _addBoundaryLayer(filtered, color);
+    });
+  } catch (_) {}
 }
 
 function stationStr(nearest_station, walk_min) {
