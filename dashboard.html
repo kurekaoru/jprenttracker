@@ -549,10 +549,12 @@
   .snake-sta.empty .snake-dot,.snake-sta.empty .snake-name { visibility:hidden; }
   .snake-name { font-size:8.5px; text-align:center; line-height:1.2; color:rgba(255,255,255,.62); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:calc(100% - 2px); min-height:11px; font-weight:600; }
   .snake-sta.active .snake-name { color:#fff; font-weight:800; }
-  .graph-wrap { --lc:#aaa; --rows:1; position:relative; height:calc(var(--rows) * 38px); padding:2px 1px 0; }
-  .graph-track { position:absolute; inset:0 0 auto; width:100%; height:calc(var(--rows) * 38px); overflow:visible; pointer-events:none; z-index:0; }
+  .graph-wrap { --lc:#aaa; --rows:1; --rowh:38px; position:relative; height:calc(var(--rows) * var(--rowh)); padding:2px 1px 0; }
+  .graph-track { position:absolute; inset:0 0 auto; width:100%; height:calc(var(--rows) * var(--rowh)); overflow:visible; pointer-events:none; z-index:0; }
   .graph-track path { fill:none; stroke:var(--lc); stroke-width:4; stroke-linecap:round; stroke-linejoin:round; opacity:.34; vector-effect:non-scaling-stroke; }
+  .graph-track path.branch-link { opacity:.2; stroke-width:3; stroke-dasharray:2 4; }
   .graph-sta { position:absolute; width:25%; transform:translate(-50%, 0); }
+  .branch-label { position:absolute; left:2px; font-size:8px; line-height:1; color:rgba(255,255,255,.42); font-weight:800; letter-spacing:.04em; pointer-events:none; z-index:1; }
   .loop-wrap { --lc:#9ACD32; position:relative; height:608px; margin:12px 1px 14px; }
   .loop-ring { position:absolute; inset:14px calc(12.5% - 2px) 30px; border:4px solid var(--lc); border-radius:36px; opacity:.36; pointer-events:none; }
   .loop-sta { position:absolute; width:25%; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; transform:translate(-50%,-9px); padding:1px 0 0; }
@@ -1423,7 +1425,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 13:50 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 14:00 JST</p>
       </div>
 
 
@@ -2355,9 +2357,11 @@ function lineGraphEdges(line, includeExtra = true) {
 
 function lineGraphLayout(line) {
   const COLS = 4;
+  const branchGap = line.branches?.length ? 2 : 1;
   const stas = _lineMainStations(line);
   const nodes = [];
   const edges = [];
+  const labels = [];
   const placePath = (pathStations, startRow, startLtr = true, branch = false) => {
     let i = 0, ltr = startLtr;
     while (i < pathStations.length) {
@@ -2380,17 +2384,18 @@ function lineGraphLayout(line) {
   const mainRows = placePath(stas, 0, true, false);
   lineGraphEdges(line, false).forEach(edge => edges.push(edge));
 
-  let nextBranchRow = mainRows + (line.branches?.length ? 1 : 0);
+  let nextBranchRow = mainRows + (line.branches?.length ? 2 : 0);
   const byName = new Map(nodes.map(node => [node.name, node]));
   (line.branches || []).forEach(branch => {
     const base = byName.get(branch.from);
     if (!base) return;
+    labels.push({ text: `${branch.from} branch`, row: nextBranchRow - 1 });
     const branchRows = placePath(branch.stations, nextBranchRow, base.col < 2, true);
     branch.stations.forEach(([name]) => byName.set(name, nodes.find(node => node.name === name)));
-    nextBranchRow += branchRows + 1;
+    nextBranchRow += branchRows + branchGap;
   });
 
-  return { nodes, edges, rows: Math.max(1, ...nodes.map(node => node.row + 1)) };
+  return { nodes, edges, labels, rows: Math.max(1, ...nodes.map(node => node.row + 1)) };
 }
 
 function renderGraphLine(line) {
@@ -2399,7 +2404,15 @@ function renderGraphLine(line) {
   wrap.className = 'graph-wrap';
   wrap.style.setProperty('--lc', line.color);
   wrap.style.setProperty('--rows', graph.rows);
+  wrap.style.setProperty('--rowh', '46px');
   wrap.innerHTML = graphTrackSvg(graph);
+  graph.labels.forEach(label => {
+    const el = document.createElement('div');
+    el.className = 'branch-label';
+    el.style.top = `${label.row * 46 + 12}px`;
+    el.textContent = label.text;
+    wrap.appendChild(el);
+  });
 
   graph.nodes.forEach(node => {
     const cell = document.createElement('div');
@@ -2408,7 +2421,7 @@ function renderGraphLine(line) {
     cell.dataset.sta = node.name;
     cell.dataset.lid = line.id;
     cell.style.left = `${12.5 + node.col * 25}%`;
-    cell.style.top = `${node.row * 38 + 1}px`;
+    cell.style.top = `${node.row * 46 + 1}px`;
     cell.style.setProperty('--dc', _sdc(svc));
     cell.title = `${node.name} · ${SERVICE_LABELS[svc] || SERVICE_LABELS[0]}`;
     cell.innerHTML = `<div class="snake-dot"></div><div class="snake-name">${node.name}</div>`;
@@ -2420,7 +2433,7 @@ function renderGraphLine(line) {
 }
 
 function graphTrackSvg(graph) {
-  const rowH = 38, dotY = 10;
+  const rowH = 46, dotY = 10;
   const colXs = [12.5, 37.5, 62.5, 87.5];
   const byName = new Map(graph.nodes.map(node => [node.name, node]));
   const paths = graph.edges.map(([from, to]) => {
@@ -2428,11 +2441,12 @@ function graphTrackSvg(graph) {
     if (!a || !b) return '';
     const ax = colXs[a.col], ay = dotY + a.row * rowH;
     const bx = colXs[b.col], by = dotY + b.row * rowH;
-    if (ay === by) return `M ${ax} ${ay} L ${bx} ${by}`;
+    const branchLink = !!b.branch && !a.branch;
+    if (ay === by) return { d: `M ${ax} ${ay} L ${bx} ${by}`, branchLink };
     const sideX = ax > 50 ? 96 : 4;
-    return `M ${ax} ${ay} C ${sideX} ${ay}, ${sideX} ${by}, ${bx} ${by}`;
+    return { d: `M ${ax} ${ay} C ${sideX} ${ay}, ${sideX} ${by}, ${bx} ${by}`, branchLink };
   }).filter(Boolean);
-  return `<svg class="graph-track" viewBox="0 0 100 ${graph.rows * rowH}" preserveAspectRatio="none" aria-hidden="true">${paths.map(d => `<path d="${d}"/>`).join('')}</svg>`;
+  return `<svg class="graph-track" viewBox="0 0 100 ${graph.rows * rowH}" preserveAspectRatio="none" aria-hidden="true">${paths.map(path => `<path class="${path.branchLink ? 'branch-link' : ''}" d="${path.d}"/>`).join('')}</svg>`;
 }
 
 function snakeTrackSvg(rows) {
