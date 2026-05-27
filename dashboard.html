@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 00:29 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 00:35 JST</p>
       </div>
 
 
@@ -2561,9 +2561,26 @@ function lineGraphLayout(line) {
       const firstBranchRows = placePath(branches[0].stations, nextRow, [3, 2, 1, 0], true, true, new Set(), new Set(), 'branch0', 3);
       nextRow += firstBranchRows + branchGap;
 
-      const laterBranchNames = new Set(branches.slice(1).map(branch => branch.from));
-      const suffixRows = placePath(suffix, nextRow, [4, 3, 2, 1, 0], true, true, new Set(), laterBranchNames, 'main', 4);
-      mainRows = nextRow + suffixRows;
+      const secondBranch = branches[1];
+      const secondBranchIdx = secondBranch ? suffix.findIndex(([name]) => name === secondBranch.from) : -1;
+      if (secondBranch && secondBranchIdx >= 0) {
+        const beforeSecond = suffix.slice(0, secondBranchIdx);
+        const secondStation = suffix[secondBranchIdx];
+        const afterSecond = suffix.slice(secondBranchIdx + 1);
+        nextRow += placePath(beforeSecond, nextRow, [4, 3, 2, 1, 0], true, true, new Set(), new Set(), 'main-before-second', 4);
+        nextRow += placePath([secondStation], nextRow, [4, 3, 2, 1, 0], false, true, new Set(), new Set(), 'main-before-second', 4);
+
+        labels.push({ text: `${secondBranch.from} branch`, row: nextRow + 0.28 });
+        nextRow += 1;
+        const secondBranchRows = placePath(secondBranch.stations, nextRow, [1, 2, 3, 4], true, true, new Set(), new Set(), 'branch1', 4);
+        nextRow += secondBranchRows + branchGap;
+
+        const odawaraRows = placePath(afterSecond, nextRow, [0, 1, 2, 3, 4], true, true, new Set(), new Set(), 'odawara', 0);
+        mainRows = nextRow + odawaraRows;
+      } else {
+        const suffixRows = placePath(suffix, nextRow, [4, 3, 2, 1, 0], true, true, new Set(), new Set(), 'main', 4);
+        mainRows = nextRow + suffixRows;
+      }
     } else {
       mainRows = placePath(stas, 0, trunkCols, true, false);
     }
@@ -2587,7 +2604,7 @@ function lineGraphLayout(line) {
 
   let nextBranchRow = mainRows + (branches.length ? 1 : 0);
   const byName = new Map(nodes.map(node => [node.name, node]));
-  branches.slice(multiBranch ? 1 : 0).forEach((branch, idx) => {
+  branches.slice(multiBranch ? branches.length : 0).forEach((branch, idx) => {
     const base = byName.get(branch.from);
     if (!base) return;
     labels.push({ text: `${branch.from} branch`, row: nextBranchRow - 0.72 });
