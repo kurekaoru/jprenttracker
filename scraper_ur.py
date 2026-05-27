@@ -356,6 +356,32 @@ def _fetch_ur_room_data(listing_url: str) -> tuple[list[tuple[str, str]], dict]:
             age_years = int(raw_year)
         except (ValueError, TypeError):
             age_years = None
+        # Combine biko (renovation notes) + biko106 (shop contact/conditions)
+        notes_parts = [p for p in [
+            _strip_html(d.get("biko") or ""),
+            _strip_html(d.get("biko106") or ""),
+        ] if p]
+
+        # Design labels (e.g. リノベーション住宅) as comma-separated string
+        design_labels = ", ".join(
+            item.get("デザイン名", "") for item in (d.get("design") or [])
+            if item.get("デザイン名")
+        ) or None
+
+        # Discount/system labels (e.g. 近居割)
+        system_labels = ", ".join(
+            item.get("制度名", "") for item in (d.get("system") or [])
+            if item.get("制度名")
+        ) or None
+
+        # Common fee — prefer commonfee_sp (formatted string)
+        commonfee_raw = d.get("commonfee_sp") or d.get("commonfee") or ""
+        commonfee = _strip_html(str(commonfee_raw)).replace("円", "").replace(",", "").strip()
+        try:
+            commonfee_jpy = int(commonfee) if commonfee else None
+        except ValueError:
+            commonfee_jpy = None
+
         detail = {
             "features":       d.get("feature_pickup") or [],   # list of highlight tags
             "facility":       _strip_html(d.get("facility") or ""),
@@ -365,8 +391,11 @@ def _fetch_ur_room_data(listing_url: str) -> tuple[list[tuple[str, str]], dict]:
             "age_years":      age_years,
             "available_date": d.get("availableDate") or "",
             "feature_text":   _strip_html(d.get("feature") or ""),
-            "notes":          _strip_html(d.get("biko") or ""),
+            "notes":          "\n".join(notes_parts) if notes_parts else "",
             "shikikin":       d.get("shikikin") or "",
+            "design":         design_labels,
+            "systems":        system_labels,
+            "commonfee_jpy":  commonfee_jpy,
         }
         return images[:20], detail
 
@@ -386,16 +415,23 @@ def _save_ur_detail(lid: str, detail: dict, con: sqlite3.Connection) -> None:
     if not detail:
         return
     features_csv = ", ".join(detail["features"]) if detail["features"] else None
-    # Build a human-readable detail_text from all fields
+
+    # Build a human-readable detail_text from all captured fields
     parts = []
     if detail["features"]:
         parts.append("特徴ピックアップ\n" + "\n".join(detail["features"]))
+    if detail.get("design"):
+        parts.append("デザイン\n" + detail["design"])
+    if detail.get("systems"):
+        parts.append("割引制度\n" + detail["systems"])
     if detail["facility"]:
         parts.append("設備\n" + detail["facility"])
     if detail["parking"]:
         parts.append("敷地内駐車場\n" + detail["parking"])
     if detail["age_years"] is not None:
         parts.append(f"管理年数\n{detail['age_years']}年")
+    if detail.get("shikikin"):
+        parts.append(f"敷金\n{detail['shikikin']}")
     if detail["available_date"]:
         parts.append(f"入居可能時期\n{detail['available_date']}")
     if detail["feature_text"]:
@@ -403,6 +439,9 @@ def _save_ur_detail(lid: str, detail: dict, con: sqlite3.Connection) -> None:
     if detail["notes"]:
         parts.append("備考\n" + detail["notes"])
     detail_text = "\n\n".join(parts) if parts else None
+
+    # building_type gets design label if not already set
+    building_type = detail.get("design")
 
     con.execute(
         "UPDATE listings SET "
@@ -413,7 +452,8 @@ def _save_ur_detail(lid: str, detail: dict, con: sqlite3.Connection) -> None:
         "  parking_fee=COALESCE(?, parking_fee),"
         "  age_years=COALESCE(?, age_years),"
         "  available_from=COALESCE(?, available_from),"
-        "  nearby_features=COALESCE(?, nearby_features)"
+        "  nearby_features=COALESCE(?, nearby_features),"
+        "  building_type=COALESCE(?, building_type)"
         " WHERE id=?",
         (
             features_csv,
@@ -424,6 +464,7 @@ def _save_ur_detail(lid: str, detail: dict, con: sqlite3.Connection) -> None:
             detail["age_years"],
             detail["available_date"] or None,
             detail["feature_text"] or None,
+            building_type,
             lid,
         ),
     )
