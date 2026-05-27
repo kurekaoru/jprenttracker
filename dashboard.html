@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 08:47 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 08:49 JST</p>
       </div>
 
 
@@ -2605,9 +2605,11 @@ function lineGraphLayout(line) {
   };
 
   let mainRows;
+  let renderedBranchCount = 0;
   if (multiBranch) {
     const firstBranchIdx = stas.findIndex(([name]) => name === branches[0].from);
     if (firstBranchIdx >= 0) {
+      renderedBranchCount = branches.length;
       const prefix = stas.slice(0, firstBranchIdx + 1);
       const suffix = stas.slice(firstBranchIdx + 1);
       const prefixRows = placePath(prefix, 0, fullCols, true, false, new Set(), new Set([branches[0].from]));
@@ -2642,7 +2644,19 @@ function lineGraphLayout(line) {
   } else if (branches.length) {
     const branchNames = new Set(branches.map(branch => branch.from));
     const firstBranchIdx = stas.findIndex(([name]) => branchNames.has(name));
-    if (firstBranchIdx >= 0) {
+    if (line.id === 'M' && branches[0] && firstBranchIdx >= 0) {
+      const branch = branches[0];
+      const prefix = stas.slice(0, firstBranchIdx);
+      const splitStation = stas[firstBranchIdx];
+      const suffix = stas.slice(firstBranchIdx + 1);
+      const splitRow = placePath(prefix, 0, fullCols, true, false);
+      placePath([splitStation], splitRow, fullCols, true, false, new Set(), new Set(), 'main-before-branch');
+      const branchRows = placePath(branch.stations, splitRow, [1, 2, 3, 4], true, true, new Set(), new Set(), 'branch0', 1);
+      labels.push(terminalBranchLabel(branch, 'branch0', splitRow, 4));
+      const suffixRows = placePath(suffix, splitRow + branchRows, fullCols, true, false, new Set(), new Set(), 'ogikubo');
+      mainRows = splitRow + branchRows + suffixRows;
+      renderedBranchCount = 1;
+    } else if (firstBranchIdx >= 0) {
       const prefix = stas.slice(0, firstBranchIdx + 1);
       const suffix = stas.slice(firstBranchIdx + 1);
       const prefixRows = placePath(prefix, 0, fullCols, true, false);
@@ -2659,7 +2673,7 @@ function lineGraphLayout(line) {
 
   let nextBranchRow = mainRows;
   const byName = new Map(nodes.map(node => [node.name, node]));
-  branches.slice(multiBranch ? branches.length : 0).forEach((branch, idx) => {
+  branches.slice(renderedBranchCount).forEach((branch, idx) => {
     const base = byName.get(branch.from);
     if (!base) return;
     const escapeRight = base.col > Math.floor((colXs.length - 1) / 2);
