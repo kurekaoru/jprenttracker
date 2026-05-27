@@ -1459,7 +1459,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 21:49 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 22:31 JST</p>
       </div>
 
 
@@ -4431,12 +4431,9 @@ function _renderFloorPlanAnalysis(d) {
     const areaStr = area != null ? area.toFixed(2) + ' m²' : '—';
     const inferred = r.area_m2 == null && r.inferred_area_m2 != null;
     const infTag  = inferred ? `<span style="color:var(--muted);font-size:9px;" title="pixel-ratio estimate">~</span>` : '';
-    const dimStr  = r.dim_calc
-      ? `<span style="color:var(--muted);font-size:10px;">${escHtml(r.dim_calc)}</span>` : '';
     return `<tr${r.is_outdoor ? ' style="opacity:.6"' : ''}>
       <td>${escHtml(r.label)}</td>
       <td class="r">${infTag}${areaStr}</td>
-      <td style="font-size:10px;padding-left:4px;">${dimStr}</td>
       <td class="c" style="color:var(--accent);font-size:11px;">${winSym(r.has_window)}</td>
     </tr>`;
   }).join('');
@@ -4449,7 +4446,7 @@ function _renderFloorPlanAnalysis(d) {
     <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">Floor Plan Analysis</div>
     <table class="fp-analysis-table">
       <thead><tr>
-        <th>Room</th><th class="r">Area</th><th>Calc</th><th class="c" title="Exterior window">☀</th>
+        <th>Room</th><th class="r">Area</th><th class="c" title="Exterior window">☀</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
