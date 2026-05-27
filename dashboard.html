@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 23:53 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 23:57 JST</p>
       </div>
 
 
@@ -2557,7 +2557,8 @@ function lineGraphLayout(line) {
     const base = byName.get(branch.from);
     if (!base) return;
     labels.push({ text: `${branch.from} branch`, row: nextBranchRow - 0.72 });
-    const branchRows = placePath(branch.stations, nextBranchRow, branchCols, true, true);
+    const escapeRight = base.col > 1;
+    const branchRows = placePath(branch.stations, nextBranchRow, branchCols, !escapeRight, true);
     branch.stations.forEach(([name]) => byName.set(name, nodes.find(node => node.name === name)));
     nextBranchRow += branchRows + branchGap;
   });
@@ -2611,9 +2612,12 @@ function graphTrackSvg(graph) {
     const branchLink = !!b.branch && !a.branch;
     if (ay === by) return { d: `M ${ax} ${ay} L ${bx} ${by}`, branchLink };
     if (branchLink) {
-      const escapeX = 4, r = 8, dir = by > ay ? 1 : -1;
+      const escapeRight = b.col > 1;
+      const escapeX = escapeRight ? 96 : 4;
+      const r = 8, dir = by > ay ? 1 : -1;
+      const leadX = escapeX + (escapeRight ? -r : r);
       return {
-        d: `M ${ax} ${ay} L ${escapeX + r} ${ay} Q ${escapeX} ${ay} ${escapeX} ${ay + dir * r} L ${escapeX} ${by - dir * r} Q ${escapeX} ${by} ${escapeX + r} ${by} L ${bx} ${by}`,
+        d: `M ${ax} ${ay} L ${leadX} ${ay} Q ${escapeX} ${ay} ${escapeX} ${ay + dir * r} L ${escapeX} ${by - dir * r} Q ${escapeX} ${by} ${leadX} ${by} L ${bx} ${by}`,
         branchLink
       };
     }
