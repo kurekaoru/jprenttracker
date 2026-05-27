@@ -1417,7 +1417,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 09:20 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 09:24 JST</p>
       </div>
 
 
@@ -2454,16 +2454,21 @@ function _updateLineSel(lid) {
   if (el) el.textContent = cnt > 0 ? cnt : '';
 }
 
-const TRAIN_STATION_COORDS_KEY = 'jkkTrainStationCoords:v1';
+const TRAIN_STATION_COORDS_KEY = 'jkkTrainStationCoords:v2';
+const TRAIN_STATION_MISS_TTL = 24 * 60 * 60 * 1000;
 let _trainLinePolyline = null;
 let _trainStationMarkers = [];
 let _trainGeocoder = null;
 let _activeTrainMapLine = null;
 let _trainMapToken = 0;
+let _trainStationCoordCache = null;
+const _trainGeocodeInflight = new Map();
 
 function _readTrainStationCoords() {
-  try { return JSON.parse(localStorage.getItem(TRAIN_STATION_COORDS_KEY) || '{}'); }
-  catch (_) { return {}; }
+  if (_trainStationCoordCache) return _trainStationCoordCache;
+  try { _trainStationCoordCache = JSON.parse(localStorage.getItem(TRAIN_STATION_COORDS_KEY) || '{}'); }
+  catch (_) { _trainStationCoordCache = {}; }
+  return _trainStationCoordCache;
 }
 
 function _writeTrainStationCoords(coords) {
@@ -2516,24 +2521,62 @@ function _drawTrainLineOverlay(line, points) {
   }));
 }
 
+function _stationCoordKey(name, line) {
+  return `${line.id}:${name}駅`;
+}
+
+function _legacyStationCoordKey(name) {
+  return `${name}駅`;
+}
+
+function _cachedTrainStationPoint(name, line, cache) {
+  const key = _stationCoordKey(name, line);
+  const legacyKey = _legacyStationCoordKey(name);
+  const cached = cache[key] || cache[legacyKey];
+  if (!cached) return { status: 'missing', key };
+  if (cached.missAt) {
+    return Date.now() - cached.missAt < TRAIN_STATION_MISS_TTL
+      ? { status: 'miss', key }
+      : { status: 'missing', key };
+  }
+  return { status: 'hit', key, point: cached };
+}
+
+function _rememberTrainStationMiss(key, cache) {
+  cache[key] = { missAt: Date.now() };
+  _writeTrainStationCoords(cache);
+}
+
 function _geocodeTrainStation(name, line, cache, attempt = 0) {
-  const key = `${name}駅`;
-  if (cache[key]) return Promise.resolve(cache[key]);
+  const cached = _cachedTrainStationPoint(name, line, cache);
+  if (cached.status === 'hit') return Promise.resolve({ point: cached.point, cached: true });
+  if (cached.status === 'miss') return Promise.resolve({ point: null, cached: true });
+  const key = cached.key;
+  if (_trainGeocodeInflight.has(key)) return _trainGeocodeInflight.get(key);
   if (!_trainGeocoder) _trainGeocoder = new google.maps.Geocoder();
-  return new Promise(resolve => {
+
+  const req = new Promise(resolve => {
     _trainGeocoder.geocode({ address: `${name}駅 日本`, region: 'jp' }, (results, status) => {
       if (status === 'OVER_QUERY_LIMIT' && attempt < 2) {
         setTimeout(() => resolve(_geocodeTrainStation(name, line, cache, attempt + 1)), 350);
         return;
       }
-      if (status !== 'OK' || !results?.[0]?.geometry?.location) return resolve(null);
+      if (status !== 'OK' || !results?.[0]?.geometry?.location) {
+        _rememberTrainStationMiss(key, cache);
+        return resolve({ point: null, cached: false });
+      }
       const loc = results[0].geometry.location;
       const point = { lat: loc.lat(), lng: loc.lng() };
       cache[key] = point;
       _writeTrainStationCoords(cache);
-      resolve(point);
+      resolve({ point, cached: false });
     });
+  }).finally(() => {
+    _trainGeocodeInflight.delete(key);
   });
+
+  _trainGeocodeInflight.set(key, req);
+  return req;
 }
 
 async function showTrainLineOverlay(id) {
@@ -2546,13 +2589,14 @@ async function showTrainLineOverlay(id) {
   const points = [];
 
   for (const [name] of line.stations) {
-    const point = await _geocodeTrainStation(name, line, cache);
+    const result = await _geocodeTrainStation(name, line, cache);
     if (token !== _trainMapToken || _activeTrainMapLine !== id) return;
+    const point = result?.point;
     if (point) {
       points.push({ name, position: point });
       if (points.length >= 2) _drawTrainLineOverlay(line, points);
     }
-    await new Promise(resolve => setTimeout(resolve, 60));
+    if (!result?.cached) await new Promise(resolve => setTimeout(resolve, 60));
   }
 }
 
