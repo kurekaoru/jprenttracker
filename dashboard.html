@@ -1417,7 +1417,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 09:28 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 09:34 JST</p>
       </div>
 
 
@@ -2410,9 +2410,10 @@ function buildLineAccordion() {
 
     const body = document.createElement('div');
     body.className = 'line-body';
-    body.style.display = 'none';
+    body.style.display = _openTrainLineIds.has(line.id) ? 'block' : 'none';
     body.id = 'lb-' + line.id;
     body.appendChild(renderSnake(line));
+    if (_openTrainLineIds.has(line.id)) item.classList.add('open');
 
     item.appendChild(hdr);
     item.appendChild(body);
@@ -2427,9 +2428,11 @@ function toggleLine(id) {
   const open = item.classList.toggle('open');
   body.style.display = open ? 'block' : 'none';
   if (open) {
+    _openTrainLineIds.add(id);
     showTrainLineOverlay(id);
-  } else if (_activeTrainMapLine === id) {
-    clearTrainLineOverlay();
+  } else {
+    _openTrainLineIds.delete(id);
+    clearTrainLineOverlay(id);
   }
 }
 
@@ -2458,11 +2461,10 @@ const TRAIN_STATION_DB = 'jkk-local-db';
 const TRAIN_STATION_STORE = 'trainStationCoords';
 const TRAIN_STATION_LEGACY_KEY = 'jkkTrainStationCoords:v2';
 const TRAIN_STATION_MISS_TTL = 24 * 60 * 60 * 1000;
-let _trainLinePolyline = null;
-let _trainStationMarkers = [];
 let _trainGeocoder = null;
-let _activeTrainMapLine = null;
-let _trainMapToken = 0;
+const _openTrainLineIds = new Set();
+const _trainLineOverlays = new Map();
+const _trainLineTokens = new Map();
 let _trainStationCoordCache = null;
 let _trainStationDbPromise = null;
 const _trainGeocodeInflight = new Map();
@@ -2517,26 +2519,32 @@ async function _writeTrainStationCoord(key, value) {
   });
 }
 
-function clearTrainLineOverlay() {
-  _trainMapToken++;
-  _activeTrainMapLine = null;
-  if (_trainLinePolyline) {
-    _trainLinePolyline.setMap(null);
-    _trainLinePolyline = null;
+function _nextTrainLineToken(id) {
+  const token = (_trainLineTokens.get(id) || 0) + 1;
+  _trainLineTokens.set(id, token);
+  return token;
+}
+
+function clearTrainLineOverlay(id = null) {
+  if (id == null) {
+    [..._trainLineOverlays.keys()].forEach(lineId => clearTrainLineOverlay(lineId));
+    return;
   }
-  _trainStationMarkers.forEach(marker => marker.setMap(null));
-  _trainStationMarkers = [];
+  _nextTrainLineToken(id);
+  const overlay = _trainLineOverlays.get(id);
+  if (!overlay) return;
+  overlay.polyline?.setMap(null);
+  overlay.markers.forEach(marker => marker.setMap(null));
+  _trainLineOverlays.delete(id);
 }
 
 function _drawTrainLineOverlay(line, points) {
   if (!map || points.length < 2) return;
-  if (_trainLinePolyline) _trainLinePolyline.setMap(null);
-  _trainStationMarkers.forEach(marker => marker.setMap(null));
-  _trainStationMarkers = [];
+  clearTrainLineOverlay(line.id);
 
   const positions = points.map(p => p.position);
   const path = line.id === 'JY' ? [...positions, positions[0]] : positions;
-  _trainLinePolyline = new google.maps.Polyline({
+  const polyline = new google.maps.Polyline({
     path,
     geodesic: false,
     strokeColor: line.color,
@@ -2545,7 +2553,7 @@ function _drawTrainLineOverlay(line, points) {
     zIndex: 18,
     map
   });
-  _trainStationMarkers = points.map(point => new google.maps.Marker({
+  const markers = points.map(point => new google.maps.Marker({
     position: point.position,
     map,
     title: `${line.name} ${point.name}`,
@@ -2560,6 +2568,7 @@ function _drawTrainLineOverlay(line, points) {
       strokeWeight: 2
     }
   }));
+  _trainLineOverlays.set(line.id, { polyline, markers });
 }
 
 function _stationCoordKey(name, line) {
@@ -2623,22 +2632,20 @@ function _geocodeTrainStation(name, line, cache, attempt = 0) {
 async function showTrainLineOverlay(id) {
   const line = TRAIN_LINES.find(l => l.id === id);
   if (!line || !map || !window.google?.maps?.Geocoder) return;
-  clearTrainLineOverlay();
-  _activeTrainMapLine = id;
-  const token = _trainMapToken;
+  const token = _nextTrainLineToken(id);
   const cache = await _readTrainStationCoords();
   const points = [];
 
   for (const [name] of line.stations) {
     const result = await _geocodeTrainStation(name, line, cache);
-    if (token !== _trainMapToken || _activeTrainMapLine !== id) return;
+    if (token !== _trainLineTokens.get(id) || !_openTrainLineIds.has(id)) return;
     const point = result?.point;
     if (point) {
       points.push({ name, position: point });
     }
     if (!result?.cached) await new Promise(resolve => setTimeout(resolve, 60));
   }
-  if (token !== _trainMapToken || _activeTrainMapLine !== id) return;
+  if (token !== _trainLineTokens.get(id) || !_openTrainLineIds.has(id)) return;
   _drawTrainLineOverlay(line, points);
 }
 
@@ -4403,7 +4410,6 @@ function openPanel(name) {
     document.getElementById(`panel-${n}`)?.classList.toggle('active', n === name);
   });
   panel.style.width = (name === 'listings' || name === 'favourites') ? '864px' : (name === 'filter' ? '338px' : '260px');
-  if (name !== 'filter') clearTrainLineOverlay();
   document.getElementById('panel-title').textContent = _panelTitles[name] ? t(_panelTitles[name]) : '';
   panel.classList.add('open');
   backdrop.classList.add('open');
@@ -4413,7 +4419,6 @@ function openPanel(name) {
 
 function closePanel() {
   _activePanel = null;
-  clearTrainLineOverlay();
   document.getElementById('side-panel').classList.remove('open');
   document.getElementById('panel-backdrop').classList.remove('open');
   _allPanels.forEach(n => document.getElementById(`rail-${n}`)?.classList.remove('active'));
