@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 00:53 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 01:02 JST</p>
       </div>
 
 
@@ -2424,6 +2424,12 @@ function schematicBranches(line) {
   return (line.branches || []).filter(branch => branch.schematic !== false);
 }
 
+function branchDisplayName(line, branch) {
+  if (line.id === 'OH' && branch.from === '新百合ケ丘') return '多摩線';
+  if (line.id === 'OH' && branch.from === '相模大野') return '江ノ島線';
+  return branch.name || `${branch.from} branch`;
+}
+
 function _stationSvc(line, name) {
   const found = line.stations.find(([station]) => station === name);
   return found ? found[1] : 0;
@@ -2559,7 +2565,7 @@ function lineGraphLayout(line) {
       const prefixRows = placePath(prefix, 0, fullCols, true, false, new Set(), new Set([branches[0].from]));
       let nextRow = prefixRows + 1;
 
-      labels.push({ text: `${branches[0].from} branch`, row: nextRow - 0.72 });
+      labels.push({ text: branchDisplayName(line, branches[0]), row: nextRow - 0.72, col: 3 });
       const firstBranchRows = placePath(branches[0].stations, nextRow, [3, 2, 1, 0], true, true, new Set(), new Set(), 'branch0', 3);
       nextRow += firstBranchRows + branchGap;
 
@@ -2572,8 +2578,14 @@ function lineGraphLayout(line) {
         nextRow += placePath(beforeSecond, nextRow, [4, 3, 2, 1, 0], true, true, new Set(), new Set(), 'main-before-second', 4);
         nextRow += placePath([secondStation], nextRow, [4, 3, 2, 1, 0], false, true, new Set(), new Set(), 'main-before-second', 4);
 
-        labels.push({ text: `${secondBranch.from} branch`, row: nextRow - 0.42 });
         const secondBranchRows = placePath(secondBranch.stations, nextRow, [4, 3, 2, 1], true, true, new Set(), new Set(), 'branch1', 4);
+        const labelRowNode = nodes.find(node => node.group === 'branch1' && node.name === '湘南台');
+        const labelColNode = nodes.find(node => node.group === 'branch1' && node.name === '藤沢');
+        labels.push({
+          text: branchDisplayName(line, secondBranch),
+          row: (labelRowNode?.row ?? nextRow) + 0.62,
+          col: labelColNode?.col ?? 1
+        });
         nextRow += secondBranchRows + branchGap;
 
         const odawaraRows = placePath(afterSecond, nextRow, [0, 1, 2, 3, 4], true, true, new Set(), new Set(), 'odawara', 0);
@@ -2608,7 +2620,7 @@ function lineGraphLayout(line) {
   branches.slice(multiBranch ? branches.length : 0).forEach((branch, idx) => {
     const base = byName.get(branch.from);
     if (!base) return;
-    labels.push({ text: `${branch.from} branch`, row: nextBranchRow - 0.72 });
+    labels.push({ text: branchDisplayName(line, branch), row: nextBranchRow - 0.72, col: 0 });
     const escapeRight = multiBranch ? base.col >= 3 : base.col > 1;
     const cols = multiBranch && escapeRight ? [4, 3, 2, 1, 0] : branchCols;
     const branchRows = placePath(branch.stations, nextBranchRow, cols, true, true, new Set(), new Set(), `branch${idx + 1}`, cols[0]);
@@ -2632,6 +2644,12 @@ function renderGraphLine(line) {
     const el = document.createElement('div');
     el.className = 'branch-label';
     el.style.top = `${label.row * 46 + 12}px`;
+    if (Number.isFinite(label.col)) {
+      el.style.left = `${graph.colXs[label.col]}%`;
+      el.style.width = `${graph.cellW}%`;
+      el.style.transform = 'translateX(-50%)';
+      el.style.textAlign = 'center';
+    }
     el.textContent = label.text;
     wrap.appendChild(el);
   });
@@ -2666,6 +2684,7 @@ function graphTrackSvg(graph) {
     const bx = colXs[b.col], by = dotY + b.row * rowH;
     const branchLink = !!b.branch && a.group !== b.group;
     if (ay === by) return { d: `M ${ax} ${ay} L ${bx} ${by}`, branchLink };
+    if (ax === bx) return { d: `M ${ax} ${ay} L ${bx} ${by}`, branchLink };
     if (branchLink) {
       const escapeCol = b.escapeCol ?? b.col;
       const escapeX = colXs[escapeCol];
