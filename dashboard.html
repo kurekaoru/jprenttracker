@@ -544,6 +544,8 @@
   .snake-dot  { width:18px; height:18px; border-radius:50%; border:2.5px solid var(--dc,#8A8D93); background:var(--surface); transition:background .12s,transform .1s,box-shadow .12s; flex-shrink:0; box-sizing:border-box; box-shadow:0 0 0 2px var(--surface); }
   .snake-sta.active .snake-dot  { background:var(--dc,var(--lc)); }
   .snake-sta:hover:not(.empty) .snake-dot { transform:scale(1.16); box-shadow:0 0 0 2px var(--surface),0 0 0 5px rgba(255,255,255,.08); }
+  .snake-sta.map-hover .snake-dot { transform:scale(1.22); box-shadow:0 0 0 2px var(--surface),0 0 0 5px rgba(255,255,255,.18); }
+  .snake-sta.map-hover .snake-name { color:#fff; font-weight:800; }
   .snake-sta.empty .snake-dot,.snake-sta.empty .snake-name { visibility:hidden; }
   .snake-name { font-size:8.5px; text-align:center; line-height:1.2; color:rgba(255,255,255,.62); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:calc(100% - 2px); min-height:11px; font-weight:600; }
   .snake-sta.active .snake-name { color:#fff; font-weight:800; }
@@ -1421,7 +1423,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 13:43 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 13:49 JST</p>
       </div>
 
 
@@ -2294,6 +2296,7 @@ function renderLoopLine(line) {
     cell.title = `${name} · ${SERVICE_LABELS[svc] || SERVICE_LABELS[0]}`;
     cell.innerHTML = `<div class="snake-dot"></div><div class="snake-name">${name}</div>`;
     cell.onclick = () => _staTog(cell);
+    _wireStationCellHover(cell);
     wrap.appendChild(cell);
   });
   return wrap;
@@ -2410,6 +2413,7 @@ function renderGraphLine(line) {
     cell.title = `${node.name} · ${SERVICE_LABELS[svc] || SERVICE_LABELS[0]}`;
     cell.innerHTML = `<div class="snake-dot"></div><div class="snake-name">${node.name}</div>`;
     cell.onclick = () => _staTog(cell);
+    _wireStationCellHover(cell);
     wrap.appendChild(cell);
   });
   return wrap;
@@ -2508,15 +2512,40 @@ function toggleLine(id) {
 function _staTog(el) {
   const name = el.dataset.sta;
   const lid  = el.dataset.lid;
-  if (selectedStations.has(name)) {
-    selectedStations.delete(name);
-    el.classList.remove('active');
-  } else {
-    selectedStations.add(name);
-    el.classList.add('active');
-  }
-  _updateLineSel(lid);
+  _setStationSelected(name, !selectedStations.has(name));
+  if (lid) _updateLineSel(lid);
   applyMapFilters();
+  refreshTrainStationMarkers();
+}
+
+function _stationCellSelector(name) {
+  const esc = window.CSS?.escape ? CSS.escape(name) : name.replace(/["\\]/g, '\\$&');
+  return `.snake-sta[data-sta="${esc}"]`;
+}
+
+function _wireStationCellHover(cell) {
+  cell.onmouseenter = () => setTrainStationHover(cell.dataset.lid, cell.dataset.sta, true);
+  cell.onmouseleave = () => setTrainStationHover(cell.dataset.lid, cell.dataset.sta, false);
+}
+
+function _setStationSelected(name, selected) {
+  if (selected) selectedStations.add(name);
+  else selectedStations.delete(name);
+  document.querySelectorAll(_stationCellSelector(name)).forEach(cell => {
+    cell.classList.toggle('active', selected);
+  });
+  TRAIN_LINES.forEach(line => _updateLineSel(line.id));
+}
+
+function setTrainStationHover(lineId, name, on) {
+  if (!name) return;
+  document.querySelectorAll(_stationCellSelector(name)).forEach(cell => {
+    if (!lineId || cell.dataset.lid === lineId) cell.classList.toggle('map-hover', on);
+  });
+  const overlay = _trainLineOverlays.get(lineId);
+  overlay?.markers.forEach(marker => {
+    if (marker._stationName === name) updateTrainStationMarker(marker, on);
+  });
 }
 
 function _updateLineSel(lid) {
@@ -2713,6 +2742,36 @@ function clearTrainLineOverlay(id = null) {
   _trainLineOverlays.delete(id);
 }
 
+function trainStationMarkerIcon(marker, hover = false) {
+  const color = _sdc(marker._svc || 0);
+  const selected = selectedStations.has(marker._stationName);
+  return {
+    path: google.maps.SymbolPath.CIRCLE,
+    scale: hover ? 6 : 5,
+    fillColor: selected ? color : '#ffffff',
+    fillOpacity: 1,
+    strokeColor: color,
+    strokeWeight: hover ? 3 : 2
+  };
+}
+
+function updateTrainStationMarker(marker, hover = false) {
+  marker.setIcon(trainStationMarkerIcon(marker, hover));
+  marker.setLabel(hover ? {
+    text: marker._stationName,
+    color: '#1f2933',
+    fontSize: '12px',
+    fontWeight: '700'
+  } : null);
+  marker.setZIndex(hover ? 24 : 19);
+}
+
+function refreshTrainStationMarkers() {
+  _trainLineOverlays.forEach(overlay => {
+    overlay.markers.forEach(marker => updateTrainStationMarker(marker, false));
+  });
+}
+
 function _drawTrainLineOverlay(line, points) {
   if (!map || points.length < 2) return;
   clearTrainLineOverlay(line.id);
@@ -2730,21 +2789,27 @@ function _drawTrainLineOverlay(line, points) {
     zIndex: 18,
     map
   }));
-  const markers = points.map(point => new google.maps.Marker({
-    position: point.position,
-    map,
-    title: `${line.name} ${point.name}`,
-    clickable: false,
-    zIndex: 19,
-    icon: {
-      path: google.maps.SymbolPath.CIRCLE,
-      scale: 4,
-      fillColor: '#ffffff',
-      fillOpacity: 1,
-      strokeColor: line.color,
-      strokeWeight: 2
-    }
-  }));
+  const markers = points.map(point => {
+    const marker = new google.maps.Marker({
+      position: point.position,
+      map,
+      title: `${line.name} ${point.name}`,
+      clickable: true,
+      zIndex: 19
+    });
+    marker._lineId = line.id;
+    marker._stationName = point.name;
+    marker._svc = point.svc;
+    updateTrainStationMarker(marker, false);
+    marker.addListener('mouseover', () => setTrainStationHover(line.id, point.name, true));
+    marker.addListener('mouseout', () => setTrainStationHover(line.id, point.name, false));
+    marker.addListener('click', () => {
+      _setStationSelected(point.name, !selectedStations.has(point.name));
+      applyMapFilters();
+      refreshTrainStationMarkers();
+    });
+    return marker;
+  });
   _trainLineOverlays.set(line.id, { polylines, markers });
 }
 
@@ -2837,7 +2902,7 @@ async function showTrainLineOverlay(id) {
     if (token !== _trainLineTokens.get(id) || !_openTrainLineIds.has(id)) return;
     const point = result?.point;
     if (point) {
-      points.push({ name, position: point });
+      points.push({ name, svc: _stationSvc(line, name), position: point });
     }
     if (!result?.cached) await new Promise(resolve => setTimeout(resolve, 60));
   }
