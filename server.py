@@ -122,9 +122,10 @@ def db():
         ("lng",             "REAL"),
         ("geocoded_at",     "TEXT"),
         ("disappeared_at",  "TEXT"),
-        ("walk_min",        "INTEGER"),
-        ("walk_m",          "INTEGER"),
-        ("nearest_station", "TEXT"),
+        ("walk_min",          "INTEGER"),
+        ("walk_m",            "INTEGER"),
+        ("nearest_station",   "TEXT"),
+        ("station_in_range",  "INTEGER DEFAULT 0"),
         ("thumbnail_url",   "TEXT"),
         ("floor_plan_data", "TEXT"),
         ("priority",        "TEXT"),
@@ -336,6 +337,8 @@ def _gsi_geocode(query):
     return (float(lat), float(lng))
 
 
+NEAREST_STATION_MAX_M = 1000
+
 def _nearest_station(lat, lng):
     try:
         r = requests.get(HEARTRAILS_URL,
@@ -353,7 +356,8 @@ def _nearest_station(lat, lng):
         name     = s.get("name", "")
         line     = s.get("line", "")
         label    = f"{name}（{line}）" if line else name
-        return (label, walk_min, dist_m)
+        in_range = 1 if dist_m <= NEAREST_STATION_MAX_M else 0
+        return (label, walk_min, dist_m, in_range)
     except Exception:
         return None
 
@@ -480,11 +484,12 @@ def _geocode_worker():
                 if coords is not None:
                     station  = _nearest_station(coords[0], coords[1])
                     con.execute(
-                        "UPDATE listings SET lat=?,lng=?,geocoded_at=?,nearest_station=?,walk_min=?,walk_m=? WHERE id=?",
+                        "UPDATE listings SET lat=?,lng=?,geocoded_at=?,nearest_station=?,walk_min=?,walk_m=?,station_in_range=? WHERE id=?",
                         (coords[0], coords[1], now,
                          station[0] if station else None,
                          station[1] if station else None,
                          station[2] if station else None,
+                         station[3] if station else 0,
                          row["id"]),
                     )
                 else:
@@ -503,8 +508,8 @@ def _geocode_worker():
             if row:
                 station = _nearest_station(row["lat"], row["lng"])
                 if station:
-                    con.execute("UPDATE listings SET nearest_station=?, walk_min=?, walk_m=? WHERE id=?",
-                                (station[0], station[1], station[2], row["id"]))
+                    con.execute("UPDATE listings SET nearest_station=?, walk_min=?, walk_m=?, station_in_range=? WHERE id=?",
+                                (station[0], station[1], station[2], station[3], row["id"]))
                 else:
                     con.execute("UPDATE listings SET nearest_station='' WHERE id=?", (row["id"],))
                 con.commit()
