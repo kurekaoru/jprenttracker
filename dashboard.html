@@ -525,6 +525,14 @@
   .ftab-btn:hover { color:var(--text); }
   .ftab-btn.active { color:var(--accent); background:rgba(93,202,165,0.12); }
   .ftab-btn.is-paused { opacity:.46; }
+  .ftab-switch-pop { position:fixed; z-index:9999; background:var(--bg); border:1px solid var(--border); border-radius:9px; padding:11px 13px 10px; box-shadow:0 6px 20px rgba(0,0,0,.18); max-width:210px; font-family:var(--font); pointer-events:auto; }
+  .ftab-switch-pop-title { font-size:11.5px; font-weight:700; color:var(--text); margin-bottom:4px; line-height:1.3; }
+  .ftab-switch-pop-body { font-size:10.5px; color:var(--muted); line-height:1.45; margin-bottom:9px; }
+  .ftab-switch-pop-actions { display:flex; gap:6px; justify-content:flex-end; }
+  .ftab-switch-pop-cancel { background:none; border:1px solid var(--border); border-radius:5px; padding:3px 9px; font-size:11px; font-family:var(--font); color:var(--muted); cursor:pointer; }
+  .ftab-switch-pop-cancel:hover { color:var(--text); border-color:currentColor; }
+  .ftab-switch-pop-confirm { background:var(--accent); border:none; border-radius:5px; padding:3px 9px; font-size:11px; font-family:var(--font); color:#fff; font-weight:600; cursor:pointer; }
+  .ftab-switch-pop-confirm:hover { opacity:.85; }
   .ftab-content { flex:1; min-width:0; padding:10px 0 4px 12px; overflow-y:auto; max-height:calc(100vh - 205px); }
   .ftab-pane { display:none; }
   .ftab-pane.active { display:block; }
@@ -1438,7 +1446,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 16:50 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 18:01 JST</p>
       </div>
 
 
@@ -2388,13 +2396,38 @@ function setLocationFilterMode(mode) {
   updateLocationModeUi();
 }
 
+function showFTabSwitchPop(anchorBtn, targetMode, onConfirm) {
+  document.querySelector('.ftab-switch-pop')?.remove();
+  const isLine = targetMode === 'line';
+  const title = isLine ? 'Switch to line filters?' : 'Switch to area filters?';
+  const body  = isLine ? 'Area filters will be paused, but your area choices stay saved.'
+                       : 'Line filters will be paused, but your station choices stay saved.';
+  const pop = document.createElement('div');
+  pop.className = 'ftab-switch-pop';
+  pop.innerHTML = `<div class="ftab-switch-pop-title">${title}</div>
+<div class="ftab-switch-pop-body">${body}</div>
+<div class="ftab-switch-pop-actions">
+  <button class="ftab-switch-pop-cancel">Cancel</button>
+  <button class="ftab-switch-pop-confirm">Switch</button>
+</div>`;
+  document.body.appendChild(pop);
+  const r = anchorBtn.getBoundingClientRect();
+  const ph = pop.offsetHeight || 90;
+  let top = r.top + (r.height - ph) / 2;
+  top = Math.max(8, Math.min(top, window.innerHeight - ph - 8));
+  pop.style.top  = top + 'px';
+  pop.style.left = (r.right + 10) + 'px';
+  const dismiss = () => pop.remove();
+  pop.querySelector('.ftab-switch-pop-cancel').onclick  = dismiss;
+  pop.querySelector('.ftab-switch-pop-confirm').onclick = () => { dismiss(); onConfirm(); };
+  setTimeout(() => document.addEventListener('click', function h(e) {
+    if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('click', h); }
+  }), 0);
+}
+
 function ensureLocationFilterMode(mode) {
   mode = mode === 'line' ? 'line' : 'area';
   if (activeLocationFilter === mode) return true;
-  const msg = mode === 'line'
-    ? 'Switch to line filters? Area filters will be paused, but your area choices stay saved.'
-    : 'Switch to area filters? Line filters will be paused, but your station choices stay saved.';
-  if (!confirm(msg)) return false;
   setLocationFilterMode(mode);
   return true;
 }
@@ -3080,14 +3113,24 @@ function addSectionLabel(container, text, marginTop = 8) {
 }
 
 function switchFTab(btn, id) {
-  const beforeMode = activeLocationFilter;
-  if (id === 'ftab-station' && activeLocationFilter === 'area' && !ensureLocationFilterMode('line')) return;
-  if (id === 'ftab-district' && activeLocationFilter === 'line' && !ensureLocationFilterMode('area')) return;
+  const needsSwitch = (id === 'ftab-station' && activeLocationFilter === 'area')
+                   || (id === 'ftab-district' && activeLocationFilter === 'line');
+  if (needsSwitch) {
+    const targetMode = id === 'ftab-station' ? 'line' : 'area';
+    showFTabSwitchPop(btn, targetMode, () => {
+      setLocationFilterMode(targetMode);
+      btn.closest('.ftab-bar').querySelectorAll('.ftab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      btn.closest('.ftabs').querySelectorAll('.ftab-pane').forEach(p => p.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+      applyMapFilters();
+    });
+    return;
+  }
   btn.closest('.ftab-bar').querySelectorAll('.ftab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   btn.closest('.ftabs').querySelectorAll('.ftab-pane').forEach(p => p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  if (beforeMode !== activeLocationFilter) applyMapFilters();
 }
 
 function updateStationBanner() {
@@ -3972,21 +4015,28 @@ function initMap() {
     _ro.observe(_mapEl);
   }
 
-  loadTokyoBoundary();
+  loadAreaBoundaries();
   loadListings();
 }
 
-async function loadTokyoBoundary() {
+async function loadAreaBoundary(url, color) {
   try {
-    const r = await fetch('https://raw.githubusercontent.com/dataofjapan/land/master/tokyo.geojson');
+    const r = await fetch(url);
     if (!r.ok) return;
     const gj = await r.json();
-    map.data.addGeoJson(gj);
-    map.data.setStyle({
-      strokeColor: '#1D9E75', strokeWeight: 1.5, strokeOpacity: 0.45,
-      fillColor: '#1D9E75', fillOpacity: 0.04, clickable: false,
-    });
+    const layer = new google.maps.Data({ map });
+    layer.addGeoJson(gj);
+    layer.setStyle({ strokeColor: color, strokeWeight: 1.5, strokeOpacity: 0.45,
+                     fillColor: color, fillOpacity: 0.04, clickable: false });
   } catch (_) {}
+}
+
+function loadAreaBoundaries() {
+  const BASE = 'https://raw.githubusercontent.com/niiyz/JapanCityGeoJson/master/geojson/cities/';
+  loadAreaBoundary('https://raw.githubusercontent.com/dataofjapan/land/master/tokyo.geojson', '#1D9E75');
+  loadAreaBoundary(BASE + '14100.geojson', '#1565C0'); // Yokohama — blue
+  loadAreaBoundary(BASE + '14130.geojson', '#C62828'); // Kawasaki — red
+  loadAreaBoundary(BASE + '14150.geojson', '#6A1B9A'); // Sagamihara — purple
 }
 
 function stationStr(nearest_station, walk_min) {
