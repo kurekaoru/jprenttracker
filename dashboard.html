@@ -572,7 +572,7 @@
   .graph-track path { fill:none; stroke:var(--lc-dim,var(--lc)); stroke-width:4; stroke-linecap:round; stroke-linejoin:round; opacity:1; vector-effect:non-scaling-stroke; }
   .graph-track path.branch-link { opacity:1; stroke-width:4; stroke-dasharray:none; }
   .graph-sta { position:absolute; width:25%; transform:translate(-50%, 0); }
-  .branch-label { position:absolute; left:2px; font-size:8px; line-height:1; color:rgba(255,255,255,.42); font-weight:800; letter-spacing:.04em; pointer-events:none; z-index:1; }
+  .branch-label { position:absolute; left:2px; font-size:8px; line-height:1; color:#fff; background:var(--lc); border-radius:999px; padding:4px 7px; font-weight:800; letter-spacing:.04em; pointer-events:none; z-index:1; box-shadow:0 0 0 2px var(--surface); white-space:nowrap; }
   .loop-wrap { --lc:#9ACD32; position:relative; height:608px; margin:12px 1px 14px; }
   .loop-ring { position:absolute; inset:14px calc(12.5% - 2px) 30px; border:4px solid var(--lc-dim,var(--lc)); border-radius:36px; pointer-events:none; }
   .loop-sta { position:absolute; width:25%; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; transform:translate(-50%,-9px); padding:1px 0 0; }
@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 01:02 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 01:08 JST</p>
       </div>
 
 
@@ -2517,6 +2517,27 @@ function lineGraphLayout(line) {
   const nodes = [];
   const edges = [];
   const labels = [];
+  const terminalBranchLabel = (branch, group, fallbackRow = 0, fallbackCol = 0) => {
+    const branchNodes = branch.stations
+      .map(([name]) => nodes.find(node => node.group === group && node.name === name))
+      .filter(Boolean);
+    const last = branchNodes.at(-1);
+    const prev = branchNodes.at(-2);
+    if (!last) return { text: branchDisplayName(line, branch), row: fallbackRow, col: fallbackCol };
+    let row = last.row;
+    let col = last.col;
+    if (prev) {
+      const rowStep = Math.sign(last.row - prev.row);
+      const colStep = Math.sign(last.col - prev.col);
+      if (colStep) col += colStep;
+      else if (rowStep) row += rowStep;
+    }
+    return {
+      text: branchDisplayName(line, branch),
+      row,
+      col: Math.max(0, Math.min(colXs.length - 1, col))
+    };
+  };
   const placePath = (pathStations, startRow, cols, startLtr = true, branch = false, forceRowStartNames = new Set(), rowEndNames = new Set(), group = 'trunk', escapeCol = null) => {
     let ltr = startLtr;
     const rowSize = cols.length;
@@ -2565,8 +2586,8 @@ function lineGraphLayout(line) {
       const prefixRows = placePath(prefix, 0, fullCols, true, false, new Set(), new Set([branches[0].from]));
       let nextRow = prefixRows + 1;
 
-      labels.push({ text: branchDisplayName(line, branches[0]), row: nextRow - 0.72, col: 3 });
       const firstBranchRows = placePath(branches[0].stations, nextRow, [3, 2, 1, 0], true, true, new Set(), new Set(), 'branch0', 3);
+      labels.push(terminalBranchLabel(branches[0], 'branch0', nextRow, 3));
       nextRow += firstBranchRows + branchGap;
 
       const secondBranch = branches[1];
@@ -2579,13 +2600,7 @@ function lineGraphLayout(line) {
         nextRow += placePath([secondStation], nextRow, [4, 3, 2, 1, 0], false, true, new Set(), new Set(), 'main-before-second', 4);
 
         const secondBranchRows = placePath(secondBranch.stations, nextRow, [4, 3, 2, 1], true, true, new Set(), new Set(), 'branch1', 4);
-        const labelRowNode = nodes.find(node => node.group === 'branch1' && node.name === '湘南台');
-        const labelColNode = nodes.find(node => node.group === 'branch1' && node.name === '藤沢');
-        labels.push({
-          text: branchDisplayName(line, secondBranch),
-          row: (labelRowNode?.row ?? nextRow) + 0.62,
-          col: labelColNode?.col ?? 1
-        });
+        labels.push(terminalBranchLabel(secondBranch, 'branch1', nextRow, 1));
         nextRow += secondBranchRows + branchGap;
 
         const odawaraRows = placePath(afterSecond, nextRow, [0, 1, 2, 3, 4], true, true, new Set(), new Set(), 'odawara', 0);
@@ -2620,10 +2635,10 @@ function lineGraphLayout(line) {
   branches.slice(multiBranch ? branches.length : 0).forEach((branch, idx) => {
     const base = byName.get(branch.from);
     if (!base) return;
-    labels.push({ text: branchDisplayName(line, branch), row: nextBranchRow - 0.72, col: 0 });
     const escapeRight = multiBranch ? base.col >= 3 : base.col > 1;
     const cols = multiBranch && escapeRight ? [4, 3, 2, 1, 0] : branchCols;
     const branchRows = placePath(branch.stations, nextBranchRow, cols, true, true, new Set(), new Set(), `branch${idx + 1}`, cols[0]);
+    labels.push(terminalBranchLabel(branch, `branch${idx + 1}`, nextBranchRow, cols[0]));
     branch.stations.forEach(([name]) => byName.set(name, nodes.find(node => node.name === name)));
     nextBranchRow += branchRows + branchGap;
   });
@@ -2643,7 +2658,7 @@ function renderGraphLine(line) {
   graph.labels.forEach(label => {
     const el = document.createElement('div');
     el.className = 'branch-label';
-    el.style.top = `${label.row * 46 + 12}px`;
+    el.style.top = `${label.row * 46 + 2}px`;
     if (Number.isFinite(label.col)) {
       el.style.left = `${graph.colXs[label.col]}%`;
       el.style.width = `${graph.cellW}%`;
