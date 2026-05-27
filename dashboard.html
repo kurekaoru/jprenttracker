@@ -1459,7 +1459,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 21:37 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 21:42 JST</p>
       </div>
 
 
@@ -4284,11 +4284,11 @@ function renderDetailTab(listingId) {
   const listing = _allListings?.find(l => l.id === listingId);
   if (!listing) { el.innerHTML = ''; return; }
 
-  const row = (label, val, wide) => {
+  const row = (label, val, isHtml) => {
     if (!val && val !== 0) return '';
-    const valHtml = escHtml(String(val)).replace(/\n/g, '<br>');
+    const valHtml = isHtml ? String(val) : escHtml(String(val)).replace(/\n/g, '<br>');
     return `<tr>
-      <th style="color:var(--accent);white-space:nowrap;padding:5px 10px 5px 0;vertical-align:top;font-weight:600;font-size:11px;width:${wide?'auto':'88px'};">${label}</th>
+      <th style="color:var(--accent);white-space:nowrap;padding:5px 10px 5px 0;vertical-align:top;font-weight:600;font-size:11px;width:88px;">${label}</th>
       <td style="padding:5px 0;vertical-align:top;word-break:break-word;font-size:12px;">${valHtml}</td>
     </tr>`;
   };
@@ -4345,7 +4345,7 @@ function renderDetailTab(listingId) {
     const chips = listing.features.split(',').map(f =>
       `<span style="display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:11px;margin:2px 2px 2px 0;">${escHtml(f.trim())}</span>`
     ).join('');
-    html += row(t('detail_features'), chips);
+    html += row(t('detail_features'), chips, true);
   }
 
   // Appliances — wrap each item as a chip
@@ -4353,7 +4353,7 @@ function renderDetailTab(listingId) {
     const chips = listing.appliances.split('、').map(a =>
       `<span style="display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:11px;margin:2px 2px 2px 0;">${escHtml(a.trim())}</span>`
     ).join('');
-    html += row(t('detail_amenities'), chips);
+    html += row(t('detail_amenities'), chips, true);
   }
 
   html += '</table>';
