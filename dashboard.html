@@ -1417,7 +1417,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 09:24 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 09:28 JST</p>
       </div>
 
 
@@ -2454,7 +2454,9 @@ function _updateLineSel(lid) {
   if (el) el.textContent = cnt > 0 ? cnt : '';
 }
 
-const TRAIN_STATION_COORDS_KEY = 'jkkTrainStationCoords:v2';
+const TRAIN_STATION_DB = 'jkk-local-db';
+const TRAIN_STATION_STORE = 'trainStationCoords';
+const TRAIN_STATION_LEGACY_KEY = 'jkkTrainStationCoords:v2';
 const TRAIN_STATION_MISS_TTL = 24 * 60 * 60 * 1000;
 let _trainLinePolyline = null;
 let _trainStationMarkers = [];
@@ -2462,18 +2464,57 @@ let _trainGeocoder = null;
 let _activeTrainMapLine = null;
 let _trainMapToken = 0;
 let _trainStationCoordCache = null;
+let _trainStationDbPromise = null;
 const _trainGeocodeInflight = new Map();
 
-function _readTrainStationCoords() {
+function _openTrainStationDb() {
+  if (_trainStationDbPromise) return _trainStationDbPromise;
+  if (!window.indexedDB) return Promise.resolve(null);
+  _trainStationDbPromise = new Promise(resolve => {
+    const req = indexedDB.open(TRAIN_STATION_DB, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(TRAIN_STATION_STORE)) db.createObjectStore(TRAIN_STATION_STORE, { keyPath: 'key' });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => resolve(null);
+  });
+  return _trainStationDbPromise;
+}
+
+async function _readTrainStationCoords() {
   if (_trainStationCoordCache) return _trainStationCoordCache;
-  try { _trainStationCoordCache = JSON.parse(localStorage.getItem(TRAIN_STATION_COORDS_KEY) || '{}'); }
-  catch (_) { _trainStationCoordCache = {}; }
+  _trainStationCoordCache = {};
+  const db = await _openTrainStationDb();
+  if (db) {
+    await new Promise(resolve => {
+      const tx = db.transaction(TRAIN_STATION_STORE, 'readonly');
+      const req = tx.objectStore(TRAIN_STATION_STORE).getAll();
+      req.onsuccess = () => {
+        (req.result || []).forEach(row => { _trainStationCoordCache[row.key] = row.value; });
+      };
+      tx.oncomplete = resolve;
+      tx.onerror = resolve;
+    });
+  }
+  if (!Object.keys(_trainStationCoordCache).length) {
+    try { _trainStationCoordCache = JSON.parse(localStorage.getItem(TRAIN_STATION_LEGACY_KEY) || '{}'); }
+    catch (_) { _trainStationCoordCache = {}; }
+    Object.entries(_trainStationCoordCache).forEach(([key, value]) => _writeTrainStationCoord(key, value));
+  }
   return _trainStationCoordCache;
 }
 
-function _writeTrainStationCoords(coords) {
-  try { localStorage.setItem(TRAIN_STATION_COORDS_KEY, JSON.stringify(coords)); }
-  catch (_) {}
+async function _writeTrainStationCoord(key, value) {
+  if (_trainStationCoordCache) _trainStationCoordCache[key] = value;
+  const db = await _openTrainStationDb();
+  if (!db) return;
+  await new Promise(resolve => {
+    const tx = db.transaction(TRAIN_STATION_STORE, 'readwrite');
+    tx.objectStore(TRAIN_STATION_STORE).put({ key, value });
+    tx.oncomplete = resolve;
+    tx.onerror = resolve;
+  });
 }
 
 function clearTrainLineOverlay() {
@@ -2544,7 +2585,7 @@ function _cachedTrainStationPoint(name, line, cache) {
 
 function _rememberTrainStationMiss(key, cache) {
   cache[key] = { missAt: Date.now() };
-  _writeTrainStationCoords(cache);
+  _writeTrainStationCoord(key, cache[key]);
 }
 
 function _geocodeTrainStation(name, line, cache, attempt = 0) {
@@ -2568,7 +2609,7 @@ function _geocodeTrainStation(name, line, cache, attempt = 0) {
       const loc = results[0].geometry.location;
       const point = { lat: loc.lat(), lng: loc.lng() };
       cache[key] = point;
-      _writeTrainStationCoords(cache);
+      _writeTrainStationCoord(key, point);
       resolve({ point, cached: false });
     });
   }).finally(() => {
@@ -2585,7 +2626,7 @@ async function showTrainLineOverlay(id) {
   clearTrainLineOverlay();
   _activeTrainMapLine = id;
   const token = _trainMapToken;
-  const cache = _readTrainStationCoords();
+  const cache = await _readTrainStationCoords();
   const points = [];
 
   for (const [name] of line.stations) {
@@ -2594,10 +2635,11 @@ async function showTrainLineOverlay(id) {
     const point = result?.point;
     if (point) {
       points.push({ name, position: point });
-      if (points.length >= 2) _drawTrainLineOverlay(line, points);
     }
     if (!result?.cached) await new Promise(resolve => setTimeout(resolve, 60));
   }
+  if (token !== _trainMapToken || _activeTrainMapLine !== id) return;
+  _drawTrainLineOverlay(line, points);
 }
 
 const APPLIANCES = ['エアコン','浴室乾燥機','追い焚き','自動お湯張り','ウォシュレット','乾燥機','食洗機','BS・CS'];
