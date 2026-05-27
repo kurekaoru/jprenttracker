@@ -1453,7 +1453,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 20:06 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 20:21 JST</p>
       </div>
 
 
@@ -3421,23 +3421,23 @@ let _facilityCircle  = null;
 let _facPopup = null;
 let _facListing = null; // listing currently showing facilities
 
-const _facilityTypeLabels = {
-  konbini:      { ja: 'コンビニ',     en: 'Convenience Store' },
-  supermarket:  { ja: 'スーパー',     en: 'Supermarket' },
-  kindergarten: { ja: '幼稚園・保育園', en: 'Kindergarten' },
-  school:       { ja: '小・中学校',   en: 'School' },
-  hospital:     { ja: '病院',         en: 'Hospital' },
-  clinic:       { ja: 'クリニック',   en: 'Clinic' },
-  doctors:      { ja: '診療所',       en: 'Doctor\'s Office' },
-  pharmacy:     { ja: '薬局',         en: 'Pharmacy' },
-  park:         { ja: '公園',         en: 'Park' },
-  station:      { ja: '駅',           en: 'Station' },
+// Map facility type → i18n key (used by facilityTypeLabel)
+const _facilityTypeI18n = {
+  konbini:      'konbini',
+  supermarket:  'supermarket',
+  kindergarten: 'kindergarten',
+  school:       'school_label',
+  hospital:     'hospital_label',
+  clinic:       'clinic',
+  doctors:      'clinic',
+  pharmacy:     'pharmacy_label',
+  park:         'park_label',
+  station:      'station_label',
 };
 
 function facilityTypeLabel(type) {
-  const entry = _facilityTypeLabels[type];
-  if (!entry) return type;
-  return entry[_lang] || entry.ja;
+  const key = _facilityTypeI18n[type];
+  return key ? t(key) : type;
 }
 
 function _facPopupHtml(color, name, typeLabel, distM) {
