@@ -128,6 +128,8 @@ def init_db() -> sqlite3.Connection:
         ("age_years",       "INTEGER"),
         ("available_from",  "TEXT"),
         ("nearby_features", "TEXT"),
+        ("scrape_complete", "INTEGER DEFAULT 0"),
+        ("data_issues",     "TEXT"),
     ]:
         if col not in cols:
             con.execute(f"ALTER TABLE listings ADD COLUMN {col} {defn}")
@@ -473,6 +475,45 @@ def backfill_images(listing_ids: list[str] | None = None, limit: int = 50) -> No
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
+def update_scrape_completeness(con):
+    """Re-evaluate scrape_complete for all non-disappeared listings and persist findings."""
+    cur = con.execute("""
+        SELECT l.id, l.source, l.lat, l.lng, l.detail_text, l.age_years, l.floor_plan_data,
+               (SELECT COUNT(*) FROM listing_images li
+                WHERE li.listing_id=l.id AND li.local_path IS NOT NULL
+                  AND li.image_type != 'floor_plan') as photo_count,
+               (SELECT COUNT(*) FROM listing_images li
+                WHERE li.listing_id=l.id AND li.local_path IS NOT NULL
+                  AND li.image_type = 'floor_plan') as fp_img_count
+        FROM listings l
+        WHERE l.disappeared_at IS NULL
+    """)
+    rows = cur.fetchall()
+    updates = []
+    for r in rows:
+        issues = []
+        if not r["lat"] or not r["lng"]:
+            issues.append("no_geocoding")
+        if r["photo_count"] == 0:
+            issues.append("no_photos")
+        has_fp = bool(r["floor_plan_data"]) or r["fp_img_count"] > 0
+        if not has_fp:
+            issues.append("no_floor_plan")
+        if not r["detail_text"] or len(r["detail_text"]) < 100:
+            issues.append("no_detail_text")
+        if r["age_years"] is None:
+            issues.append("no_age_years")
+        complete = 1 if not issues else 0
+        issues_str = ",".join(issues) if issues else None
+        updates.append((complete, issues_str, r["id"]))
+    for upd in updates:
+        con.execute("UPDATE listings SET scrape_complete=?, data_issues=? WHERE id=?", upd)
+    con.commit()
+    done  = sum(1 for c, _, _ in updates if c == 1)
+    total = len(updates)
+    log.info(f"Completeness: {done}/{total} listings fully scraped.")
+
+
 def run():
     log.info("JKK + UR Monitor started ✓")
     con = init_db()
@@ -566,6 +607,9 @@ def run():
                     kwargs={"limit": 20},
                     daemon=True,
                 ).start()
+
+        # Re-evaluate completeness after images/data have had time to land
+        update_scrape_completeness(con)
 
         time.sleep(POLL_INTERVAL)
 

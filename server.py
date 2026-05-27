@@ -136,8 +136,10 @@ def db():
         ("has_parking",     "INTEGER DEFAULT 0"),
         ("parking_fee",     "INTEGER DEFAULT 0"),
         ("age_years",       "INTEGER"),
-        ("available_from",  "TEXT"),
-        ("nearby_features", "TEXT"),
+        ("available_from",   "TEXT"),
+        ("nearby_features",  "TEXT"),
+        ("scrape_complete",  "INTEGER DEFAULT 0"),
+        ("data_issues",      "TEXT"),
     ]:
         if col not in cols:
             con.execute(f"ALTER TABLE listings ADD COLUMN {col} {defn}")
