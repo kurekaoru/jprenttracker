@@ -1459,7 +1459,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 21:04 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 21:37 JST</p>
       </div>
 
 
@@ -2049,6 +2049,8 @@ const STRINGS = {
   detail_features:      { ja:'特徴',                    en:'Features',          uk:'Особливості' },
   detail_amenities:     { ja:'設備',                    en:'Amenities',         uk:'Обладнання' },
   detail_notes:         { ja:'備考',                    en:'Notes',             uk:'Примітки' },
+  detail_deposit:       { ja:'敷金',                    en:'Deposit',           uk:'Застава' },
+  detail_systems:       { ja:'割引制度',                 en:'Discounts',         uk:'Знижки' },
   age_label:            { ja:'築年数',                   en:'Building age',      uk:'Вік будинку' },
   years_suffix:         { ja:'年',                      en:'yrs',               uk:'р.' },
   no_detail:            { ja:'詳細情報なし',              en:'No details available', uk:'Деталі відсутні' },
@@ -4214,8 +4216,6 @@ function popupHtml(l) {
       })() : ''}
       <div class="pin-meta" style="margin-top:3px;">${t('first_seen_label')}: ${fmtDate(l.first_seen)}${daysStr ? ` · ${daysStr}` : ''}</div>
       ${l.priority ? `<div style="margin-top:4px;font-size:11px;color:var(--accent);font-weight:600;">${escHtml(l.priority)}</div>` : ''}
-      ${l.building_type ? `<div style="margin-top:2px;font-size:11px;color:var(--muted);">${escHtml(l.building_type)}</div>` : ''}
-      ${l.appliances ? `<div style="margin-top:4px;font-size:11px;color:var(--muted);">🔌 ${escHtml(l.appliances)}</div>` : ''}
       <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
         ${l.source === 'ur' && l.url ? `<a href="${escHtml(l.url)}" target="_blank" rel="noopener">${t('open_listing')}</a>` : ''}
         ${l.source === 'jkk' ? `<span style="font-size:11px;color:var(--muted);">JKK listings must be searched manually on the JKK website</span>` : ''}
@@ -4223,10 +4223,10 @@ function popupHtml(l) {
       </div>
       <div class="prop-tabs">
         <div class="prop-tab-bar">
-          <button class="prop-tab-btn active" data-tab="fac" onclick="switchPropTab('fac')">${t('tab_fac')}</button>
+          <button class="prop-tab-btn active" data-tab="details" onclick="switchPropTab('details')">${t('tab_details')}</button>
+          <button class="prop-tab-btn" data-tab="fac" onclick="switchPropTab('fac')">${t('tab_fac')}</button>
           <button class="prop-tab-btn" data-tab="floorplan" onclick="switchPropTab('floorplan')">${t('tab_floorplan')}</button>
           <button class="prop-tab-btn" data-tab="photos" onclick="switchPropTab('photos')">${t('tab_photos')}</button>
-          <button class="prop-tab-btn" data-tab="details" onclick="switchPropTab('details')">${t('tab_details')}</button>
           <button class="prop-tab-btn" data-tab="route" onclick="switchPropTab('route')">${t('tab_route')}</button>
         </div>
         <div class="prop-tab-content">
@@ -4254,10 +4254,10 @@ function popupHtml(l) {
           <div class="prop-tab-pane" id="prop-tab-photos">
             <div class="prop-photos-grid" id="prop-photos-grid"></div>
           </div>
-          <div class="prop-tab-pane" id="prop-tab-details">
+          <div class="prop-tab-pane active" id="prop-tab-details">
             <div id="prop-details-content" style="font-size:12px;line-height:1.6;color:var(--text);"></div>
           </div>
-          <div class="prop-tab-pane active" id="prop-tab-fac">
+          <div class="prop-tab-pane" id="prop-tab-fac">
             <div id="fac-section"></div>
           </div>
         </div>
@@ -4284,63 +4284,100 @@ function renderDetailTab(listingId) {
   const listing = _allListings?.find(l => l.id === listingId);
   if (!listing) { el.innerHTML = ''; return; }
 
-  const row = (label, val) => val
-    ? `<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);">
-         <div style="color:var(--muted);flex-shrink:0;width:90px;">${label}</div>
-         <div style="flex:1;word-break:break-word;">${escHtml(val)}</div>
-       </div>`
-    : '';
+  const row = (label, val, wide) => {
+    if (!val && val !== 0) return '';
+    const valHtml = escHtml(String(val)).replace(/\n/g, '<br>');
+    return `<tr>
+      <th style="color:var(--accent);white-space:nowrap;padding:5px 10px 5px 0;vertical-align:top;font-weight:600;font-size:11px;width:${wide?'auto':'88px'};">${label}</th>
+      <td style="padding:5px 0;vertical-align:top;word-break:break-word;font-size:12px;">${valHtml}</td>
+    </tr>`;
+  };
 
-  let html = '';
+  let html = '<table style="width:100%;border-collapse:collapse;">';
 
-  // Structured fields
+  // ── Core structured fields ──────────────────────────────────────────────
   if (listing.building_type) html += row(t('detail_structure'),  listing.building_type);
   if (listing.age_years != null) html += row(t('age_label'),     `${listing.age_years} ${t('years_suffix')}`);
   if (listing.available_from)  html += row(t('detail_avail'),    listing.available_from);
-  if (listing.has_parking)     html += row(t('detail_parking'),  listing.has_parking === 1 ? '○' : '—');
-  if (listing.parking_fee)     html += row(t('detail_parking'),  listing.parking_fee);
 
-  // Features / nearby
-  if (listing.nearby_features) html += row(t('detail_nearby'),   listing.nearby_features);
-  if (listing.features)        html += row(t('detail_features'), listing.features);
-  if (listing.appliances)      html += row(t('detail_amenities'),listing.appliances);
+  // Parking: prefer parking_fee text if available, else boolean flag
+  const parkingVal = listing.parking_fee
+    ? `¥${Number(listing.parking_fee).toLocaleString()}/月`
+    : listing.has_parking ? '○' : null;
+  if (parkingVal) html += row(t('detail_parking'), parkingVal);
 
-  // Raw detail_text — parse into labelled sections
+  // ── Parsed from detail_text ─────────────────────────────────────────────
   if (listing.detail_text) {
-    const lines = listing.detail_text.split('\n').map(s => s.trim()).filter(Boolean);
-    // Group consecutive lines into labelled sections where a short line ≤12 chars is a header
-    const sections = [];
-    let cur = null;
-    for (const line of lines) {
-      if (line.length <= 14 && !line.includes('：') && !line.includes('、') && cur?.body.length === 0) {
-        if (cur) sections.push(cur);
-        cur = { header: line, body: [] };
-      } else {
-        if (!cur) cur = { header: null, body: [] };
-        cur.body.push(line);
-      }
-    }
-    if (cur) sections.push(cur);
-
-    // Only show sections not already covered by structured fields
-    const skip = new Set(['特徴ピックアップ','設備','特徴','備考']);
-    for (const sec of sections) {
-      const h = sec.header;
-      const body = sec.body.join('\n');
-      if (!body) continue;
-      if (h && skip.has(h)) continue;
-      html += row(h || t('detail_notes'), body);
-    }
-
-    // Always show 備考 (notes/remarks) at the bottom
-    const bikouIdx = lines.indexOf('備考');
-    if (bikouIdx !== -1) {
-      const bikou = lines.slice(bikouIdx + 1).join('\n');
-      if (bikou) html += row('備考', bikou);
+    const sections = _parseDetailSections(listing.detail_text);
+    const FIELD_MAP = {
+      '設備':           t('detail_amenities'),
+      '敷地内駐車場':   t('detail_parking'),
+      '管理年数':       t('age_label'),
+      '入居可能時期':   t('detail_avail'),
+      'デザイン':       t('detail_structure'),
+      '割引制度':       t('detail_systems'),
+      '敷金':           t('detail_deposit'),
+      '特徴':           t('detail_nearby'),
+      '備考':           t('detail_notes'),
+    };
+    // Skip sections already shown from structured fields
+    const SKIP = new Set(
+      [listing.building_type && 'デザイン',
+       listing.age_years != null && '管理年数',
+       listing.available_from && '入居可能時期',
+       (listing.has_parking || listing.parking_fee) && '敷地内駐車場',
+       listing.nearby_features && '特徴',
+      ].filter(Boolean)
+    );
+    SKIP.add('特徴ピックアップ'); // shown as feature chips below
+    for (const { header, body } of sections) {
+      if (!body || SKIP.has(header)) continue;
+      const label = FIELD_MAP[header] || header || t('detail_notes');
+      html += row(label, body);
     }
   }
 
+  // ── Surroundings & features ─────────────────────────────────────────────
+  if (listing.nearby_features) html += row(t('detail_nearby'),   listing.nearby_features);
+
+  // Feature chips (highlight tags)
+  if (listing.features) {
+    const chips = listing.features.split(',').map(f =>
+      `<span style="display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:11px;margin:2px 2px 2px 0;">${escHtml(f.trim())}</span>`
+    ).join('');
+    html += row(t('detail_features'), chips);
+  }
+
+  // Appliances — wrap each item as a chip
+  if (listing.appliances) {
+    const chips = listing.appliances.split('、').map(a =>
+      `<span style="display:inline-block;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;font-size:11px;margin:2px 2px 2px 0;">${escHtml(a.trim())}</span>`
+    ).join('');
+    html += row(t('detail_amenities'), chips);
+  }
+
+  html += '</table>';
+
   el.innerHTML = html || `<div style="color:var(--muted);padding:12px 0;">${t('no_detail')}</div>`;
+}
+
+function _parseDetailSections(text) {
+  const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
+  const sections = [];
+  let cur = null;
+  for (const line of lines) {
+    // A section header: short, no commas/colons, and not starting a bullet
+    const isHeader = line.length <= 12 && !line.includes('、') && !line.includes('：') && !line.startsWith('・') && !line.match(/^\d/);
+    if (isHeader) {
+      if (cur) sections.push(cur);
+      cur = { header: line, body: '' };
+    } else {
+      if (!cur) cur = { header: null, body: '' };
+      cur.body += (cur.body ? '\n' : '') + line;
+    }
+  }
+  if (cur) sections.push(cur);
+  return sections;
 }
 
 async function loadPropPhotos(listingId, gridId, filterTypes) {
@@ -4646,6 +4683,7 @@ function openPropCard(l) {
   document.getElementById('right-panel-title').textContent = wardLabel(l.ward) || t('property_info');
   document.getElementById('right-panel').classList.add('open');
   recordView(l.id);
+  renderDetailTab(l.id);
 }
 
 function closePropCard() {
