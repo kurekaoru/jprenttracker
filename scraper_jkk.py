@@ -400,8 +400,22 @@ class JKKScraper(BaseScraper):
         """)
         if detail_text and detail_text.strip():
             lines = [l.strip() for l in detail_text.split("\n") if l.strip()]
-            con.execute("UPDATE listings SET detail_text=? WHERE id=?",
-                        ("\n".join(lines), lid))
+            joined = "\n".join(lines)
+            con.execute("UPDATE listings SET detail_text=? WHERE id=?", (joined, lid))
+            # Parse build date → age_years
+            import re as _re
+            from datetime import date as _date
+            m = _re.search(r"竣工年月日\s*(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", joined)
+            if not m:
+                # fallback: 築(\d+)年 e.g. "築12年"
+                m2 = _re.search(r"築(\d+)年", joined)
+                if m2:
+                    age = int(m2.group(1))
+                    con.execute("UPDATE listings SET age_years=? WHERE id=?", (age, lid))
+            else:
+                built = _date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+                age = max(0, round((_date.today() - built).days / 365.25, 1))
+                con.execute("UPDATE listings SET age_years=? WHERE id=?", (age, lid))
             con.commit()
 
         all_urls = [(u, "interior") for u in photo_urls]
