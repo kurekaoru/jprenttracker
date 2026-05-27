@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 01:20 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 01:35 JST</p>
       </div>
 
 
@@ -2221,8 +2221,22 @@ const TRAIN_LINES = [
   { id:'JY', code:'JY', color:'#9ACD32', name:'JR山手線', stations:[
     ['大崎',0],['五反田',0],['目黒',0],['恵比寿',0],['渋谷',0],['原宿',0],['代々木',0],['新宿',0],['新大久保',0],['高田馬場',0],['目白',0],['池袋',0],['大塚',0],['巣鴨',0],['駒込',0],['田端',0],['西日暮里',0],['日暮里',0],['鶯谷',0],['上野',0],['御徒町',0],['秋葉原',0],['神田',0],['東京',0],['有楽町',0],['新橋',0],['浜松町',0],['田町',0],['高輪ゲートウェイ',0],['品川',0]
   ]},
-  { id:'JC', code:'JC', color:'#F15A22', name:'JR中央快速線', stations:[
-    ['東京',0],['神田',0],['御茶ノ水',2],['四ツ谷',2],['新宿',2],['中野',2],['荻窪',2],['吉祥寺',2],['三鷹',2],['武蔵境',2],['東小金井',2],['武蔵小金井',2],['国分寺',2],['西国分寺',2],['国立',2],['立川',2],['日野',0],['豊田',0],['八王子',0],['西八王子',0],['高尾',0]
+  { id:'JC', code:'JC', color:'#F15A22', name:'中央線', stations:[
+    ['東京',0],['神田',0],['御茶ノ水',0],['四ツ谷',0],['新宿',0],['中野',0],
+    ['高円寺',0],['阿佐ケ谷',0],['荻窪',0],['西荻窪',0],['吉祥寺',0],
+    ['三鷹',0],['武蔵境',0],['東小金井',0],['武蔵小金井',0],
+    ['国分寺',0],['西国分寺',0],['国立',0],['立川',0],
+    ['日野',0],['豊田',0],['八王子',0],['西八王子',0],['高尾',0]
+  ], branches:[
+    { from:'立川', stations:[
+      ['西立川',0],['東中神',0],['中神',0],['昭島',0],['拝島',2],
+      ['牛浜',0],['福生',0],['羽村',0],['小作',0],['河辺',0],['東青梅',0],['青梅',2],
+      ['宮ノ平',0],['日向和田',0],['石神前',0],['二俣尾',0],['軍畑',0],['沢井',0],
+      ['御嶽',0],['川井',0],['古里',0],['鳩ノ巣',0],['白丸',0],['奥多摩',0]
+    ]},
+    { from:'拝島', stations:[
+      ['熊川',0],['東秋留',0],['秋川',0],['武蔵引田',0],['武蔵増戸',0],['武蔵五日市',0]
+    ]}
   ]},
   { id:'JK', code:'JK', color:'#00B2E2', name:'JR京浜東北線', stations:[
     ['大宮',0],['さいたま新都心',0],['与野',0],['北浦和',0],['浦和',0],['南浦和',0],['蕨',0],['西川口',0],['川口',0],['赤羽',0],['東十条',0],['王子',0],['上中里',0],['田端',0],['西日暮里',0],['日暮里',0],['鶯谷',0],['上野',0],['御徒町',0],['秋葉原',0],['神田',0],['東京',0],['有楽町',0],['新橋',0],['浜松町',0],['田町',0],['高輪ゲートウェイ',0],['品川',0],['大井町',0],['大森',0],['蒲田',0],['川崎',0],['鶴見',0],['新子安',0],['東神奈川',0],['横浜',0],['桜木町',0],['関内',0],['石川町',0],['山手',0],['根岸',0],['磯子',0],['新杉田',0],['洋光台',0],['港南台',0],['本郷台',0],['大船',0]
@@ -2310,7 +2324,7 @@ const SERVICE_COLORS = ['#8A8D93', '#8BC34A', '#F39C12', '#E74C3C'];
 const SERVICE_LABELS = ['各停', '準急・区間急行', '急行・快速', '特急・通勤特急'];
 
 const LINE_STOP_CLASSES = {
-  JC: { 2:['東京','神田','御茶ノ水','四ツ谷','新宿','中野','三鷹','国分寺','立川','日野','豊田','八王子','西八王子','高尾'], 1:['荻窪','吉祥寺','武蔵境','東小金井','武蔵小金井','西国分寺','国立'] },
+  JC: { 3:['東京','神田','御茶ノ水','四ツ谷','新宿','中野','三鷹','国分寺','立川','八王子','高尾'], 2:['荻窪','吉祥寺','武蔵境','東小金井','武蔵小金井','西国分寺','国立','日野','豊田','西八王子'], 0:['高円寺','阿佐ケ谷','西荻窪'] },
   TY: { 3:['渋谷','中目黒','自由が丘','武蔵小杉','日吉','菊名','横浜'], 2:['学芸大学','田園調布','多摩川','綱島'] },
   DT: { 2:['渋谷','三軒茶屋','二子玉川','溝の口','鷺沼','たまプラーザ','あざみ野','青葉台','長津田','南町田グランベリーパーク','中央林間'], 1:['池尻大橋','駒沢大学','桜新町','用賀','つくし野','すずかけ台','つきみ野'] },
   OH: { 3:['新宿','代々木上原','下北沢','登戸','新百合ケ丘','町田','相模大野','海老名','本厚木','伊勢原','秦野','新松田','小田原'], 2:['経堂','成城学園前','向ヶ丘遊園'], 1:['祖師ケ谷大蔵','喜多見','狛江','和泉多摩川'] },
@@ -2430,9 +2444,14 @@ function branchDisplayName(line, branch) {
   return branch.name || `${branch.from} branch`;
 }
 
-function _stationSvc(line, name) {
-  const found = line.stations.find(([station]) => station === name);
-  return found ? found[1] : 0;
+function _stationSvc(line, name, fallback = 0) {
+  const found = line.stations.find(([s]) => s === name);
+  if (found) return found[1];
+  for (const branch of (line.branches || [])) {
+    const bf = branch.stations.find(([s]) => s === name);
+    if (bf) return bf[1];
+  }
+  return fallback;
 }
 
 function lineGraphEdges(line, includeExtra = true, schematicOnly = false) {
@@ -2821,6 +2840,7 @@ function setLineStationsSelected(lid, selected) {
   const line = TRAIN_LINES.find(l => l.id === lid);
   if (!line) return;
   line.stations.forEach(([name]) => _setStationSelected(name, selected));
+  (line.branches || []).forEach(b => b.stations.forEach(([name]) => _setStationSelected(name, selected)));
   _updateLineSel(lid);
   applyMapFilters();
   refreshTrainStationMarkers();
@@ -2859,11 +2879,15 @@ function setTrainStationHover(lineId, name, on) {
 function _updateLineSel(lid) {
   const line = TRAIN_LINES.find(l => l.id === lid);
   if (!line) return;
-  const cnt = line.stations.filter(([n]) => selectedStations.has(n)).length;
+  const allNames = [
+    ...line.stations.map(([n]) => n),
+    ...(line.branches || []).flatMap(b => b.stations.map(([n]) => n))
+  ];
+  const cnt = allNames.filter(n => selectedStations.has(n)).length;
   const el = document.getElementById('lsel-' + lid);
   if (el) el.textContent = cnt > 0 ? cnt : '';
   const btn = document.getElementById('ltog-' + lid);
-  if (btn) btn.textContent = cnt === line.stations.length ? '全OFF' : '全ON';
+  if (btn) btn.textContent = cnt === allNames.length ? '全OFF' : '全ON';
   _updateAllStationsBtnText();
 }
 
@@ -3245,12 +3269,20 @@ async function showTrainLineOverlay(id) {
   const cache = await _readTrainStationCoords();
   const points = [];
 
-  for (const [name] of line.stations) {
+  // Collect main + branch stations, deduped
+  const _allStaForLine = [...line.stations];
+  const _seenSta = new Set(line.stations.map(([n]) => n));
+  for (const branch of (line.branches || [])) {
+    for (const sta of branch.stations) {
+      if (!_seenSta.has(sta[0])) { _allStaForLine.push(sta); _seenSta.add(sta[0]); }
+    }
+  }
+  for (const [name, fallbackSvc] of _allStaForLine) {
     const result = await _geocodeTrainStation(name, line, cache);
     if (token !== _trainLineTokens.get(id) || !_openTrainLineIds.has(id)) return;
     const point = result?.point;
     if (point) {
-      points.push({ name, svc: _stationSvc(line, name), position: point });
+      points.push({ name, svc: _stationSvc(line, name, fallbackSvc), position: point });
     }
     if (!result?.cached) await new Promise(resolve => setTimeout(resolve, 60));
   }
@@ -3393,7 +3425,10 @@ function _setWardGroupSelected(id) {
 
 function toggleAllStations() {
   if (!ensureLocationFilterMode('line')) return;
-  const allSta = [...new Set(TRAIN_LINES.flatMap(l => l.stations.map(([n]) => n)))];
+  const allSta = [...new Set(TRAIN_LINES.flatMap(l => [
+    ...l.stations.map(([n]) => n),
+    ...(l.branches || []).flatMap(b => b.stations.map(([n]) => n))
+  ]))];
   const anyOn = allSta.some(n => selectedStations.has(n));
   allSta.forEach(n => _setStationSelected(n, !anyOn));
   TRAIN_LINES.forEach(l => _updateLineSel(l.id));
@@ -3404,7 +3439,10 @@ function toggleAllStations() {
 function _updateAllStationsBtnText() {
   const btn = document.getElementById('all-stations-btn');
   if (!btn) return;
-  const anyOn = TRAIN_LINES.some(l => l.stations.some(([n]) => selectedStations.has(n)));
+  const anyOn = TRAIN_LINES.some(l =>
+    l.stations.some(([n]) => selectedStations.has(n)) ||
+    (l.branches || []).some(b => b.stations.some(([n]) => selectedStations.has(n)))
+  );
   btn.textContent = anyOn ? '全OFF' : '全ON';
 }
 
