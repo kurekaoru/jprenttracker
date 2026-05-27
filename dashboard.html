@@ -561,7 +561,7 @@
   .graph-wrap { --lc:#aaa; --rows:1; --rowh:38px; position:relative; height:calc(var(--rows) * var(--rowh)); padding:2px 1px 0; }
   .graph-track { position:absolute; inset:0 0 auto; width:100%; height:calc(var(--rows) * var(--rowh)); overflow:visible; pointer-events:none; z-index:0; }
   .graph-track path { fill:none; stroke:var(--lc); stroke-width:4; stroke-linecap:round; stroke-linejoin:round; opacity:.34; vector-effect:non-scaling-stroke; }
-  .graph-track path.branch-link { opacity:.2; stroke-width:3; stroke-dasharray:2 4; }
+  .graph-track path.branch-link { opacity:.34; stroke-width:4; stroke-dasharray:none; }
   .graph-sta { position:absolute; width:25%; transform:translate(-50%, 0); }
   .branch-label { position:absolute; left:2px; font-size:8px; line-height:1; color:rgba(255,255,255,.42); font-weight:800; letter-spacing:.04em; pointer-events:none; z-index:1; }
   .loop-wrap { --lc:#9ACD32; position:relative; height:608px; margin:12px 1px 14px; }
@@ -1438,7 +1438,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 14:16 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 14:24 JST</p>
       </div>
 
 
@@ -2399,7 +2399,8 @@ function updateLocationModeUi() {
 
 function lineGraphLayout(line) {
   const branchGap = line.branches?.length ? 2 : 1;
-  const mainCols = line.branches?.length ? [1, 2, 3] : [0, 1, 2, 3];
+  const fullCols = [0, 1, 2, 3];
+  const trunkCols = [1, 2, 3];
   const branchCols = [0, 1, 2, 3];
   const stas = _lineMainStations(line);
   const nodes = [];
@@ -2425,7 +2426,22 @@ function lineGraphLayout(line) {
     return Math.ceil(pathStations.length / rowSize);
   };
 
-  const mainRows = placePath(stas, 0, mainCols, true, false);
+  let mainRows;
+  if (line.branches?.length) {
+    const branchNames = new Set(line.branches.map(branch => branch.from));
+    const firstBranchIdx = stas.findIndex(([name]) => branchNames.has(name));
+    if (firstBranchIdx >= 0) {
+      const prefix = stas.slice(0, firstBranchIdx + 1);
+      const suffix = stas.slice(firstBranchIdx + 1);
+      const prefixRows = placePath(prefix, 0, fullCols, true, false);
+      const suffixRows = placePath(suffix, prefixRows, trunkCols, prefixRows % 2 === 0, false);
+      mainRows = prefixRows + suffixRows;
+    } else {
+      mainRows = placePath(stas, 0, trunkCols, true, false);
+    }
+  } else {
+    mainRows = placePath(stas, 0, fullCols, true, false);
+  }
   lineGraphEdges(line, false).forEach(edge => edges.push(edge));
 
   let nextBranchRow = mainRows + (line.branches?.length ? 2 : 0);
@@ -2487,6 +2503,7 @@ function graphTrackSvg(graph) {
     const bx = colXs[b.col], by = dotY + b.row * rowH;
     const branchLink = !!b.branch && !a.branch;
     if (ay === by) return { d: `M ${ax} ${ay} L ${bx} ${by}`, branchLink };
+    if (branchLink) return { d: `M ${ax} ${ay} L ${colXs[0]} ${ay} L ${colXs[0]} ${by}`, branchLink };
     const sideX = branchLink ? 4 : (graph.hasBranches && !a.branch && !b.branch && a.col === 1 ? 28 : (ax > 50 ? 96 : 4));
     return { d: `M ${ax} ${ay} C ${sideX} ${ay}, ${sideX} ${by}, ${bx} ${by}`, branchLink };
   }).filter(Boolean);
