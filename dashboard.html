@@ -1451,7 +1451,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 18:05 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 18:09 JST</p>
       </div>
 
 
@@ -2784,13 +2784,7 @@ let _trainStationDbPromise = null;
 const _trainGeocodeInflight = new Map();
 
 function _readOpenTrainLineIds() {
-  try {
-    const ids = JSON.parse(localStorage.getItem(TRAIN_OPEN_LINES_KEY) || '[]');
-    const known = new Set(TRAIN_LINES.map(line => line.id));
-    return Array.isArray(ids) ? ids.filter(id => known.has(id)) : [];
-  } catch (_) {
-    return [];
-  }
+  return []; // never restore open lines across page loads — overlays are transient
 }
 
 function _writeOpenTrainLineIds() {
@@ -3205,12 +3199,13 @@ function loadConfig() {
   if (fmEl) fmEl.value     = d.max_age_years || '';
   selectedStations = new Set(Array.isArray(d.stored_filter_stations) ? d.stored_filter_stations : (d.filter_stations || []));
   selectedWards    = Array.isArray(d.stored_wards) ? new Set(d.stored_wards) : (d.wards?.length ? new Set(d.wards) : new Set(DEFAULT_WARDS));
-  activeLocationFilter = locationModeFromSettings(d);
+  activeLocationFilter = 'area'; // always start in area mode on page load; station selections preserved
   selectedLayouts  = d.layouts?.length ? new Set(d.layouts) : new Set(DEFAULT_LAYOUTS);
   selectedFeatures = new Set(d.required_features || []);
   filterSources    = new Set(DEFAULT_SOURCES);
   buildChips();
   buildLineAccordion();
+  updateLocationModeUi();
   applyMapFilters();
   loadUserLayers();
   // If logged in, server settings will override this via loadUserSettings()
@@ -5749,12 +5744,13 @@ async function loadUserSettings() {
     if (fmEl) fmEl.value   = d.max_age_years || '';
     selectedStations = new Set(Array.isArray(d.stored_filter_stations) ? d.stored_filter_stations : (d.filter_stations || []));
     selectedWards    = Array.isArray(d.stored_wards) ? new Set(d.stored_wards) : (d.wards?.length ? new Set(d.wards) : new Set(DEFAULT_WARDS));
-    activeLocationFilter = locationModeFromSettings(d);
+    activeLocationFilter = 'area'; // always start in area mode on page load; station selections preserved
     selectedLayouts  = d.layouts?.length ? new Set(d.layouts) : new Set(DEFAULT_LAYOUTS);
     selectedFeatures = new Set(d.required_features || []);
     filterSources    = new Set(DEFAULT_SOURCES);
     buildChips();
     buildLineAccordion();
+    updateLocationModeUi();
     applyMapFilters();
   } catch {}
   loadUserLayers();
