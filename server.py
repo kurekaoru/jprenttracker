@@ -1627,6 +1627,7 @@ def get_listings():
         f"       disappeared_at, walk_min, walk_m, nearest_station, thumbnail_url,"
         f"       priority, building_type, appliances,"
         f"       has_parking, parking_fee, age_years, available_from, features,"
+        f"       detail_text, nearby_features,"
         f"       CASE WHEN thumbnail_url IS NOT NULL AND ("
         f"         lower(thumbnail_url) LIKE '%madori%' OR"
         f"         lower(thumbnail_url) LIKE '%floor_plan%' OR"
