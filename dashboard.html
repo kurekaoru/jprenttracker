@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 01:17 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 01:20 JST</p>
       </div>
 
 
@@ -2509,10 +2509,10 @@ function lineGraphLayout(line) {
   const branches = schematicBranches(line);
   const multiBranch = branches.length > 1;
   const branchGap = 0;
-  const colXs = multiBranch ? [15, 33, 50, 67, 85] : [12.5, 37.5, 62.5, 87.5];
-  const fullCols = multiBranch ? [0, 1, 2, 3, 4] : [0, 1, 2, 3];
-  const trunkCols = multiBranch ? [0, 1, 2, 3] : [1, 2, 3];
-  const branchCols = multiBranch ? [0, 1, 2, 3, 4] : [0, 1, 2, 3];
+  const colXs = [15, 33, 50, 67, 85];
+  const fullCols = [0, 1, 2, 3, 4];
+  const trunkCols = [0, 1, 2, 3, 4];
+  const branchCols = [0, 1, 2, 3, 4];
   const stas = _lineMainStations(line);
   const nodes = [];
   const edges = [];
@@ -2631,20 +2631,20 @@ function lineGraphLayout(line) {
   }
   lineGraphEdges(line, false, true).forEach(edge => edges.push(edge));
 
-  let nextBranchRow = mainRows + (branches.length ? 1 : 0);
+  let nextBranchRow = mainRows;
   const byName = new Map(nodes.map(node => [node.name, node]));
   branches.slice(multiBranch ? branches.length : 0).forEach((branch, idx) => {
     const base = byName.get(branch.from);
     if (!base) return;
-    const escapeRight = multiBranch ? base.col >= 3 : base.col > 1;
-    const cols = multiBranch && escapeRight ? [4, 3, 2, 1, 0] : branchCols;
+    const escapeRight = base.col > Math.floor((colXs.length - 1) / 2);
+    const cols = escapeRight ? [4, 3, 2, 1, 0] : branchCols;
     const branchRows = placePath(branch.stations, nextBranchRow, cols, true, true, new Set(), new Set(), `branch${idx + 1}`, cols[0]);
     labels.push(terminalBranchLabel(branch, `branch${idx + 1}`, nextBranchRow, cols[0]));
     branch.stations.forEach(([name]) => byName.set(name, nodes.find(node => node.name === name)));
     nextBranchRow += branchRows + branchGap;
   });
 
-  return { nodes, edges, labels, colXs, cellW: multiBranch ? 18 : 25, hasBranches: !!branches.length, rows: Math.max(1, ...nodes.map(node => node.row + 1)) };
+  return { nodes, edges, labels, colXs, cellW: 18, hasBranches: !!branches.length, rows: Math.max(1, ...nodes.map(node => node.row + 1)) };
 }
 
 function renderGraphLine(line) {
