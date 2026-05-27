@@ -1421,7 +1421,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 12:36 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 13:22 JST</p>
       </div>
 
 
@@ -2526,7 +2526,7 @@ function _updateLineSel(lid) {
 
 const TRAIN_STATION_DB = 'jkk-local-db';
 const TRAIN_STATION_STORE = 'trainStationCoords';
-const TRAIN_STATION_LEGACY_KEY = 'jkkTrainStationCoords:v2';
+const TRAIN_STATION_LEGACY_KEY = 'jkkTrainStationCoords:v3';
 const TRAIN_OPEN_LINES_KEY = 'jkkOpenTrainLines:v1';
 const TRAIN_STATION_MISS_TTL = 24 * 60 * 60 * 1000;
 const TRAIN_STATION_BOUNDS = { minLat: 35.0, maxLat: 36.5, minLng: 138.5, maxLng: 140.6 };
@@ -2748,26 +2748,40 @@ function _geocodeTrainStation(name, line, cache, attempt = 0) {
   if (_trainGeocodeInflight.has(key)) return _trainGeocodeInflight.get(key);
   if (!_trainGeocoder) _trainGeocoder = new google.maps.Geocoder();
 
-  const req = new Promise(resolve => {
-    _trainGeocoder.geocode({ address: `${name}駅 日本`, region: 'jp' }, (results, status) => {
-      if (status === 'OVER_QUERY_LIMIT' && attempt < 2) {
-        setTimeout(() => resolve(_geocodeTrainStation(name, line, cache, attempt + 1)), 350);
-        return;
-      }
-      if (status !== 'OK' || !results?.[0]?.geometry?.location) {
-        _rememberTrainStationMiss(key, cache);
-        return resolve({ point: null, cached: false });
-      }
-      const loc = results[0].geometry.location;
-      const point = { lat: loc.lat(), lng: loc.lng() };
-      if (!_validTrainStationPoint(point)) {
-        _rememberTrainStationMiss(key, cache);
-        return resolve({ point: null, cached: false });
-      }
-      cache[key] = point;
-      _writeTrainStationCoord(key, point);
-      resolve({ point, cached: false });
-    });
+  const req = fetch(
+    `https://express.heartrails.com/api/json?method=getStations&name=${encodeURIComponent(name)}`
+  ).then(r => r.json()).then(data => {
+    const stations = data?.response?.station;
+    if (!stations?.length) return null;
+    // prefer a station whose line name contains the line code, else take first
+    const match = stations.find(s => s.line && line && s.line.includes(line.replace(/^J/, 'JR').replace(/^(OH|KO|SI|TJ|TY|DT|KK|TM).*/, ''))) || stations[0];
+    const point = { lat: parseFloat(match.y), lng: parseFloat(match.x) };
+    return _validTrainStationPoint(point) ? point : null;
+  }).catch(() => null).then(point => {
+    if (!point) {
+      // fallback to Google Geocoder
+      if (!_trainGeocoder) _trainGeocoder = new google.maps.Geocoder();
+      return new Promise(resolve => {
+        _trainGeocoder.geocode({ address: `${name}駅 日本`, region: 'jp' }, (results, status) => {
+          if (status === 'OVER_QUERY_LIMIT' && attempt < 2) {
+            setTimeout(() => resolve(_geocodeTrainStation(name, line, cache, attempt + 1)), 350);
+            return;
+          }
+          if (status !== 'OK' || !results?.[0]?.geometry?.location) {
+            _rememberTrainStationMiss(key, cache);
+            return resolve({ point: null, cached: false });
+          }
+          const loc = results[0].geometry.location;
+          const p = { lat: loc.lat(), lng: loc.lng() };
+          if (!_validTrainStationPoint(p)) { _rememberTrainStationMiss(key, cache); return resolve({ point: null, cached: false }); }
+          cache[key] = p; _writeTrainStationCoord(key, p);
+          resolve({ point: p, cached: false });
+        });
+      });
+    }
+    cache[key] = point;
+    _writeTrainStationCoord(key, point);
+    return { point, cached: false };
   }).finally(() => {
     _trainGeocodeInflight.delete(key);
   });
