@@ -534,7 +534,7 @@
   .ftab-switch-pop-cancel:hover { color:var(--text); border-color:currentColor; }
   .ftab-switch-pop-confirm { background:var(--accent); border:none; border-radius:5px; padding:3px 9px; font-size:11px; font-family:var(--font); color:#fff; font-weight:600; cursor:pointer; }
   .ftab-switch-pop-confirm:hover { opacity:.85; }
-  .ftab-content { flex:1; min-width:0; padding:10px 0 4px 12px; overflow-y:auto; max-height:calc(100vh - 205px); }
+  .ftab-content { flex:1; min-width:0; padding:10px 0 4px 12px; overflow-y:auto; overflow-x:hidden; max-height:calc(100vh - 205px); }
   .ftab-pane { display:none; }
   .ftab-pane.active { display:block; }
   .station-override-banner { background:rgba(239,159,39,0.14); border:1px solid rgba(239,159,39,0.35); border-radius:6px; padding:7px 9px; font-size:10px; color:var(--warn); margin-bottom:8px; line-height:1.55; }
@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 00:09 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 00:11 JST</p>
       </div>
 
 
@@ -5216,7 +5216,7 @@ function openPanel(name) {
     document.getElementById(`rail-${n}`)?.classList.toggle('active', n === name);
     document.getElementById(`panel-${n}`)?.classList.toggle('active', n === name);
   });
-  panel.style.width = (name === 'listings' || name === 'favourites') ? '864px' : (name === 'filter' ? '338px' : '260px');
+  panel.style.width = (name === 'listings' || name === 'favourites') ? '864px' : (name === 'filter' ? '406px' : '260px');
   document.getElementById('panel-title').textContent = _panelTitles[name] ? t(_panelTitles[name]) : '';
   panel.classList.add('open');
   backdrop.classList.add('open');
