@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 01:59 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 08:47 JST</p>
       </div>
 
 
@@ -2945,7 +2945,8 @@ const TRAIN_STATION_COORD_OVERRIDES = {
   'TM:万願寺駅': { lat: 35.671806, lng: 139.420633 },
   'TM:高幡不動駅': { lat: 35.662361, lng: 139.412953 },
   'TM:程久保駅': { lat: 35.656141, lng: 139.410016 },
-  'TM:多摩動物公園駅': { lat: 35.649299, lng: 139.404599 }
+  'TM:多摩動物公園駅': { lat: 35.649299, lng: 139.404599 },
+  'KO:山田駅': { lat: 35.6224, lng: 139.3163 }
 };
 let _trainGeocoder = null;
 const _openTrainLineIds = new Set(_readOpenTrainLineIds());
@@ -3232,16 +3233,19 @@ function _geocodeTrainStation(name, line, cache, attempt = 0) {
   ).then(r => r.json()).then(data => {
     const stations = data?.response?.station;
     if (!stations?.length) return null;
-    // prefer a station whose line name contains the line code, else take first
-    const match = stations.find(s => s.line && line && s.line.includes(line.replace(/^J/, 'JR').replace(/^(OH|KO|SI|TJ|TY|DT|KK|TM).*/, ''))) || stations[0];
+    // Match by company prefix (e.g. "京王" matches "京王高尾線", "JR" matches JR lines)
+    const lineName = line?.name || '';
+    const prefix = lineName.startsWith('JR') ? 'JR' : lineName.slice(0, 2);
+    const match = (prefix ? stations.find(s => s.line?.includes(prefix)) : null) || stations[0];
     const point = { lat: parseFloat(match.y), lng: parseFloat(match.x) };
     return _validTrainStationPoint(point) ? point : null;
   }).catch(() => null).then(point => {
     if (!point) {
-      // fallback to Google Geocoder
+      // fallback to Google Geocoder with line name for disambiguation
       if (!_trainGeocoder) _trainGeocoder = new google.maps.Geocoder();
       return new Promise(resolve => {
-        _trainGeocoder.geocode({ address: `${name}駅 日本`, region: 'jp' }, (results, status) => {
+        const q = line?.name ? `${name}駅 ${line.name}` : `${name}駅 東京`;
+        _trainGeocoder.geocode({ address: q, region: 'jp' }, (results, status) => {
           if (status === 'OVER_QUERY_LIMIT' && attempt < 2) {
             setTimeout(() => resolve(_geocodeTrainStation(name, line, cache, attempt + 1)), 350);
             return;
