@@ -332,6 +332,11 @@
     color: #fff;
   }
   .chip:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
+  .location-filter-section { transition:opacity .15s, filter .15s; }
+  .location-filter-section.is-paused { opacity:.46; filter:grayscale(.35); }
+  .location-filter-section.is-paused .chip,
+  .location-filter-section.is-paused .line-header,
+  .location-filter-section.is-paused .line-action { cursor:pointer; }
 
   /* Layout chips */
   .layout-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
@@ -519,6 +524,7 @@
   .ftab-btn { writing-mode:vertical-rl; background:none; border:none; cursor:pointer; color:var(--muted); font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; padding:12px 7px; transition:color .15s,background .15s; font-family:var(--font); white-space:nowrap; }
   .ftab-btn:hover { color:var(--text); }
   .ftab-btn.active { color:var(--accent); background:rgba(93,202,165,0.12); }
+  .ftab-btn.is-paused { opacity:.46; }
   .ftab-content { flex:1; min-width:0; padding:10px 0 4px 12px; overflow-y:auto; max-height:calc(100vh - 205px); }
   .ftab-pane { display:none; }
   .ftab-pane.active { display:block; }
@@ -534,6 +540,9 @@
   .line-chev { font-size:8px; color:var(--muted); transition:transform .15s; flex-shrink:0; margin-left:2px; }
   .line-item.open .line-chev { transform:rotate(180deg); }
   .line-body { padding:4px 0 8px; }
+  .line-actions { display:flex; gap:6px; justify-content:flex-end; padding:0 2px 6px; }
+  .line-action { border:1px solid var(--border); border-radius:6px; background:var(--surface2); color:rgba(255,255,255,.78); font:700 9px/1 var(--font); padding:5px 7px; }
+  .line-action:hover { border-color:var(--accent); color:#fff; }
   /* Snake */
   .snake-wrap { --lc:#aaa; --rows:1; position:relative; padding:2px 1px 0; }
   .snake-track { position:absolute; inset:0 0 auto; width:100%; height:calc(var(--rows) * 38px); overflow:visible; pointer-events:none; z-index:0; }
@@ -1134,13 +1143,16 @@
 
             <!-- District -->
             <div class="ftab-pane active" id="ftab-district">
+              <div class="location-filter-section" id="area-filter-section">
               <p class="section-label" style="margin-bottom:6px;" data-i18n="area">エリア（区・市）</p>
               <div id="ward-chips"></div>
+              </div>
             </div>
 
             <!-- Station -->
             <div class="ftab-pane" id="ftab-station">
-              <div class="station-override-banner" id="station-override-banner" style="display:none;">⚠ 区が選択されているため、駅フィルターは通知では無効です</div>
+              <div class="location-filter-section" id="train-filter-section">
+              <div class="station-override-banner" id="station-override-banner" style="display:none;">Area filters are active. Open a line to pause area filters.</div>
               <div class="svc-legend">
                 <span><b style="background:#E74C3C"></b>特急・通勤特急</span>
                 <span><b style="background:#F39C12"></b>急行・快速</span>
@@ -1148,6 +1160,7 @@
                 <span><b style="border:1.5px solid #888;background:transparent"></b>各停</span>
               </div>
               <div id="line-accordion"></div>
+              </div>
             </div>
 
             <!-- Facilities -->
@@ -1425,7 +1438,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 14:00 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 14:11 JST</p>
       </div>
 
 
@@ -2144,6 +2157,7 @@ let selectedLayouts  = new Set(DEFAULT_LAYOUTS);
 let filterSources    = new Set(DEFAULT_SOURCES);
 let selectedFeatures = new Set();
 let selectedStations = new Set();
+let activeLocationFilter = 'area'; // 'area' | 'line'
 
 // Train line data: [id, code, color, name, stations]
 // stations: [name, svcLevel] svcLevel is recomputed below from stop patterns.
@@ -2355,6 +2369,34 @@ function lineGraphEdges(line, includeExtra = true) {
   return edges;
 }
 
+function locationModeFromSettings(d) {
+  if (d.location_filter_mode === 'line' || d.location_filter_mode === 'area') return d.location_filter_mode;
+  return (d.filter_stations || []).length ? 'line' : 'area';
+}
+
+function setLocationFilterMode(mode) {
+  activeLocationFilter = mode === 'line' ? 'line' : 'area';
+  updateLocationModeUi();
+}
+
+function ensureLocationFilterMode(mode) {
+  mode = mode === 'line' ? 'line' : 'area';
+  if (activeLocationFilter === mode) return true;
+  const msg = mode === 'line'
+    ? 'Switch to line filters? Area filters will be paused, but your area choices stay saved.'
+    : 'Switch to area filters? Line filters will be paused, but your station choices stay saved.';
+  if (!confirm(msg)) return false;
+  setLocationFilterMode(mode);
+  return true;
+}
+
+function updateLocationModeUi() {
+  document.getElementById('area-filter-section')?.classList.toggle('is-paused', activeLocationFilter === 'line');
+  document.getElementById('train-filter-section')?.classList.toggle('is-paused', activeLocationFilter === 'area');
+  document.querySelector('.ftab-btn[onclick*="ftab-district"]')?.classList.toggle('is-paused', activeLocationFilter === 'line');
+  document.querySelector('.ftab-btn[onclick*="ftab-station"]')?.classList.toggle('is-paused', activeLocationFilter === 'area');
+}
+
 function lineGraphLayout(line) {
   const COLS = 4;
   const branchGap = line.branches?.length ? 2 : 1;
@@ -2496,6 +2538,20 @@ function buildLineAccordion() {
     body.className = 'line-body';
     body.style.display = _openTrainLineIds.has(line.id) ? 'block' : 'none';
     body.id = 'lb-' + line.id;
+    const actions = document.createElement('div');
+    actions.className = 'line-actions';
+    actions.innerHTML = `
+      <button type="button" class="line-action" data-act="all">Choose all</button>
+      <button type="button" class="line-action" data-act="none">Remove all</button>`;
+    actions.querySelector('[data-act="all"]').onclick = e => {
+      e.stopPropagation();
+      setLineStationsSelected(line.id, true);
+    };
+    actions.querySelector('[data-act="none"]').onclick = e => {
+      e.stopPropagation();
+      setLineStationsSelected(line.id, false);
+    };
+    body.appendChild(actions);
     body.appendChild(renderSnake(line));
     if (_openTrainLineIds.has(line.id)) item.classList.add('open');
 
@@ -2510,8 +2566,10 @@ function toggleLine(id) {
   const item = document.getElementById('li-' + id);
   const body = document.getElementById('lb-' + id);
   if (!item || !body) return;
+  if (!item.classList.contains('open') && !ensureLocationFilterMode('line')) return;
   const open = item.classList.toggle('open');
   body.style.display = open ? 'block' : 'none';
+  applyMapFilters();
   if (open) {
     _openTrainLineIds.add(id);
     _writeOpenTrainLineIds();
@@ -2524,10 +2582,21 @@ function toggleLine(id) {
 }
 
 function _staTog(el) {
+  if (!ensureLocationFilterMode('line')) return;
   const name = el.dataset.sta;
   const lid  = el.dataset.lid;
   _setStationSelected(name, !selectedStations.has(name));
   if (lid) _updateLineSel(lid);
+  applyMapFilters();
+  refreshTrainStationMarkers();
+}
+
+function setLineStationsSelected(lid, selected) {
+  if (!ensureLocationFilterMode('line')) return;
+  const line = TRAIN_LINES.find(l => l.id === lid);
+  if (!line) return;
+  line.stations.forEach(([name]) => _setStationSelected(name, selected));
+  _updateLineSel(lid);
   applyMapFilters();
   refreshTrainStationMarkers();
 }
@@ -2765,7 +2834,8 @@ function trainStationMarkerIcon(marker, hover = false) {
     fillColor: selected ? color : '#ffffff',
     fillOpacity: 1,
     strokeColor: color,
-    strokeWeight: hover ? 3 : 2
+    strokeWeight: hover ? 3 : 2,
+    labelOrigin: new google.maps.Point(0, -13)
   };
 }
 
@@ -2818,6 +2888,7 @@ function _drawTrainLineOverlay(line, points) {
     marker.addListener('mouseover', () => setTrainStationHover(line.id, point.name, true));
     marker.addListener('mouseout', () => setTrainStationHover(line.id, point.name, false));
     marker.addListener('click', () => {
+      if (!ensureLocationFilterMode('line')) return;
       _setStationSelected(point.name, !selectedStations.has(point.name));
       applyMapFilters();
       refreshTrainStationMarkers();
@@ -2940,9 +3011,13 @@ function makeChip(label, set, container, onChange, displayLabel) {
   c.className = 'chip' + (set.has(label) ? ' active' : '');
   c.textContent = displayLabel || label;
   c.onclick = () => {
+    const had = set.has(label);
     set.has(label) ? set.delete(label) : set.add(label);
     c.classList.toggle('active');
-    if (onChange) onChange();
+    if (onChange && onChange() === false) {
+      had ? set.add(label) : set.delete(label);
+      c.classList.toggle('active', had);
+    }
   };
   container.appendChild(c);
 }
@@ -2955,17 +3030,20 @@ function addSectionLabel(container, text, marginTop = 8) {
 }
 
 function switchFTab(btn, id) {
+  const beforeMode = activeLocationFilter;
+  if (id === 'ftab-station' && activeLocationFilter === 'area' && !ensureLocationFilterMode('line')) return;
+  if (id === 'ftab-district' && activeLocationFilter === 'line' && !ensureLocationFilterMode('area')) return;
   btn.closest('.ftab-bar').querySelectorAll('.ftab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   btn.closest('.ftabs').querySelectorAll('.ftab-pane').forEach(p => p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  if (beforeMode !== activeLocationFilter) applyMapFilters();
 }
 
 function updateStationBanner() {
-  const totalWards = KU.length + SI.length + YOKOHAMA.length + KAWASAKI.length + SAGAMIHARA.length;
-  const wardFilterActive = selectedWards.size > 0 && selectedWards.size < totalWards;
   const banner = document.getElementById('station-override-banner');
-  if (banner) banner.style.display = wardFilterActive ? 'block' : 'none';
+  if (banner) banner.style.display = activeLocationFilter === 'area' ? 'block' : 'none';
+  updateLocationModeUi();
 }
 
 function buildChips() {
@@ -2980,7 +3058,11 @@ function buildChips() {
     addSectionLabel(parent, t(labelKey), marginTop ?? 8);
     const row = document.createElement('div');
     row.className = 'chips';
-    wards.forEach(w => makeChip(w, selectedWards, row, applyMapFilters, wardLabel(w)));
+    wards.forEach(w => makeChip(w, selectedWards, row, () => {
+      if (!ensureLocationFilterMode('area')) return false;
+      applyMapFilters();
+      return true;
+    }, wardLabel(w)));
     parent.appendChild(row);
   }
 
@@ -3023,8 +3105,9 @@ function loadConfig() {
   if (fpEl) fpEl.checked   = !!d.has_parking;
   if (faEl) faEl.checked   = !!d.available_now;
   if (fmEl) fmEl.value     = d.max_age_years || '';
-  selectedStations = new Set(d.filter_stations || []);
-  selectedWards    = d.wards?.length   ? new Set(d.wards)   : new Set(DEFAULT_WARDS);
+  selectedStations = new Set(Array.isArray(d.stored_filter_stations) ? d.stored_filter_stations : (d.filter_stations || []));
+  selectedWards    = Array.isArray(d.stored_wards) ? new Set(d.stored_wards) : (d.wards?.length ? new Set(d.wards) : new Set(DEFAULT_WARDS));
+  activeLocationFilter = locationModeFromSettings(d);
   selectedLayouts  = d.layouts?.length ? new Set(d.layouts) : new Set(DEFAULT_LAYOUTS);
   selectedFeatures = new Set(d.required_features || []);
   filterSources    = new Set(DEFAULT_SOURCES);
@@ -3044,19 +3127,24 @@ async function saveConfig() {
   const allWardCount = KU.length + SI.length + YOKOHAMA.length + KAWASAKI.length + SAGAMIHARA.length;
   const savedWards   = selectedWards.size >= allWardCount ? [] : [...selectedWards];
   const stations     = [...selectedStations];
+  const appliedWards = activeLocationFilter === 'area' ? savedWards : [];
+  const appliedStations = activeLocationFilter === 'line' ? stations : [];
 
   const payload = {
     min_rent:         parseInt(document.getElementById('min-rent').value) || 0,
     max_rent:         parseInt(document.getElementById('max-rent').value) || 0,
     layouts:          [...selectedLayouts],
-    wards:            savedWards,
+    wards:            appliedWards,
     min_size_m2:      parseFloat(document.getElementById('min-size').value) || 0,
     max_walk_min:     parseInt(document.getElementById('max-walk').value) || 0,
     has_parking:      document.getElementById('filter-parking')?.checked ? 1 : null,
     available_now:    document.getElementById('filter-available-now')?.checked ? 1 : 0,
     max_age_years:    parseInt(document.getElementById('filter-max-age')?.value) || 0,
     required_features: [...selectedFeatures],
-    filter_stations:  savedWards.length > 0 ? [] : stations,
+    filter_stations:  appliedStations,
+    stored_wards:     [...selectedWards],
+    stored_filter_stations: stations,
+    location_filter_mode: activeLocationFilter,
   };
 
   if (AUTH.token) {
@@ -4338,7 +4426,7 @@ function applyMapFilters() {
     if (_viewMode === 'starred' && !_savedListings.has(l.id)) return;
     if (_viewMode === 'filtered') {
       if (!filterSources.has(l.source)) return;
-      if (!selectedWards.has(l.ward)) return;
+      if (activeLocationFilter === 'area' && !selectedWards.has(l.ward)) return;
       if (!selectedLayouts.has(l.layout)) return;
       if (minRent > 0 && l.rent < minRent) return;
       if (maxRent > 0 && l.rent > maxRent) return;
@@ -4347,7 +4435,7 @@ function applyMapFilters() {
       if (hasParking && !l.has_parking) return;
       if (availNow && !(l.available_from || '').startsWith('随時')) return;
       if (maxAge > 0 && l.age_years != null && l.age_years > maxAge) return;
-      if (selectedStations.size > 0) {
+      if (activeLocationFilter === 'line' && selectedStations.size > 0) {
         const sta = l.nearest_station || '';
         if (![...selectedStations].some(s => sta.startsWith(s))) return;
       }
@@ -5520,8 +5608,9 @@ async function loadUserSettings() {
     if (fpEl) fpEl.checked = !!d.has_parking;
     if (faEl) faEl.checked = !!d.available_now;
     if (fmEl) fmEl.value   = d.max_age_years || '';
-    selectedStations = new Set(d.filter_stations || []);
-    selectedWards    = d.wards?.length   ? new Set(d.wards)   : new Set(DEFAULT_WARDS);
+    selectedStations = new Set(Array.isArray(d.stored_filter_stations) ? d.stored_filter_stations : (d.filter_stations || []));
+    selectedWards    = Array.isArray(d.stored_wards) ? new Set(d.stored_wards) : (d.wards?.length ? new Set(d.wards) : new Set(DEFAULT_WARDS));
+    activeLocationFilter = locationModeFromSettings(d);
     selectedLayouts  = d.layouts?.length ? new Set(d.layouts) : new Set(DEFAULT_LAYOUTS);
     selectedFeatures = new Set(d.required_features || []);
     filterSources    = new Set(DEFAULT_SOURCES);
