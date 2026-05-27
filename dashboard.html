@@ -1451,7 +1451,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 18:16 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 18:30 JST</p>
       </div>
 
 
@@ -1863,6 +1863,8 @@ const STRINGS = {
   ward_yokohama:        { ja:'横浜市',                en:'Yokohama',          uk:'Йокогама' },
   ward_kawasaki:        { ja:'川崎市',                en:'Kawasaki',          uk:'Кавасакі' },
   ward_sagamihara:      { ja:'相模原市',              en:'Sagamihara',        uk:'Сагаміхара' },
+  ward_saitama:         { ja:'埼玉（東京隣接）',        en:'Saitama (border)',  uk:'Сайтама (межа)' },
+  ward_chiba:           { ja:'千葉（東京隣接）',        en:'Chiba (border)',    uk:'Тіба (межа)' },
   // Status / errors
   no_match:             { ja:'条件に合う物件がありません。', en:'No matching properties.', uk:'Немає відповідних об\'єктів.' },
   no_disappeared:       { ja:'まだ消えた物件はありません。', en:'No removed properties yet.', uk:'Ще немає видалених об\'єктів.' },
@@ -2117,6 +2119,8 @@ const KAWASAKI = [
   '川崎市麻生区','川崎市多摩区','川崎市宮前区'
 ];
 const SAGAMIHARA = ['相模原市緑区','相模原市中央区','相模原市南区'];
+const SAITAMA_BORDER = ['川口市','蕨市','戸田市','和光市','朝霞市','新座市','草加市','八潮市','三郷市','所沢市'];
+const CHIBA_BORDER   = ['市川市','松戸市','浦安市'];
 const WARD_EN = {
   // 23 Tokyo Wards
   '千代田区':'Chiyoda','中央区':'Chuo','港区':'Minato','新宿区':'Shinjuku',
@@ -2149,6 +2153,11 @@ const WARD_EN = {
   '川崎市麻生区':'Kawasaki Asao','川崎市多摩区':'Kawasaki Tama','川崎市宮前区':'Kawasaki Miyamae',
   // Sagamihara
   '相模原市緑区':'Sagamihara Midori','相模原市中央区':'Sagamihara Chuo','相模原市南区':'Sagamihara Minami',
+  // Saitama border cities
+  '川口市':'Kawaguchi','蕨市':'Warabi','戸田市':'Toda','和光市':'Wako','朝霞市':'Asaka',
+  '新座市':'Niiza','草加市':'Soka','八潮市':'Yashio','三郷市':'Misato','所沢市':'Tokorozawa',
+  // Chiba border cities
+  '市川市':'Ichikawa','松戸市':'Matsudo','浦安市':'Urayasu',
 };
 
 function wardLabel(ja) {
@@ -3163,6 +3172,8 @@ function buildChips() {
   addGroup(wc, 'ward_yokohama',   YOKOHAMA);
   addGroup(wc, 'ward_kawasaki',   KAWASAKI);
   addGroup(wc, 'ward_sagamihara', SAGAMIHARA);
+  addGroup(wc, 'ward_saitama',    SAITAMA_BORDER);
+  addGroup(wc, 'ward_chiba',      CHIBA_BORDER);
 
   const ac = document.getElementById('appliance-chips');
   const pc = document.getElementById('program-chips');
@@ -4033,18 +4044,30 @@ async function loadAreaBoundaries() {
     if (r.ok) _addBoundaryLayer(await r.json(), '#1D9E75');
   } catch (_) {}
 
-  // Kanagawa cities — ward-level features filtered by city name
-  const KANAGAWA = 'https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/data/municipality/geojson/s0010/N03-21_14_210101.json';
-  try {
-    const r = await fetch(KANAGAWA);
-    if (!r.ok) return;
-    const gj = await r.json();
-    const cities = { '横浜市': '#1565C0', '川崎市': '#C62828', '相模原市': '#6A1B9A' };
-    Object.entries(cities).forEach(([city, color]) => {
-      const filtered = { ...gj, features: gj.features.filter(f => f.properties?.N03_003 === city) };
-      if (filtered.features.length) _addBoundaryLayer(filtered, color);
-    });
-  } catch (_) {}
+  const TOPO_BASE = 'https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/data/municipality/geojson/s0010/';
+
+  async function loadPrefCities(file, cityColors) {
+    try {
+      const r = await fetch(TOPO_BASE + file);
+      if (!r.ok) return;
+      const gj = await r.json();
+      Object.entries(cityColors).forEach(([city, color]) => {
+        const filtered = { ...gj, features: gj.features.filter(f => f.properties?.N03_003 === city) };
+        if (filtered.features.length) _addBoundaryLayer(filtered, color);
+      });
+    } catch (_) {}
+  }
+
+  // Kanagawa
+  loadPrefCities('N03-21_14_210101.json', { '横浜市': '#1565C0', '川崎市': '#C62828', '相模原市': '#6A1B9A' });
+  // Saitama border cities — orange
+  loadPrefCities('N03-21_11_210101.json', Object.fromEntries(
+    ['川口市','蕨市','戸田市','和光市','朝霞市','新座市','草加市','八潮市','三郷市','所沢市'].map(c => [c, '#E65100'])
+  ));
+  // Chiba border cities — teal
+  loadPrefCities('N03-21_12_210101.json', Object.fromEntries(
+    ['市川市','松戸市','浦安市'].map(c => [c, '#00838F'])
+  ));
 }
 
 function stationStr(nearest_station, walk_min) {

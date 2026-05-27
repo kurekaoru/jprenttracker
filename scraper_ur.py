@@ -63,6 +63,17 @@ UR_REGIONS = [
         # Sagamihara
         "相模原市緑区":    "151", "相模原市中央区": "152", "相模原市南区": "153",
     }),
+    # ── Saitama (tdfk=11) — Tokyo-bordering cities ────────────────────────────
+    ("11", "kanto", {
+        "川口市": "203", "蕨市":  "223", "戸田市": "224",
+        "和光市": "229", "朝霞市": "227", "新座市": "230",
+        "草加市": "221", "八潮市": "234", "三郷市": "237",
+        "所沢市": "208",
+    }),
+    # ── Chiba (tdfk=12) — Tokyo-bordering cities ──────────────────────────────
+    ("12", "kanto", {
+        "市川市": "203", "松戸市": "207", "浦安市": "227",
+    }),
 ]
 
 # Build a pattern to extract the primary municipality from a UR address string.
