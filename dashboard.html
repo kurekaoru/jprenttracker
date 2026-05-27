@@ -555,7 +555,7 @@
   /* Snake */
   .snake-wrap { --lc:#aaa; --rows:1; position:relative; padding:2px 1px 0; }
   .snake-track { position:absolute; inset:0 0 auto; width:100%; height:calc(var(--rows) * 38px); overflow:visible; pointer-events:none; z-index:0; }
-  .snake-track path { fill:none; stroke:var(--lc); stroke-width:4; stroke-linecap:round; stroke-linejoin:round; opacity:.34; vector-effect:non-scaling-stroke; }
+  .snake-track path { fill:none; stroke:var(--lc-dim,var(--lc)); stroke-width:4; stroke-linecap:round; stroke-linejoin:round; opacity:1; vector-effect:non-scaling-stroke; }
   .snake-row  { display:grid; grid-template-columns:repeat(4, 1fr); position:relative; z-index:1; height:38px; }
   .snake-sta  { min-width:0; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; position:relative; z-index:1; padding:1px 0 0; }
   .snake-sta.empty { cursor:default; pointer-events:none; }
@@ -569,12 +569,12 @@
   .snake-sta.active .snake-name { color:#fff; font-weight:800; }
   .graph-wrap { --lc:#aaa; --rows:1; --rowh:38px; position:relative; height:calc(var(--rows) * var(--rowh)); padding:2px 1px 0; }
   .graph-track { position:absolute; inset:0 0 auto; width:100%; height:calc(var(--rows) * var(--rowh)); overflow:visible; pointer-events:none; z-index:0; }
-  .graph-track path { fill:none; stroke:var(--lc); stroke-width:4; stroke-linecap:round; stroke-linejoin:round; opacity:.34; vector-effect:non-scaling-stroke; }
-  .graph-track path.branch-link { opacity:.34; stroke-width:4; stroke-dasharray:none; }
+  .graph-track path { fill:none; stroke:var(--lc-dim,var(--lc)); stroke-width:4; stroke-linecap:round; stroke-linejoin:round; opacity:1; vector-effect:non-scaling-stroke; }
+  .graph-track path.branch-link { opacity:1; stroke-width:4; stroke-dasharray:none; }
   .graph-sta { position:absolute; width:25%; transform:translate(-50%, 0); }
   .branch-label { position:absolute; left:2px; font-size:8px; line-height:1; color:rgba(255,255,255,.42); font-weight:800; letter-spacing:.04em; pointer-events:none; z-index:1; }
   .loop-wrap { --lc:#9ACD32; position:relative; height:608px; margin:12px 1px 14px; }
-  .loop-ring { position:absolute; inset:14px calc(12.5% - 2px) 30px; border:4px solid var(--lc); border-radius:36px; opacity:.36; pointer-events:none; }
+  .loop-ring { position:absolute; inset:14px calc(12.5% - 2px) 30px; border:4px solid var(--lc-dim,var(--lc)); border-radius:36px; pointer-events:none; }
   .loop-sta { position:absolute; width:25%; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; transform:translate(-50%,-9px); padding:1px 0 0; }
   .loop-sta .snake-dot { width:16px; height:16px; }
   .loop-sta .snake-name { font-size:8px; line-height:1.15; white-space:nowrap; min-height:11px; max-width:58px; text-overflow:ellipsis; overflow:hidden; }
@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 00:25 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 00:29 JST</p>
       </div>
 
 
@@ -2335,6 +2335,16 @@ function _sdc(svcLv) {
   return SERVICE_COLORS[svcLv] || SERVICE_COLORS[0];
 }
 
+function dimLineColor(hex, alpha = 0.36) {
+  const raw = String(hex || '').replace('#', '');
+  const full = raw.length === 3 ? raw.split('').map(ch => ch + ch).join('') : raw;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return hex;
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 function lineIconSvg(line) {
   const code = escHtml(line.code);
   const color = escHtml(line.color);
@@ -2355,6 +2365,7 @@ function renderLoopLine(line) {
   const wrap = document.createElement('div');
   wrap.className = 'loop-wrap';
   wrap.style.setProperty('--lc', line.color);
+  wrap.style.setProperty('--lc-dim', dimLineColor(line.color));
   wrap.innerHTML = '<div class="loop-ring"></div>';
   const positions = loopPositions(line.stations.length);
   line.stations.forEach(([name, svc], i) => {
@@ -2595,6 +2606,7 @@ function renderGraphLine(line) {
   const wrap = document.createElement('div');
   wrap.className = 'graph-wrap';
   wrap.style.setProperty('--lc', line.color);
+  wrap.style.setProperty('--lc-dim', dimLineColor(line.color));
   wrap.style.setProperty('--rows', graph.rows);
   wrap.style.setProperty('--rowh', '46px');
   wrap.innerHTML = graphTrackSvg(graph);
