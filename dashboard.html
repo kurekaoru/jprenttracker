@@ -1438,7 +1438,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 14:11 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-27 14:16 JST</p>
       </div>
 
 
@@ -2398,32 +2398,34 @@ function updateLocationModeUi() {
 }
 
 function lineGraphLayout(line) {
-  const COLS = 4;
   const branchGap = line.branches?.length ? 2 : 1;
+  const mainCols = line.branches?.length ? [1, 2, 3] : [0, 1, 2, 3];
+  const branchCols = [0, 1, 2, 3];
   const stas = _lineMainStations(line);
   const nodes = [];
   const edges = [];
   const labels = [];
-  const placePath = (pathStations, startRow, startLtr = true, branch = false) => {
+  const placePath = (pathStations, startRow, cols, startLtr = true, branch = false) => {
     let i = 0, ltr = startLtr;
+    const rowSize = cols.length;
     while (i < pathStations.length) {
-      const chunk = pathStations.slice(i, i + COLS);
+      const chunk = pathStations.slice(i, i + rowSize);
       const cells = ltr ? [...chunk] : [...chunk].reverse();
-      while (cells.length < COLS) {
+      while (cells.length < rowSize) {
         if (ltr) cells.push(null);
         else cells.unshift(null);
       }
-      const row = startRow + Math.floor(i / COLS);
-      cells.forEach((sta, col) => {
-        if (sta) nodes.push({ name: sta[0], svc: sta[1], row, col, branch });
+      const row = startRow + Math.floor(i / rowSize);
+      cells.forEach((sta, idx) => {
+        if (sta) nodes.push({ name: sta[0], svc: sta[1], row, col: cols[idx], branch });
       });
       ltr = !ltr;
-      i += COLS;
+      i += rowSize;
     }
-    return Math.ceil(pathStations.length / COLS);
+    return Math.ceil(pathStations.length / rowSize);
   };
 
-  const mainRows = placePath(stas, 0, true, false);
+  const mainRows = placePath(stas, 0, mainCols, true, false);
   lineGraphEdges(line, false).forEach(edge => edges.push(edge));
 
   let nextBranchRow = mainRows + (line.branches?.length ? 2 : 0);
@@ -2432,12 +2434,12 @@ function lineGraphLayout(line) {
     const base = byName.get(branch.from);
     if (!base) return;
     labels.push({ text: `${branch.from} branch`, row: nextBranchRow - 1 });
-    const branchRows = placePath(branch.stations, nextBranchRow, base.col < 2, true);
+    const branchRows = placePath(branch.stations, nextBranchRow, branchCols, true, true);
     branch.stations.forEach(([name]) => byName.set(name, nodes.find(node => node.name === name)));
     nextBranchRow += branchRows + branchGap;
   });
 
-  return { nodes, edges, labels, rows: Math.max(1, ...nodes.map(node => node.row + 1)) };
+  return { nodes, edges, labels, hasBranches: !!line.branches?.length, rows: Math.max(1, ...nodes.map(node => node.row + 1)) };
 }
 
 function renderGraphLine(line) {
@@ -2485,7 +2487,7 @@ function graphTrackSvg(graph) {
     const bx = colXs[b.col], by = dotY + b.row * rowH;
     const branchLink = !!b.branch && !a.branch;
     if (ay === by) return { d: `M ${ax} ${ay} L ${bx} ${by}`, branchLink };
-    const sideX = ax > 50 ? 96 : 4;
+    const sideX = branchLink ? 4 : (graph.hasBranches && !a.branch && !b.branch && a.col === 1 ? 28 : (ax > 50 ? 96 : 4));
     return { d: `M ${ax} ${ay} C ${sideX} ${ay}, ${sideX} ${by}, ${bx} ${by}`, branchLink };
   }).filter(Boolean);
   return `<svg class="graph-track" viewBox="0 0 100 ${graph.rows * rowH}" preserveAspectRatio="none" aria-hidden="true">${paths.map(path => `<path class="${path.branchLink ? 'branch-link' : ''}" d="${path.d}"/>`).join('')}</svg>`;
