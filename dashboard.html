@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 14:22 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 14:27 JST</p>
       </div>
 
 
@@ -2446,7 +2446,11 @@ function renderOedoLine(line) {
   const addNode = (name, svc, row, col, group = 'oedo') => nodes.push({ name, svc, row, col, group });
   const branchStations = ['光が丘','練馬春日町','豊島園','練馬','新江古田','落合南長崎','中井','東中野','中野坂上','西新宿五丁目']
     .map(name => [name, _stationSvc(line, name)]);
-  branchStations.forEach(([name, svc], idx) => addNode(name, svc, Math.floor(idx / 5), idx % 5, 'hikarigaoka'));
+  branchStations.forEach(([name, svc], idx) => {
+    const row = Math.floor(idx / 5);
+    const col = row % 2 === 0 ? idx % 5 : 4 - (idx % 5);
+    addNode(name, svc, row, col, 'hikarigaoka');
+  });
   const tochomaeRow = Math.ceil(branchStations.length / 5);
   const tochomaeSvc = _stationSvc(line, '都庁前');
   addNode('都庁前', tochomaeSvc, tochomaeRow, 0, 'loop');
