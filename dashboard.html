@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 12:53 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 14:16 JST</p>
       </div>
 
 
@@ -2444,7 +2444,8 @@ function renderOedoLine(line) {
   const nodes = [];
   const edges = [];
   const addNode = (name, svc, row, col, group = 'oedo') => nodes.push({ name, svc, row, col, group });
-  const branchStations = [...branch.stations].reverse();
+  const branchStations = ['光が丘','練馬春日町','豊島園','練馬','新江古田','落合南長崎','中井','東中野','中野坂上','西新宿五丁目']
+    .map(name => [name, _stationSvc(line, name)]);
   branchStations.forEach(([name, svc], idx) => addNode(name, svc, Math.floor(idx / 5), idx % 5, 'hikarigaoka'));
   const tochomaeRow = Math.ceil(branchStations.length / 5);
   const tochomaeSvc = _stationSvc(line, '都庁前');
@@ -2452,15 +2453,20 @@ function renderOedoLine(line) {
   const branchPath = [...branchStations.map(([name]) => name), '都庁前'];
   branchPath.slice(1).forEach((name, idx) => edges.push([branchPath[idx], name]));
 
-  const loopStations = _lineMainStations(line).filter(([name]) => name !== '都庁前');
+  const loopStations = [
+    '新宿','代々木','国立競技場','青山一丁目','六本木','麻布十番','赤羽橋','大門','汐留','築地市場',
+    '勝どき','月島','門前仲町','清澄白河','森下','両国','蔵前','新御徒町','上野御徒町','本郷三丁目',
+    '春日','飯田橋','牛込神楽坂','牛込柳町','若松河田','東新宿','新宿西口'
+  ].map(name => [name, _stationSvc(line, name)]);
   const loopStart = tochomaeRow + 1;
-  const leftRows = [0, 1, 2, 3, 4, 5, 6];
+  const leftRows = [1, 2, 3, 4, 5, 6, 7];
   const bottomCols = [1, 2, 3];
-  const rightRows = [6, 5, 4, 3, 2, 1, 0];
+  const rightRows = [7, 6, 5, 4, 3, 2, 1];
   const topCols = [3, 2, 1];
   const loopSlots = [
+    [loopStart, 0],
     ...leftRows.map(r => [loopStart + r, 0]),
-    ...bottomCols.map(c => [loopStart + 7, c]),
+    ...bottomCols.map(c => [loopStart + 8, c]),
     ...rightRows.map(r => [loopStart + r, 4]),
     ...topCols.map(c => [loopStart, c]),
   ];
