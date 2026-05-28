@@ -1468,7 +1468,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 00:02 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 00:10 JST</p>
       </div>
 
 
@@ -4487,72 +4487,79 @@ function initMap() {
   loadListings();
 }
 
-const _boundaryLayers = []; // { layer, color, wards: Set }
-
-function _addBoundaryLayer(gj, color, wards) {
-  const layer = new google.maps.Data({ map });
-  layer.addGeoJson(gj);
-  layer.setStyle({ strokeColor: color, strokeWeight: 1.5, strokeOpacity: 0.4,
-                   fillColor: color, fillOpacity: 0.04, clickable: false });
-  if (wards) {
-    _boundaryLayers.push({ layer, color, wards: new Set(wards) });
-    updateBoundaryStyles();
-  }
-}
+const _boundaryLayers = []; // { restyleLayer: fn }
 
 function updateBoundaryStyles() {
-  if (!_boundaryLayers.length) return;
-  const useArea = activeLocationFilter === 'area';
-  _boundaryLayers.forEach(({ layer, color, wards }) => {
-    const sel = !useArea || [...wards].some(w => selectedWards.has(w));
-    layer.setStyle({
-      strokeColor: color, strokeWeight: 1.5, clickable: false,
-      strokeOpacity: sel ? 0.55 : 0.12,
-      fillColor: color,
-      fillOpacity:  sel ? 0.11 : 0.015,
-    });
-  });
+  _boundaryLayers.forEach(({ restyleLayer }) => restyleLayer());
 }
 
 async function loadAreaBoundaries() {
-  // Tokyo — single prefecture polygon
-  try {
-    const r = await fetch('https://raw.githubusercontent.com/dataofjapan/land/master/tokyo.geojson');
-    if (r.ok) _addBoundaryLayer(await r.json(), '#1D9E75', [...KU, ...SI]);
-  } catch (_) {}
-
   const TOPO_BASE = 'https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/data/municipality/geojson/s0010/';
 
-  async function loadPrefCities(file, cityDefs) {
-    // cityDefs: { cityName: { color, wards } }
+  // Match a GeoJSON feature to its ward name using N03_003 (city) + N03_004 (district)
+  function featureWard(feature, wardSet) {
+    const n3 = feature.getProperty('N03_003') || '';
+    const n4 = feature.getProperty('N03_004') || '';
+    if (wardSet.has(n3 + n4)) return n3 + n4;  // e.g. '横浜市西区'
+    if (wardSet.has(n4))       return n4;         // e.g. '千代田区' or '川口市'
+    return null;
+  }
+
+  // One Data layer per ward group; per-feature style function so each ward lights up independently
+  function addGroupLayer(gj, color, wards) {
+    const wardSet = new Set(wards);
+    const features = gj.features.filter(f => {
+      const n3 = f.properties?.N03_003 || '';
+      const n4 = f.properties?.N03_004 || '';
+      return wardSet.has(n3 + n4) || wardSet.has(n4);
+    });
+    if (!features.length) return;
+
+    const layer = new google.maps.Data({ map });
+    layer.addGeoJson({ type: 'FeatureCollection', features });
+
+    const restyleLayer = () => {
+      const useArea = activeLocationFilter === 'area';
+      layer.setStyle(feature => {
+        const ward = featureWard(feature, wardSet);
+        if (!ward) return { visible: false };
+        const sel = !useArea || selectedWards.has(ward);
+        return {
+          strokeColor: color, strokeWeight: 1.5, clickable: false,
+          strokeOpacity: sel ? 0.55 : 0.12,
+          fillColor: color,
+          fillOpacity:  sel ? 0.11 : 0.015,
+        };
+      });
+    };
+    _boundaryLayers.push({ restyleLayer });
+    restyleLayer();
+  }
+
+  async function loadFile(file, groups) {
     try {
       const r = await fetch(TOPO_BASE + file);
       if (!r.ok) return;
       const gj = await r.json();
-      Object.entries(cityDefs).forEach(([city, { color, wards }]) => {
-        // N03_003 = designated city name; N03_004 = regular municipality name
-        const filtered = { ...gj, features: gj.features.filter(f =>
-          f.properties?.N03_003 === city || f.properties?.N03_004 === city
-        )};
-        if (filtered.features.length) _addBoundaryLayer(filtered, color, wards);
-      });
+      groups.forEach(({ color, wards }) => addGroupLayer(gj, color, wards));
     } catch (_) {}
   }
 
-  // Kanagawa
-  loadPrefCities('N03-21_14_210101.json', {
-    '横浜市': { color: '#1565C0', wards: YOKOHAMA },
-    '川崎市': { color: '#C62828', wards: KAWASAKI },
-    '相模原市': { color: '#6A1B9A', wards: SAGAMIHARA },
-  });
-  // Saitama border cities — orange
-  loadPrefCities('N03-21_11_210101.json', Object.fromEntries(
-    SAITAMA_BORDER.map(c => [c, { color: '#E65100', wards: [c] }])
-  ));
-  // Chiba border cities — teal
-  loadPrefCities('N03-21_12_210101.json', Object.fromEntries(
-    CHIBA_BORDER.map(c => [c, { color: '#00838F', wards: [c] }])
-  ));
+  // Tokyo — per-ward features (KU=23区 green, SI=市部 amber)
+  loadFile('N03-21_13_210101.json', [
+    { color: '#1D9E75', wards: KU },
+    { color: '#D3A200', wards: SI },
+  ]);
+  // Kanagawa — per-ward features for each city
+  loadFile('N03-21_14_210101.json', [
+    { color: '#1565C0', wards: YOKOHAMA },
+    { color: '#C62828', wards: KAWASAKI },
+    { color: '#6A1B9A', wards: SAGAMIHARA },
+  ]);
+  // Saitama border cities
+  loadFile('N03-21_11_210101.json', [{ color: '#E65100', wards: SAITAMA_BORDER }]);
+  // Chiba border cities
+  loadFile('N03-21_12_210101.json', [{ color: '#00838F', wards: CHIBA_BORDER }]);
 }
 
 function stationStr(nearest_station, walk_min) {
