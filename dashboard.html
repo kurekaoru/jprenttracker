@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 14:45 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 14:51 JST</p>
       </div>
 
 
@@ -2503,7 +2503,6 @@ function schematicBranches(line) {
 function branchDisplayName(line, branch) {
   if (line.id === 'OH' && branch.from === '新百合ケ丘') return '多摩線';
   if (line.id === 'OH' && branch.from === '相模大野') return '江ノ島線';
-  if (line.id === 'KO' && branch.from === '北野') return '高尾線';
   return branch.name || `${branch.from} branch`;
 }
 
@@ -2706,8 +2705,9 @@ function lineGraphLayout(line) {
       const [name, svc] = branches[0].stations[0] || [];
       if (base && name) {
         nodes.push({ name, svc, row: base.row + 1, col: base.col, branch: true, group: 'branch0', escapeCol: base.col });
-        labels.push({ text: branchDisplayName(line, branches[0]), row: base.row + 2, col: base.col });
       }
+      const takaoTerminal = nodes.find(node => node.name === '高尾山口');
+      if (takaoTerminal) labels.push({ text: '高尾線', row: takaoTerminal.row, col: Math.min(takaoTerminal.col + 1, colXs.length - 1) });
       renderedBranchCount = 1;
     } else if (line.id === 'M' && branches[0] && firstBranchIdx >= 0) {
       const branch = branches[0];
