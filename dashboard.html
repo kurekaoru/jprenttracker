@@ -540,6 +540,11 @@
   .station-override-banner { background:rgba(239,159,39,0.14); border:1px solid rgba(239,159,39,0.35); border-radius:6px; padding:7px 9px; font-size:10px; color:var(--warn); margin-bottom:8px; line-height:1.55; }
   /* ── Railway line accordion + snake ─────────────────────────────────────── */
   .line-item { border-bottom:1px solid rgba(255,255,255,0.06); }
+  /* City-level nested accordion within prefecture */
+  .line-item--sub { border-bottom:none; }
+  .line-header--sub { padding:4px 3px 4px 18px; }
+  .line-item--sub .line-body { padding-left:18px; }
+
   .line-header { display:flex; align-items:center; gap:7px; padding:6px 3px; cursor:pointer; user-select:none; transition:background .12s; border-radius:6px; }
   .line-header:hover { background:rgba(255,255,255,0.05); }
   .line-icon { width:24px; height:24px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
@@ -1468,7 +1473,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 00:34 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 00:46 JST</p>
       </div>
 
 
@@ -1874,12 +1879,7 @@ const STRINGS = {
   col_days:             { ja:'掲載日数',              en:'Listed',            uk:'Днів' },
   col_disappeared:      { ja:'消去日',               en:'Removed',           uk:'Видалено' },
   col_duration:         { ja:'掲載期間',              en:'Duration',          uk:'Тривалість' },
-  // buildChips labels
-  ward_ku:              { ja:'区部',                 en:'Tokyo Wards',       uk:'Райони Токіо' },
-  ward_si:              { ja:'市部（東京）',            en:'Tokyo Cities',      uk:'Міста Токіо' },
-  ward_kanagawa:        { ja:'神奈川県',              en:'Kanagawa',          uk:'Канаґава' },
-  ward_saitama:         { ja:'埼玉県',                 en:'Saitama',           uk:'Сайтама' },
-  ward_chiba:           { ja:'千葉県',                 en:'Chiba',             uk:'Тіба' },
+  // prefecture/city labels are now inline in PREF_GROUPS, not in STRINGS
   // Status / errors
   no_match:             { ja:'条件に合う物件がありません。', en:'No matching properties.', uk:'Немає відповідних об\'єктів.' },
   no_disappeared:       { ja:'まだ消えた物件はありません。', en:'No removed properties yet.', uk:'Ще немає видалених об\'єктів.' },
@@ -2135,62 +2135,98 @@ const SI = [
   '八王子市','立川市','武蔵野市','三鷹市','府中市','昭島市','調布市','町田市',
   '小金井市','小平市','日野市','東村山市','国分寺市','国立市','西東京市',
   '福生市','狛江市','東大和市','清瀬市','東久留米市','武蔵村山市','多摩市',
-  '稲城市','羽村市','あきる野市','日の出町','檜原村','奥多摩町','瑞穂町'
+  '稲城市','青梅市','羽村市','あきる野市','日の出町','檜原村','奥多摩町','瑞穂町'
 ];
-const KANAGAWA = [
-  // 横浜市
+
+// Kanagawa: split by city so boundaries can be coloured per city
+const YOKOHAMA = [
   '横浜市鶴見区','横浜市神奈川区','横浜市西区','横浜市中区','横浜市南区',
   '横浜市保土ケ谷区','横浜市磯子区','横浜市金沢区','横浜市港北区','横浜市戸塚区',
   '横浜市港南区','横浜市旭区','横浜市緑区','横浜市瀬谷区','横浜市栄区',
-  '横浜市青葉区','横浜市都筑区',
-  // 川崎市
+  '横浜市泉区','横浜市青葉区','横浜市都筑区'
+];
+const KAWASAKI = [
   '川崎市川崎区','川崎市幸区','川崎市中原区','川崎市高津区',
-  '川崎市麻生区','川崎市多摩区','川崎市宮前区',
-  // 相模原市
-  '相模原市緑区','相模原市中央区','相模原市南区',
-  // 他市町村
+  '川崎市麻生区','川崎市多摩区','川崎市宮前区'
+];
+const SAGAMIHARA = ['相模原市緑区','相模原市中央区','相模原市南区'];
+const KANAGAWA_CITIES = [
   '横須賀市','平塚市','鎌倉市','藤沢市','小田原市','茅ヶ崎市','逗子市','三浦市',
   '秦野市','厚木市','大和市','伊勢原市','海老名市','座間市','南足柄市','綾瀬市',
   '葉山町','寒川町','大磯町','二宮町','中井町','大井町','松田町','山北町',
   '開成町','箱根町','真鶴町','湯河原町','愛川町','清川村',
 ];
-const SAITAMA = [
-  // さいたま市
+
+// Saitama: さいたま市 wards separately for 3-level hierarchy
+const SAITAMA_CITY = [
   'さいたま市西区','さいたま市北区','さいたま市大宮区','さいたま市見沼区',
   'さいたま市中央区','さいたま市桜区','さいたま市浦和区','さいたま市南区','さいたま市岩槻区',
-  // 市
+];
+const SAITAMA_CITIES = [
   '川越市','熊谷市','川口市','行田市','秩父市','所沢市','飯能市','加須市','本庄市',
   '東松山市','春日部市','狭山市','羽生市','鴻巣市','深谷市','上尾市','草加市','越谷市',
   '蕨市','戸田市','入間市','朝霞市','志木市','和光市','新座市','桶川市','久喜市',
   '北本市','八潮市','富士見市','三郷市','蓮田市','坂戸市','幸手市','鶴ヶ島市','日高市',
   '吉川市','ふじみ野市','白岡市',
-  // 町村
   '伊奈町','三芳町','毛呂山町','越生町','滑川町','嵐山町','小川町','川島町','吉見町',
   '鳩山町','ときがわ町','横瀬町','皆野町','長瀞町','小鹿野町','美里町','神川町',
   '上里町','寄居町','宮代町','杉戸町','松伏町','東秩父村',
 ];
-const CHIBA = [
-  // 千葉市
+
+// Chiba: 千葉市 wards separately for 3-level hierarchy
+const CHIBA_CITY = [
   '千葉市中央区','千葉市花見川区','千葉市稲毛区','千葉市若葉区','千葉市緑区','千葉市美浜区',
-  // 市
+];
+const CHIBA_CITIES = [
   '銚子市','市川市','船橋市','館山市','木更津市','松戸市','野田市','茂原市','成田市',
   '佐倉市','東金市','旭市','習志野市','柏市','勝浦市','市原市','流山市','八千代市',
   '我孫子市','鴨川市','鎌ケ谷市','君津市','富津市','浦安市','四街道市','袖ケ浦市',
   '八街市','印西市','白井市','富里市','南房総市','匝瑳市','香取市','山武市','いすみ市',
   '大網白里市',
-  // 町村
   '酒々井町','栄町','神崎町','多古町','東庄町','九十九里町','芝山町','横芝光町',
   '一宮町','睦沢町','長生村','白子町','長柄町','長南町','大多喜町','御宿町','鋸南町',
 ];
 
-const WARD_GROUPS = [
-  { id: 'ku',       labelKey: 'ward_ku',       wards: KU,       color: '#1D9E75' },
-  { id: 'si',       labelKey: 'ward_si',       wards: SI,       color: '#D3A200' },
-  { id: 'kanagawa', labelKey: 'ward_kanagawa', wards: KANAGAWA, color: '#1565C0' },
-  { id: 'saitama',  labelKey: 'ward_saitama',  wards: SAITAMA,  color: '#E65100' },
-  { id: 'chiba',    labelKey: 'ward_chiba',    wards: CHIBA,    color: '#00838F' },
+// Prefecture > City > District hierarchy
+const PREF_GROUPS = [
+  {
+    id: 'tokyo', color: '#4CAF7A',
+    label: { ja: '東京都', en: 'Tokyo', uk: 'Токіо' },
+    cities: [
+      { id: 'ku', label: { ja: '特別区（23区）', en: '23 Wards', uk: '23 Райони' }, wards: KU },
+      { id: 'si', label: { ja: '多摩・島嶼',     en: 'Tama / Islands',  uk: 'Тама' }, wards: SI },
+    ]
+  },
+  {
+    id: 'kanagawa', color: '#1565C0',
+    label: { ja: '神奈川県', en: 'Kanagawa', uk: 'Канаґава' },
+    cities: [
+      { id: 'yokohama',        label: { ja: '横浜市',    en: 'Yokohama',    uk: 'Йокогама'   }, wards: YOKOHAMA },
+      { id: 'kawasaki',        label: { ja: '川崎市',    en: 'Kawasaki',    uk: 'Кавасакі'   }, wards: KAWASAKI },
+      { id: 'sagamihara',      label: { ja: '相模原市',  en: 'Sagamihara',  uk: 'Сагаміхара' }, wards: SAGAMIHARA },
+      { id: 'kanagawa_cities', label: { ja: 'その他市町村', en: 'Other cities', uk: 'Інші міста' }, wards: KANAGAWA_CITIES },
+    ]
+  },
+  {
+    id: 'saitama', color: '#E65100',
+    label: { ja: '埼玉県', en: 'Saitama', uk: 'Сайтама' },
+    cities: [
+      { id: 'saitama_city',   label: { ja: 'さいたま市',  en: 'Saitama City',  uk: 'м. Сайтама' }, wards: SAITAMA_CITY },
+      { id: 'saitama_cities', label: { ja: 'その他市町村', en: 'Other cities', uk: 'Інші міста' }, wards: SAITAMA_CITIES },
+    ]
+  },
+  {
+    id: 'chiba', color: '#00838F',
+    label: { ja: '千葉県', en: 'Chiba', uk: 'Тіба' },
+    cities: [
+      { id: 'chiba_city',   label: { ja: '千葉市',     en: 'Chiba City',   uk: 'м. Тіба'    }, wards: CHIBA_CITY },
+      { id: 'chiba_cities', label: { ja: 'その他市町村', en: 'Other cities', uk: 'Інші міста' }, wards: CHIBA_CITIES },
+    ]
+  },
 ];
-let _wardGroupOpen = new Set(['ku']);
+
+let _prefOpen = new Set(['tokyo']);
+let _cityOpen = new Set(['tokyo:ku','tokyo:si']);
 const WARD_EN = {
   // 23 Tokyo Wards
   '千代田区':'Chiyoda','中央区':'Chuo','港区':'Minato','新宿区':'Shinjuku',
@@ -2206,7 +2242,7 @@ const WARD_EN = {
   '国分寺市':'Kokubunji','国立市':'Kunitachi','西東京市':'Nishi-Tokyo',
   '福生市':'Fussa','狛江市':'Komae','東大和市':'Higashi-Yamato','清瀬市':'Kiyose',
   '東久留米市':'Higashi-Kurume','武蔵村山市':'Musashimurayama','多摩市':'Tama',
-  '稲城市':'Inagi','羽村市':'Hamura','あきる野市':'Akiruno','日の出町':'Hinode',
+  '稲城市':'Inagi','青梅市':'Ome','羽村市':'Hamura','あきる野市':'Akiruno','日の出町':'Hinode',
   '檜原村':'Hinohara','奥多摩町':'Okutama','瑞穂町':'Mizuho',
   // Kanagawa
   '横浜市鶴見区':'Yokohama Tsurumi','横浜市神奈川区':'Yokohama Kanagawa',
@@ -2216,7 +2252,7 @@ const WARD_EN = {
   '横浜市戸塚区':'Yokohama Totsuka','横浜市港南区':'Yokohama Konan',
   '横浜市旭区':'Yokohama Asahi','横浜市緑区':'Yokohama Midori',
   '横浜市瀬谷区':'Yokohama Seya','横浜市栄区':'Yokohama Sakae',
-  '横浜市青葉区':'Yokohama Aoba','横浜市都筑区':'Yokohama Tsuzuki',
+  '横浜市泉区':'Yokohama Izumi','横浜市青葉区':'Yokohama Aoba','横浜市都筑区':'Yokohama Tsuzuki',
   '川崎市川崎区':'Kawasaki Kawasaki','川崎市幸区':'Kawasaki Saiwai',
   '川崎市中原区':'Kawasaki Nakahara','川崎市高津区':'Kawasaki Takatsu',
   '川崎市麻生区':'Kawasaki Asao','川崎市多摩区':'Kawasaki Tama','川崎市宮前区':'Kawasaki Miyamae',
@@ -3591,75 +3627,152 @@ function updateStationBanner() {
   updateLocationModeUi();
 }
 
+function _prefAllWards(pref) { return pref.cities.flatMap(c => c.wards); }
+function _citySelCount(city) { return city.wards.filter(w => selectedWards.has(w)).length; }
+function _prefSelCount(pref) { return _prefAllWards(pref).filter(w => selectedWards.has(w)).length; }
+function tLabel(obj) { return (obj && (obj[_lang] || obj['ja'])) || ''; }
+
 function buildDistrictAccordion() {
   const wc = document.getElementById('ward-chips');
   if (!wc) return;
   wc.innerHTML = '';
-  WARD_GROUPS.forEach(group => {
-    const selCount = group.wards.filter(w => selectedWards.has(w)).length;
-    const item = document.createElement('div');
-    item.className = 'line-item' + (_wardGroupOpen.has(group.id) ? ' open' : '');
-    item.id = 'wgi-' + group.id;
-    const hdr = document.createElement('div');
-    hdr.className = 'line-header';
-    hdr.onclick = () => {
-      const it = document.getElementById('wgi-' + group.id);
-      const bd = document.getElementById('wgb-' + group.id);
-      const open = it.classList.toggle('open');
-      bd.style.display = open ? 'block' : 'none';
-      if (open) _wardGroupOpen.add(group.id); else _wardGroupOpen.delete(group.id);
+
+  PREF_GROUPS.forEach(pref => {
+    const prefSel   = _prefSelCount(pref);
+    const prefTotal = _prefAllWards(pref).length;
+    const prefOpen  = _prefOpen.has(pref.id);
+
+    const prefItem = document.createElement('div');
+    prefItem.className = 'line-item' + (prefOpen ? ' open' : '');
+    prefItem.id = 'pgi-' + pref.id;
+
+    const prefHdr = document.createElement('div');
+    prefHdr.className = 'line-header';
+    prefHdr.onclick = () => {
+      const open = prefItem.classList.toggle('open');
+      prefBody.style.display = open ? 'block' : 'none';
+      if (open) _prefOpen.add(pref.id); else _prefOpen.delete(pref.id);
     };
-    hdr.innerHTML = `
-      <div class="line-icon"><span style="width:12px;height:12px;border-radius:50%;background:${group.color};display:block;flex-shrink:0;"></span></div>
-      <span class="line-name">${t(group.labelKey)}</span>
-      <span class="line-sel" id="wgsel-${group.id}">${selCount > 0 ? selCount : ''}</span>
+    prefHdr.innerHTML = `
+      <div class="line-icon"><span style="width:12px;height:12px;border-radius:50%;background:${pref.color};display:block;flex-shrink:0;"></span></div>
+      <span class="line-name">${tLabel(pref.label)}</span>
+      <span class="line-sel" id="pgsel-${pref.id}">${prefSel > 0 ? prefSel : ''}</span>
       <span class="line-chev">▼</span>`;
-    const body = document.createElement('div');
-    body.className = 'line-body';
-    body.style.display = _wardGroupOpen.has(group.id) ? 'block' : 'none';
-    body.id = 'wgb-' + group.id;
-    const acts = document.createElement('div');
-    acts.className = 'line-actions';
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'line-action';
-    btn.id = 'wgbtn-' + group.id;
-    btn.textContent = selCount === group.wards.length ? '全OFF' : '全ON';
-    btn.onclick = e => { e.stopPropagation(); _setWardGroupSelected(group.id); };
-    acts.appendChild(btn);
-    body.appendChild(acts);
-    const row = document.createElement('div');
-    row.className = 'chips';
-    group.wards.forEach(w => makeChip(w, selectedWards, row, () => {
-      if (!ensureLocationFilterMode('area')) return false;
-      _updateWardGroupSel(group.id);
-      applyMapFilters();
-      return true;
-    }, wardLabel(w)));
-    body.appendChild(row);
-    item.appendChild(hdr);
-    item.appendChild(body);
-    wc.appendChild(item);
+
+    const prefBody = document.createElement('div');
+    prefBody.className = 'line-body';
+    prefBody.style.display = prefOpen ? 'block' : 'none';
+    prefBody.id = 'pgb-' + pref.id;
+
+    const prefActs = document.createElement('div');
+    prefActs.className = 'line-actions';
+    const prefBtn = document.createElement('button');
+    prefBtn.type = 'button'; prefBtn.className = 'line-action';
+    prefBtn.id = 'pgbtn-' + pref.id;
+    prefBtn.textContent = prefSel === prefTotal ? '全OFF' : '全ON';
+    prefBtn.onclick = e => { e.stopPropagation(); _setPrefSelected(pref.id); };
+    prefActs.appendChild(prefBtn);
+    prefBody.appendChild(prefActs);
+
+    pref.cities.forEach(city => {
+      const ck      = pref.id + ':' + city.id;
+      const citySel = _citySelCount(city);
+      const cityOpen = _cityOpen.has(ck);
+
+      const cityItem = document.createElement('div');
+      cityItem.className = 'line-item line-item--sub' + (cityOpen ? ' open' : '');
+      cityItem.id = 'cgi-' + ck;
+
+      const cityHdr = document.createElement('div');
+      cityHdr.className = 'line-header line-header--sub';
+      const cityBody = document.createElement('div');
+      cityBody.className = 'line-body';
+      cityBody.style.display = cityOpen ? 'block' : 'none';
+      cityBody.id = 'cgb-' + ck;
+      cityHdr.onclick = () => {
+        const open = cityItem.classList.toggle('open');
+        cityBody.style.display = open ? 'block' : 'none';
+        if (open) _cityOpen.add(ck); else _cityOpen.delete(ck);
+      };
+      cityHdr.innerHTML = `
+        <span class="line-name" style="font-size:10.5px;">${tLabel(city.label)}</span>
+        <span class="line-sel" id="cgsel-${ck}">${citySel > 0 ? citySel : ''}</span>
+        <span class="line-chev">▼</span>`;
+
+      const cityActs = document.createElement('div');
+      cityActs.className = 'line-actions';
+      const cityBtn = document.createElement('button');
+      cityBtn.type = 'button'; cityBtn.className = 'line-action';
+      cityBtn.id = 'cgbtn-' + ck;
+      cityBtn.textContent = citySel === city.wards.length ? '全OFF' : '全ON';
+      cityBtn.onclick = e => { e.stopPropagation(); _setCitySelected(pref.id, city.id); };
+      cityActs.appendChild(cityBtn);
+      cityBody.appendChild(cityActs);
+
+      const chipsRow = document.createElement('div');
+      chipsRow.className = 'chips';
+      city.wards.forEach(w => makeChip(w, selectedWards, chipsRow, () => {
+        if (!ensureLocationFilterMode('area')) return false;
+        _updateCitySel(pref.id, city.id);
+        _updatePrefSel(pref.id);
+        applyMapFilters();
+        return true;
+      }, wardLabel(w)));
+      cityBody.appendChild(chipsRow);
+
+      cityItem.appendChild(cityHdr);
+      cityItem.appendChild(cityBody);
+      prefBody.appendChild(cityItem);
+    });
+
+    prefItem.appendChild(prefHdr);
+    prefItem.appendChild(prefBody);
+    wc.appendChild(prefItem);
   });
 }
 
-function _updateWardGroupSel(id) {
-  const group = WARD_GROUPS.find(g => g.id === id);
-  if (!group) return;
-  const cnt = group.wards.filter(w => selectedWards.has(w)).length;
-  const el = document.getElementById('wgsel-' + id);
-  const btn = document.getElementById('wgbtn-' + id);
-  if (el) el.textContent = cnt > 0 ? cnt : '';
-  if (btn) btn.textContent = cnt === group.wards.length ? '全OFF' : '全ON';
+function _updateCitySel(prefId, cityId) {
+  const pref = PREF_GROUPS.find(p => p.id === prefId); if (!pref) return;
+  const city = pref.cities.find(c => c.id === cityId); if (!city) return;
+  const ck = prefId + ':' + cityId;
+  const cnt = _citySelCount(city);
+  const el = document.getElementById('cgsel-' + ck);
+  const btn = document.getElementById('cgbtn-' + ck);
+  if (el)  el.textContent  = cnt > 0 ? cnt : '';
+  if (btn) btn.textContent = cnt === city.wards.length ? '全OFF' : '全ON';
 }
 
-function _setWardGroupSelected(id) {
+function _updatePrefSel(prefId) {
+  const pref = PREF_GROUPS.find(p => p.id === prefId); if (!pref) return;
+  const cnt   = _prefSelCount(pref);
+  const total = _prefAllWards(pref).length;
+  const el  = document.getElementById('pgsel-' + prefId);
+  const btn = document.getElementById('pgbtn-' + prefId);
+  if (el)  el.textContent  = cnt > 0 ? cnt : '';
+  if (btn) btn.textContent = cnt === total ? '全OFF' : '全ON';
+}
+
+function _setCitySelected(prefId, cityId) {
   if (!ensureLocationFilterMode('area')) return;
-  const group = WARD_GROUPS.find(g => g.id === id);
-  if (!group) return;
-  const allSel = group.wards.every(w => selectedWards.has(w));
-  group.wards.forEach(w => allSel ? selectedWards.delete(w) : selectedWards.add(w));
-  buildDistrictAccordion();
+  const pref = PREF_GROUPS.find(p => p.id === prefId); if (!pref) return;
+  const city = pref.cities.find(c => c.id === cityId); if (!city) return;
+  const allSel = city.wards.every(w => selectedWards.has(w));
+  city.wards.forEach(w => allSel ? selectedWards.delete(w) : selectedWards.add(w));
+  _updateCitySel(prefId, cityId);
+  _updatePrefSel(prefId);
+  updateBoundaryStyles();
+  applyMapFilters();
+}
+
+function _setPrefSelected(prefId) {
+  if (!ensureLocationFilterMode('area')) return;
+  const pref = PREF_GROUPS.find(p => p.id === prefId); if (!pref) return;
+  const allWards = _prefAllWards(pref);
+  const allSel   = allWards.every(w => selectedWards.has(w));
+  allWards.forEach(w => allSel ? selectedWards.delete(w) : selectedWards.add(w));
+  pref.cities.forEach(c => _updateCitySel(prefId, c.id));
+  _updatePrefSel(prefId);
+  updateBoundaryStyles();
   applyMapFilters();
 }
 
@@ -3747,7 +3860,7 @@ async function saveConfig() {
   btn.classList.add('saving');
   btn.textContent = t('saving');
 
-  const allWardCount = KU.length + SI.length + KANAGAWA.length + SAITAMA.length + CHIBA.length;
+  const allWardCount = PREF_GROUPS.reduce((n, p) => n + p.cities.reduce((m, c) => m + c.wards.length, 0), 0);
   const savedWards   = selectedWards.size >= allWardCount ? [] : [...selectedWards];
   const stations     = [...selectedStations];
   const appliedWards = activeLocationFilter === 'area' ? savedWards : [];
@@ -4609,15 +4722,24 @@ async function loadAreaBoundaries() {
 
   // Tokyo — per-ward features (KU=23区 green, SI=市部 amber)
   loadFile('N03-21_13_210101.json', [
-    { color: '#1D9E75', wards: KU },
+    { color: '#4CAF7A', wards: KU },
     { color: '#D3A200', wards: SI },
   ]);
-  // Kanagawa — per-ward features for each city
+  // Kanagawa — per-city colours
   loadFile('N03-21_14_210101.json', [
-    { color: '#1565C0', wards: KANAGAWA },
+    { color: '#1565C0', wards: YOKOHAMA },
+    { color: '#C62828', wards: KAWASAKI },
+    { color: '#6A1B9A', wards: SAGAMIHARA },
+    { color: '#0277BD', wards: KANAGAWA_CITIES },
   ]);
-  loadFile('N03-21_11_210101.json', [{ color: '#E65100', wards: SAITAMA }]);
-  loadFile('N03-21_12_210101.json', [{ color: '#00838F', wards: CHIBA }]);
+  loadFile('N03-21_11_210101.json', [
+    { color: '#FF7043', wards: SAITAMA_CITY },
+    { color: '#E65100', wards: SAITAMA_CITIES },
+  ]);
+  loadFile('N03-21_12_210101.json', [
+    { color: '#26C6DA', wards: CHIBA_CITY },
+    { color: '#00838F', wards: CHIBA_CITIES },
+  ]);
 }
 
 function stationStr(nearest_station, walk_min) {
