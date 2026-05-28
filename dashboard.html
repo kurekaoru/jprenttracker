@@ -1473,7 +1473,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 00:59 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 01:02 JST</p>
       </div>
 
 
@@ -4668,8 +4668,6 @@ function updateBoundaryStyles() {
 
 async function loadAreaBoundaries() {
   const TOPO_BASE = 'https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/data/municipality/geojson/s0010/';
-  const _holes = [];  // outer rings of all supported municipalities → punched out of dark overlay
-
   function featureWard(feature, wardSet) {
     const n3 = feature.getProperty('N03_003') || '';
     const n4 = feature.getProperty('N03_004') || '';
@@ -4708,30 +4706,12 @@ async function loadAreaBoundaries() {
     restyleLayer();
   }
 
-  // Collect outer polygon rings for the dark overlay holes
-  function collectHoles(gj, combinedWardSet) {
-    gj.features.forEach(f => {
-      const n3 = f.properties?.N03_003 || '';
-      const n4 = f.properties?.N03_004 || '';
-      if (!combinedWardSet.has(n3 + n4) && !combinedWardSet.has(n4)) return;
-      const geom = f.geometry;
-      const polys = geom.type === 'Polygon'      ? [geom.coordinates]
-                  : geom.type === 'MultiPolygon' ? geom.coordinates : [];
-      polys.forEach(poly => {
-        // poly[0] is the outer ring; [lng,lat] → {lat,lng}
-        _holes.push(poly[0].map(([lng, lat]) => ({ lat, lng })));
-      });
-    });
-  }
-
   async function loadFile(file, groups) {
     try {
       const r = await fetch(TOPO_BASE + file);
       if (!r.ok) return;
       const gj = await r.json();
       groups.forEach(({ color, wards }) => addGroupLayer(gj, color, wards));
-      const all = new Set(groups.flatMap(g => g.wards));
-      collectHoles(gj, all);
     } catch (_) {}
   }
 
@@ -4756,19 +4736,6 @@ async function loadAreaBoundaries() {
     ]),
   ]);
 
-  // Dark overlay: large bounding box with a hole for every supported municipality
-  // Uses even-odd fill rule — regions inside an odd number of paths are filled
-  new google.maps.Polygon({
-    paths: [
-      [{ lat: 48, lng: 118 }, { lat: 48, lng: 158 }, { lat: 18, lng: 158 }, { lat: 18, lng: 118 }],
-      ..._holes,
-    ],
-    fillColor: '#000000',
-    fillOpacity: 0.40,
-    strokeWeight: 0,
-    clickable: false,
-    map,
-  });
 }
 
 function stationStr(nearest_station, walk_min) {
