@@ -1468,7 +1468,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 00:10 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 00:21 JST</p>
       </div>
 
 
@@ -1880,8 +1880,9 @@ const STRINGS = {
   ward_yokohama:        { ja:'横浜市',                en:'Yokohama',          uk:'Йокогама' },
   ward_kawasaki:        { ja:'川崎市',                en:'Kawasaki',          uk:'Кавасакі' },
   ward_sagamihara:      { ja:'相模原市',              en:'Sagamihara',        uk:'Сагаміхара' },
-  ward_saitama:         { ja:'埼玉（東京隣接）',        en:'Saitama (border)',  uk:'Сайтама (межа)' },
-  ward_chiba:           { ja:'千葉（東京隣接）',        en:'Chiba (border)',    uk:'Тіба (межа)' },
+  ward_kanagawa_other:  { ja:'神奈川（その他）',         en:'Kanagawa (other)',  uk:'Канаґава (інші)' },
+  ward_saitama:         { ja:'埼玉県',                 en:'Saitama',           uk:'Сайтама' },
+  ward_chiba:           { ja:'千葉県',                 en:'Chiba',             uk:'Тіба' },
   // Status / errors
   no_match:             { ja:'条件に合う物件がありません。', en:'No matching properties.', uk:'Немає відповідних об\'єктів.' },
   no_disappeared:       { ja:'まだ消えた物件はありません。', en:'No removed properties yet.', uk:'Ще немає видалених об\'єктів.' },
@@ -2150,17 +2151,33 @@ const KAWASAKI = [
   '川崎市麻生区','川崎市多摩区','川崎市宮前区'
 ];
 const SAGAMIHARA = ['相模原市緑区','相模原市中央区','相模原市南区'];
-const SAITAMA_BORDER = ['川口市','蕨市','戸田市','和光市','朝霞市','新座市','草加市','八潮市','三郷市','所沢市'];
-const CHIBA_BORDER   = ['市川市','松戸市','浦安市'];
+const SAITAMA = [
+  '川口市','蕨市','戸田市','和光市','朝霞市','新座市','草加市','八潮市','三郷市','所沢市',
+  'さいたま市西区','さいたま市北区','さいたま市大宮区','さいたま市見沼区',
+  'さいたま市中央区','さいたま市桜区','さいたま市浦和区','さいたま市南区','さいたま市岩槻区',
+  '越谷市','志木市','ふじみ野市','富士見市','川越市','狭山市','入間市',
+  '鶴ヶ島市','坂戸市','日高市','飯能市',
+];
+const CHIBA = [
+  '市川市','松戸市','浦安市',
+  '千葉市中央区','千葉市花見川区','千葉市稲毛区','千葉市若葉区','千葉市緑区','千葉市美浜区',
+  '船橋市','柏市','流山市','我孫子市','野田市','鎌ケ谷市','習志野市','八千代市',
+  '四街道市','印西市','白井市',
+];
+const KANAGAWA_OTHER = [
+  '藤沢市','茅ヶ崎市','平塚市','大和市','厚木市','海老名市','座間市','綾瀬市',
+  '横須賀市','鎌倉市','逗子市','三浦市','秦野市','伊勢原市','小田原市','南足柄市','葉山町',
+];
 
 const WARD_GROUPS = [
-  { id: 'ku',         labelKey: 'ward_ku',         wards: KU,             color: '#1D9E75' },
-  { id: 'si',         labelKey: 'ward_si',         wards: SI,             color: '#D3A200' },
-  { id: 'yokohama',   labelKey: 'ward_yokohama',   wards: YOKOHAMA,       color: '#1565C0' },
-  { id: 'kawasaki',   labelKey: 'ward_kawasaki',   wards: KAWASAKI,       color: '#C62828' },
-  { id: 'sagamihara', labelKey: 'ward_sagamihara', wards: SAGAMIHARA,     color: '#6A1B9A' },
-  { id: 'saitama',    labelKey: 'ward_saitama',    wards: SAITAMA_BORDER, color: '#E65100' },
-  { id: 'chiba',      labelKey: 'ward_chiba',      wards: CHIBA_BORDER,   color: '#00838F' },
+  { id: 'ku',             labelKey: 'ward_ku',             wards: KU,             color: '#1D9E75' },
+  { id: 'si',             labelKey: 'ward_si',             wards: SI,             color: '#D3A200' },
+  { id: 'yokohama',       labelKey: 'ward_yokohama',       wards: YOKOHAMA,       color: '#1565C0' },
+  { id: 'kawasaki',       labelKey: 'ward_kawasaki',       wards: KAWASAKI,       color: '#C62828' },
+  { id: 'sagamihara',     labelKey: 'ward_sagamihara',     wards: SAGAMIHARA,     color: '#6A1B9A' },
+  { id: 'kanagawa_other', labelKey: 'ward_kanagawa_other', wards: KANAGAWA_OTHER, color: '#0277BD' },
+  { id: 'saitama',        labelKey: 'ward_saitama',        wards: SAITAMA,        color: '#E65100' },
+  { id: 'chiba',          labelKey: 'ward_chiba',          wards: CHIBA,          color: '#00838F' },
 ];
 let _wardGroupOpen = new Set(['ku']);
 const WARD_EN = {
@@ -2195,19 +2212,35 @@ const WARD_EN = {
   '川崎市麻生区':'Kawasaki Asao','川崎市多摩区':'Kawasaki Tama','川崎市宮前区':'Kawasaki Miyamae',
   // Sagamihara
   '相模原市緑区':'Sagamihara Midori','相模原市中央区':'Sagamihara Chuo','相模原市南区':'Sagamihara Minami',
-  // Saitama border cities
+  // Kanagawa other
+  '藤沢市':'Fujisawa','茅ヶ崎市':'Chigasaki','平塚市':'Hiratsuka','大和市':'Yamato',
+  '厚木市':'Atsugi','海老名市':'Ebina','座間市':'Zama','綾瀬市':'Ayase',
+  '横須賀市':'Yokosuka','鎌倉市':'Kamakura','逗子市':'Zushi','三浦市':'Miura',
+  '秦野市':'Hadano','伊勢原市':'Isehara','小田原市':'Odawara','南足柄市':'Minamiashigara','葉山町':'Hayama',
+  // Saitama
   '川口市':'Kawaguchi','蕨市':'Warabi','戸田市':'Toda','和光市':'Wako','朝霞市':'Asaka',
   '新座市':'Niiza','草加市':'Soka','八潮市':'Yashio','三郷市':'Misato','所沢市':'Tokorozawa',
-  // Chiba border cities
+  'さいたま市西区':'Saitama Nishi','さいたま市北区':'Saitama Kita','さいたま市大宮区':'Saitama Omiya',
+  'さいたま市見沼区':'Saitama Minuma','さいたま市中央区':'Saitama Chuo','さいたま市桜区':'Saitama Sakura',
+  'さいたま市浦和区':'Saitama Urawa','さいたま市南区':'Saitama Minami','さいたま市岩槻区':'Saitama Iwatsuki',
+  '越谷市':'Koshigaya','志木市':'Shiki','ふじみ野市':'Fujimino','富士見市':'Fujimi',
+  '川越市':'Kawagoe','狭山市':'Sayama','入間市':'Iruma','鶴ヶ島市':'Tsurugashima',
+  '坂戸市':'Sakado','日高市':'Hidaka','飯能市':'Hanno',
+  // Chiba
   '市川市':'Ichikawa','松戸市':'Matsudo','浦安市':'Urayasu',
+  '千葉市中央区':'Chiba Chuo','千葉市花見川区':'Chiba Hanamigawa','千葉市稲毛区':'Chiba Inage',
+  '千葉市若葉区':'Chiba Wakaba','千葉市緑区':'Chiba Midori','千葉市美浜区':'Chiba Mihama',
+  '船橋市':'Funabashi','柏市':'Kashiwa','流山市':'Nagareyama','我孫子市':'Abiko',
+  '野田市':'Noda','鎌ケ谷市':'Kamagaya','習志野市':'Narashino','八千代市':'Yachiyo',
+  '四街道市':'Yotsukaido','印西市':'Inzai','白井市':'Shiroi',
 };
 
 function wardLabel(ja) {
   if (_lang === 'en' || _lang === 'uk') {
     const en = WARD_EN[ja] || ja;
-    return en.replace(/^(Yokohama|Kawasaki|Sagamihara) /, '');
+    return en.replace(/^(Yokohama|Kawasaki|Sagamihara|Saitama|Chiba) /, '');
   }
-  return ja.replace(/^(横浜市|川崎市|相模原市)/, '');
+  return ja.replace(/^(横浜市|川崎市|相模原市|さいたま市|千葉市)/, '');
 }
 
 const LAYOUTS = ['1R','1K','1DK','1LDK','2K','2DK','2LDK','3K','3DK','3LDK','4LDK以上'];
@@ -3685,7 +3718,7 @@ async function saveConfig() {
   btn.classList.add('saving');
   btn.textContent = t('saving');
 
-  const allWardCount = KU.length + SI.length + YOKOHAMA.length + KAWASAKI.length + SAGAMIHARA.length;
+  const allWardCount = KU.length + SI.length + YOKOHAMA.length + KAWASAKI.length + SAGAMIHARA.length + KANAGAWA_OTHER.length + SAITAMA.length + CHIBA.length;
   const savedWards   = selectedWards.size >= allWardCount ? [] : [...selectedWards];
   const stations     = [...selectedStations];
   const appliedWards = activeLocationFilter === 'area' ? savedWards : [];
@@ -4555,11 +4588,10 @@ async function loadAreaBoundaries() {
     { color: '#1565C0', wards: YOKOHAMA },
     { color: '#C62828', wards: KAWASAKI },
     { color: '#6A1B9A', wards: SAGAMIHARA },
+    { color: '#0277BD', wards: KANAGAWA_OTHER },
   ]);
-  // Saitama border cities
-  loadFile('N03-21_11_210101.json', [{ color: '#E65100', wards: SAITAMA_BORDER }]);
-  // Chiba border cities
-  loadFile('N03-21_12_210101.json', [{ color: '#00838F', wards: CHIBA_BORDER }]);
+  loadFile('N03-21_11_210101.json', [{ color: '#E65100', wards: SAITAMA }]);
+  loadFile('N03-21_12_210101.json', [{ color: '#00838F', wards: CHIBA }]);
 }
 
 function stationStr(nearest_station, walk_min) {
