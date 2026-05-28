@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 15:21 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 15:33 JST</p>
       </div>
 
 
@@ -2444,11 +2444,12 @@ function renderYamanoteGraphLine(line) {
     [11, 4], [11, 3], [11, 2], [11, 1], [11, 0],
     [10, 0], [9, 0], [8, 0], [7, 0], [6, 0], [5, 0], [4, 0], [3, 0], [2, 0], [1, 0]
   ];
-  line.stations.forEach(([name, svc], idx) => {
+  const stations = [line.stations[0], ...line.stations.slice(1).reverse()];
+  stations.forEach(([name, svc], idx) => {
     const [row, col] = slots[idx % slots.length];
     nodes.push({ name, svc, row, col, group: 'loop' });
   });
-  const names = line.stations.map(([name]) => name);
+  const names = stations.map(([name]) => name);
   names.forEach((name, idx) => edges.push([name, names[(idx + 1) % names.length]]));
   const graph = {
     nodes,
