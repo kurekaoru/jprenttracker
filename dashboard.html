@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 17:17 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 17:25 JST</p>
       </div>
 
 
@@ -2703,11 +2703,11 @@ function lineGraphLayout(line) {
       const prefixRows = placePath(prefix, 0, fullCols, true, false, new Set(), new Set([branches[0].from]));
       let nextRow = prefixRows;
 
-      const omeRows = placePath(branches[0].stations, nextRow, [0, 1, 2, 3, 4], true, true, new Set(), new Set(), 'branch0', 0);
-      labels.push(terminalBranchLabel(branches[0], 'branch0', nextRow, 0));
+      const omeRows = placePath(branches[0].stations, nextRow, [1, 2, 3, 4], true, true, new Set(), new Set(), 'branch0', 1);
+      labels.push(terminalBranchLabel(branches[0], 'branch0', nextRow, 1));
       nextRow += omeRows + branchGap;
 
-      const itsukaichiRows = placePath(branches[1].stations, nextRow, [4, 3, 2, 1, 0], true, true, new Set(), new Set(), 'branch1', 4);
+      const itsukaichiRows = placePath(branches[1].stations, nextRow, [4, 3, 2, 1], true, true, new Set(), new Set(), 'branch1', 4);
       labels.push(terminalBranchLabel(branches[1], 'branch1', nextRow, 4));
       nextRow += itsukaichiRows + branchGap;
 
