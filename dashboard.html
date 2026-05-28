@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 17:25 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 17:35 JST</p>
       </div>
 
 
@@ -2686,7 +2686,7 @@ function lineGraphLayout(line) {
       }
       const row = startRow + rowOffset;
       cells.forEach((sta, idx) => {
-        if (sta) nodes.push({ name: sta[0], svc: sta[1], row, col: cols[idx], branch, group, escapeCol });
+        if (sta) nodes.push({ name: sta[0], svc: sta[1], row, col: cols[idx], branch, group, escapeCol, routeCols: cols });
       });
     });
     return rows.length;
@@ -2711,7 +2711,7 @@ function lineGraphLayout(line) {
       labels.push(terminalBranchLabel(branches[1], 'branch1', nextRow, 4));
       nextRow += itsukaichiRows + branchGap;
 
-      const suffixRows = placePath(suffix, nextRow, fullCols, true, false, new Set(), new Set(), 'main-after-branches');
+      const suffixRows = placePath(suffix, nextRow, [1, 2, 3, 4], true, false, new Set(), new Set(), 'main-after-branches');
       mainRows = nextRow + suffixRows;
     } else {
       mainRows = placePath(stas, 0, fullCols, true, false);
@@ -2876,7 +2876,12 @@ function graphTrackSvg(graph) {
         branchLink
       };
     }
-    const sideX = graph.hasBranches && !a.branch && !b.branch && a.col === 1 ? colXs[1] : (ax > 50 ? colXs[colXs.length - 1] : colXs[0]);
+    const routeCols = a.group === b.group && Array.isArray(a.routeCols) ? a.routeCols : null;
+    const minRouteCol = routeCols ? Math.min(...routeCols) : 0;
+    const maxRouteCol = routeCols ? Math.max(...routeCols) : colXs.length - 1;
+    const sideX = graph.hasBranches && !a.branch && !b.branch && a.col === 1
+      ? colXs[1]
+      : (ax > 50 ? colXs[maxRouteCol] : colXs[minRouteCol]);
     return { d: `M ${ax} ${ay} L ${sideX} ${ay} L ${sideX} ${by} L ${bx} ${by}`, branchLink };
   }).filter(Boolean);
   return `<svg class="graph-track" viewBox="0 0 100 ${graph.rows * rowH}" preserveAspectRatio="none" aria-hidden="true">${paths.map(path => `<path class="${path.branchLink ? 'branch-link' : ''}" d="${path.d}"/>`).join('')}</svg>`;
