@@ -1468,7 +1468,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 23:50 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 00:02 JST</p>
       </div>
 
 
@@ -4502,9 +4502,9 @@ function _addBoundaryLayer(gj, color, wards) {
 
 function updateBoundaryStyles() {
   if (!_boundaryLayers.length) return;
-  const areaActive = _viewMode === 'filtered' && activeLocationFilter === 'area';
+  const useArea = activeLocationFilter === 'area';
   _boundaryLayers.forEach(({ layer, color, wards }) => {
-    const sel = !areaActive || [...wards].some(w => selectedWards.has(w));
+    const sel = !useArea || [...wards].some(w => selectedWards.has(w));
     layer.setStyle({
       strokeColor: color, strokeWeight: 1.5, clickable: false,
       strokeOpacity: sel ? 0.55 : 0.12,
