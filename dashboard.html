@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 12:35 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 08:49 JST</p>
       </div>
 
 
@@ -2651,13 +2651,10 @@ function lineGraphLayout(line) {
       const suffix = stas.slice(firstBranchIdx + 1);
       const splitRow = placePath(prefix, 0, fullCols, true, false);
       placePath([splitStation], splitRow, fullCols, true, false, new Set(), new Set(), 'main-before-branch');
-      const branchRow = splitRow + 1;
-      branch.stations.forEach(([name, svc], idx) => {
-        nodes.push({ name, svc, row: branchRow, col: idx, branch: true, group: 'branch0', escapeCol: 0 });
-      });
-      labels.push({ text: branchDisplayName(line, branch), row: branchRow, col: branch.stations.length });
-      const suffixRows = placePath(suffix, branchRow + 1, fullCols, true, false, new Set(), new Set(), 'ogikubo');
-      mainRows = branchRow + 1 + suffixRows;
+      const branchRows = placePath(branch.stations, splitRow, [1, 2, 3, 4], true, true, new Set(), new Set(), 'branch0', 1);
+      labels.push(terminalBranchLabel(branch, 'branch0', splitRow, 4));
+      const suffixRows = placePath(suffix, splitRow + branchRows, fullCols, true, false, new Set(), new Set(), 'ogikubo');
+      mainRows = splitRow + branchRows + suffixRows;
       renderedBranchCount = 1;
     } else if (firstBranchIdx >= 0) {
       const prefix = stas.slice(0, firstBranchIdx + 1);
