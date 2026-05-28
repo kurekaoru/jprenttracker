@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 14:16 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 14:22 JST</p>
       </div>
 
 
@@ -2458,17 +2458,16 @@ function renderOedoLine(line) {
     '勝どき','月島','門前仲町','清澄白河','森下','両国','蔵前','新御徒町','上野御徒町','本郷三丁目',
     '春日','飯田橋','牛込神楽坂','牛込柳町','若松河田','東新宿','新宿西口'
   ].map(name => [name, _stationSvc(line, name)]);
-  const loopStart = tochomaeRow + 1;
-  const leftRows = [1, 2, 3, 4, 5, 6, 7];
-  const bottomCols = [1, 2, 3];
-  const rightRows = [7, 6, 5, 4, 3, 2, 1];
-  const topCols = [3, 2, 1];
+  const loopStart = tochomaeRow;
+  const topCols = [1, 2, 3, 4];
+  const rightRows = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  const bottomCols = [3, 2, 1, 0];
+  const leftRows = [9, 8, 7, 6, 5, 4, 3, 2, 1];
   const loopSlots = [
-    [loopStart, 0],
-    ...leftRows.map(r => [loopStart + r, 0]),
-    ...bottomCols.map(c => [loopStart + 8, c]),
-    ...rightRows.map(r => [loopStart + r, 4]),
     ...topCols.map(c => [loopStart, c]),
+    ...rightRows.map(r => [loopStart + r, 4]),
+    ...bottomCols.map(c => [loopStart + 10, c]),
+    ...leftRows.map(r => [loopStart + r, 0]),
   ];
   loopStations.forEach(([name, svc], idx) => {
     const [row, col] = loopSlots[idx % loopSlots.length];
