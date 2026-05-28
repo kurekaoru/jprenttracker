@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 14:27 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 14:31 JST</p>
       </div>
 
 
@@ -2458,9 +2458,9 @@ function renderOedoLine(line) {
   branchPath.slice(1).forEach((name, idx) => edges.push([branchPath[idx], name]));
 
   const loopStations = [
-    '新宿','代々木','国立競技場','青山一丁目','六本木','麻布十番','赤羽橋','大門','汐留','築地市場',
-    '勝どき','月島','門前仲町','清澄白河','森下','両国','蔵前','新御徒町','上野御徒町','本郷三丁目',
-    '春日','飯田橋','牛込神楽坂','牛込柳町','若松河田','東新宿','新宿西口'
+    '新宿西口','東新宿','若松河田','牛込柳町','牛込神楽坂','飯田橋','春日','本郷三丁目','上野御徒町',
+    '新御徒町','蔵前','両国','森下','清澄白河','門前仲町','月島','勝どき','築地市場','汐留','大門',
+    '赤羽橋','麻布十番','六本木','青山一丁目','国立競技場','代々木','新宿'
   ].map(name => [name, _stationSvc(line, name)]);
   const loopStart = tochomaeRow;
   const topCols = [1, 2, 3, 4];
