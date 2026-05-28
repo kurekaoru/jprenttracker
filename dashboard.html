@@ -1468,7 +1468,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 23:43 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 23:50 JST</p>
       </div>
 
 
@@ -4487,46 +4487,71 @@ function initMap() {
   loadListings();
 }
 
-function _addBoundaryLayer(gj, color) {
+const _boundaryLayers = []; // { layer, color, wards: Set }
+
+function _addBoundaryLayer(gj, color, wards) {
   const layer = new google.maps.Data({ map });
   layer.addGeoJson(gj);
   layer.setStyle({ strokeColor: color, strokeWeight: 1.5, strokeOpacity: 0.4,
                    fillColor: color, fillOpacity: 0.04, clickable: false });
+  if (wards) {
+    _boundaryLayers.push({ layer, color, wards: new Set(wards) });
+    updateBoundaryStyles();
+  }
+}
+
+function updateBoundaryStyles() {
+  if (!_boundaryLayers.length) return;
+  const areaActive = _viewMode === 'filtered' && activeLocationFilter === 'area';
+  _boundaryLayers.forEach(({ layer, color, wards }) => {
+    const sel = !areaActive || [...wards].some(w => selectedWards.has(w));
+    layer.setStyle({
+      strokeColor: color, strokeWeight: 1.5, clickable: false,
+      strokeOpacity: sel ? 0.55 : 0.12,
+      fillColor: color,
+      fillOpacity:  sel ? 0.11 : 0.015,
+    });
+  });
 }
 
 async function loadAreaBoundaries() {
   // Tokyo — single prefecture polygon
   try {
     const r = await fetch('https://raw.githubusercontent.com/dataofjapan/land/master/tokyo.geojson');
-    if (r.ok) _addBoundaryLayer(await r.json(), '#1D9E75');
+    if (r.ok) _addBoundaryLayer(await r.json(), '#1D9E75', [...KU, ...SI]);
   } catch (_) {}
 
   const TOPO_BASE = 'https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/data/municipality/geojson/s0010/';
 
-  async function loadPrefCities(file, cityColors) {
+  async function loadPrefCities(file, cityDefs) {
+    // cityDefs: { cityName: { color, wards } }
     try {
       const r = await fetch(TOPO_BASE + file);
       if (!r.ok) return;
       const gj = await r.json();
-      Object.entries(cityColors).forEach(([city, color]) => {
+      Object.entries(cityDefs).forEach(([city, { color, wards }]) => {
         // N03_003 = designated city name; N03_004 = regular municipality name
         const filtered = { ...gj, features: gj.features.filter(f =>
           f.properties?.N03_003 === city || f.properties?.N03_004 === city
         )};
-        if (filtered.features.length) _addBoundaryLayer(filtered, color);
+        if (filtered.features.length) _addBoundaryLayer(filtered, color, wards);
       });
     } catch (_) {}
   }
 
   // Kanagawa
-  loadPrefCities('N03-21_14_210101.json', { '横浜市': '#1565C0', '川崎市': '#C62828', '相模原市': '#6A1B9A' });
+  loadPrefCities('N03-21_14_210101.json', {
+    '横浜市': { color: '#1565C0', wards: YOKOHAMA },
+    '川崎市': { color: '#C62828', wards: KAWASAKI },
+    '相模原市': { color: '#6A1B9A', wards: SAGAMIHARA },
+  });
   // Saitama border cities — orange
   loadPrefCities('N03-21_11_210101.json', Object.fromEntries(
-    ['川口市','蕨市','戸田市','和光市','朝霞市','新座市','草加市','八潮市','三郷市','所沢市'].map(c => [c, '#E65100'])
+    SAITAMA_BORDER.map(c => [c, { color: '#E65100', wards: [c] }])
   ));
   // Chiba border cities — teal
   loadPrefCities('N03-21_12_210101.json', Object.fromEntries(
-    ['市川市','松戸市','浦安市'].map(c => [c, '#00838F'])
+    CHIBA_BORDER.map(c => [c, { color: '#00838F', wards: [c] }])
   ));
 }
 
@@ -5192,6 +5217,7 @@ function applyMapFilters() {
   if (_stationPending  > 0) txt += t('station_pending', _stationPending);
   summary.textContent = txt;
   renderAvailableTable();
+  updateBoundaryStyles();
 }
 
 let _geoPending       = 0;
