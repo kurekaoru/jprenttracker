@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 15:08 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 15:10 JST</p>
       </div>
 
 
@@ -2429,9 +2429,37 @@ function loopPositions(count) {
 }
 
 function renderSnake(line) {
-  if (line.id === 'JY') return renderLoopLine(line);
+  if (line.id === 'JY') return renderYamanoteGraphLine(line);
   if (line.id === 'E') return renderOedoLine(line);
   return renderGraphLine(line);
+}
+
+function renderYamanoteGraphLine(line) {
+  const colXs = [15, 33, 50, 67, 85];
+  const nodes = [];
+  const edges = [];
+  const slots = [
+    [0, 0], [0, 1], [0, 2], [0, 3], [0, 4],
+    [1, 4], [2, 4], [3, 4], [4, 4], [5, 4], [6, 4], [7, 4], [8, 4],
+    [9, 4], [9, 3], [9, 2], [9, 1], [9, 0],
+    [8, 0], [7, 0], [6, 0], [5, 0], [4, 0], [3, 0], [2, 0], [1, 0]
+  ];
+  line.stations.forEach(([name, svc], idx) => {
+    const [row, col] = slots[idx % slots.length];
+    nodes.push({ name, svc, row, col, group: 'loop' });
+  });
+  const names = line.stations.map(([name]) => name);
+  names.forEach((name, idx) => edges.push([name, names[(idx + 1) % names.length]]));
+  const graph = {
+    nodes,
+    edges,
+    labels: [],
+    colXs,
+    cellW: 18,
+    hasBranches: false,
+    rows: Math.max(1, ...nodes.map(node => node.row + 1))
+  };
+  return renderGraphLineFromGraph(line, graph);
 }
 
 function renderOedoLine(line) {
