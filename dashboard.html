@@ -1473,7 +1473,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 00:50 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 00:52 JST</p>
       </div>
 
 
@@ -3758,8 +3758,7 @@ function _setCitySelected(prefId, cityId) {
   const city = pref.cities.find(c => c.id === cityId); if (!city) return;
   const allSel = city.wards.every(w => selectedWards.has(w));
   city.wards.forEach(w => allSel ? selectedWards.delete(w) : selectedWards.add(w));
-  _updateCitySel(prefId, cityId);
-  _updatePrefSel(prefId);
+  buildDistrictAccordion();
   updateBoundaryStyles();
   applyMapFilters();
 }
@@ -3770,8 +3769,7 @@ function _setPrefSelected(prefId) {
   const allWards = _prefAllWards(pref);
   const allSel   = allWards.every(w => selectedWards.has(w));
   allWards.forEach(w => allSel ? selectedWards.delete(w) : selectedWards.add(w));
-  pref.cities.forEach(c => _updateCitySel(prefId, c.id));
-  _updatePrefSel(prefId);
+  buildDistrictAccordion();
   updateBoundaryStyles();
   applyMapFilters();
 }
