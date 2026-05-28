@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 14:31 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 14:38 JST</p>
       </div>
 
 
@@ -2299,11 +2299,9 @@ const TRAIN_LINES = [
     { from:'相模大野', stations:[['東林間',0],['中央林間',0],['南林間',0],['鶴間',0],['大和',0],['桜ヶ丘',0],['高座渋谷',0],['長後',0],['湘南台',0],['六会日大前',0],['善行',0],['藤沢本町',0],['藤沢',0]] }
   ]},
   { id:'KO', code:'KO', color:'#E5006E', name:'京王線', stations:[
-    ['新宿',0],['笹塚',1],['代田橋',0],['明大前',1],['下高井戸',0],['桜上水',0],['上北沢',0],['八幡山',0],['芦花公園',0],['千歳烏山',1],['仙川',0],['つつじケ丘',2],['柴崎',0],['国領',0],['布田',0],['調布',3],['西調布',0],['飛田給',0],['武蔵野台',0],['多磨霊園',0],['東府中',0],['府中',2],['分倍河原',0],['中河原',0],['聖蹟桜ケ丘',2],['百草園',0],['高幡不動',2],['南平',0],['平山城址公園',0],['長沼',0],['北野',2],['京王八王子',0]
+    ['新宿',0],['笹塚',1],['代田橋',0],['明大前',1],['下高井戸',0],['桜上水',0],['上北沢',0],['八幡山',0],['芦花公園',0],['千歳烏山',1],['仙川',0],['つつじケ丘',2],['柴崎',0],['国領',0],['布田',0],['調布',3],['西調布',0],['飛田給',0],['武蔵野台',0],['多磨霊園',0],['東府中',0],['府中',2],['分倍河原',0],['中河原',0],['聖蹟桜ケ丘',2],['百草園',0],['高幡不動',2],['南平',0],['平山城址公園',0],['長沼',0],['北野',2],['京王片倉',0],['山田',0],['めじろ台',0],['狭間',0],['高尾',1],['高尾山口',0],['京王八王子',0]
   ], branches:[
-    { from:'北野', stations:[
-      ['京王片倉',0],['山田',0],['めじろ台',0],['狭間',0],['高尾',1],['高尾山口',0]
-    ]}
+    { from:'北野', stations:[['京王八王子',0]] }
   ]},
   { id:'IN', code:'IN', color:'#00B2CA', name:'京王井の頭線', stations:[
     ['渋谷',2],['神泉',0],['駒場東大前',0],['池ノ上',0],['下北沢',2],['新代田',0],['東松原',0],['明大前',2],['永福町',1],['西永福',0],['浜田山',0],['高井戸',0],['富士見ヶ丘',0],['久我山',1],['三鷹台',0],['井の頭公園',0],['吉祥寺',2]
@@ -2701,7 +2699,15 @@ function lineGraphLayout(line) {
   } else if (branches.length) {
     const branchNames = new Set(branches.map(branch => branch.from));
     const firstBranchIdx = stas.findIndex(([name]) => branchNames.has(name));
-    if (line.id === 'M' && branches[0] && firstBranchIdx >= 0) {
+    if (line.id === 'KO' && branches[0]) {
+      mainRows = placePath(stas, 0, fullCols, true, false);
+      const base = nodes.find(node => node.name === branches[0].from);
+      const [name, svc] = branches[0].stations[0] || [];
+      if (base && name) {
+        nodes.push({ name, svc, row: base.row + 1, col: base.col, branch: true, group: 'branch0', escapeCol: base.col });
+      }
+      renderedBranchCount = 1;
+    } else if (line.id === 'M' && branches[0] && firstBranchIdx >= 0) {
       const branch = branches[0];
       const prefix = stas.slice(0, firstBranchIdx);
       const splitStation = stas[firstBranchIdx];
