@@ -61,6 +61,7 @@ def listing_id(listing: dict) -> str:
 
 def init_db() -> sqlite3.Connection:
     con = sqlite3.connect(DB_FILE, timeout=60)
+    con.row_factory = sqlite3.Row
     con.execute("PRAGMA journal_mode=WAL")
     con.executescript(
         "CREATE TABLE IF NOT EXISTS listings ("

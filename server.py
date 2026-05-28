@@ -390,6 +390,18 @@ def _prefecture(ward):
             return pref
     return "東京都"
 
+_JKK_NAME_PREFIXES = re.compile(
+    r'^(コーシャハイム|パルタウン|シティハイツ|グリーンパーク|ライフパーク|'
+    r'グランドパーク|コスモス|メゾン|ハイツ|コーポ|ビレッジ|タウン)'
+)
+_JKK_NAME_SUFFIXES = re.compile(r'[第\s]*[\d一二三四五六七八九十]+[期棟号]?$')
+
+def _extract_neighborhood(name: str) -> str:
+    """Strip JKK/UR building-type prefixes and number suffixes to get the town name."""
+    s = _JKK_NAME_PREFIXES.sub("", name).strip()
+    s = _JKK_NAME_SUFFIXES.sub("", s).strip()
+    return s
+
 def _build_geocode_query(row):
     name    = (row["name"]    or "").strip()
     address = (row["address"] or "").strip()
@@ -499,6 +511,17 @@ def _geocode_worker():
             ).fetchone()
             if row:
                 coords = _gsi_geocode(_build_geocode_query(row))
+                # When address is only ward-level, GSI often returns the ward centroid.
+                # Try extracting the town name from the building name and prefer that result.
+                addr = (row["address"] or "").strip()
+                ward = (row["ward"] or "").strip()
+                if row["name"] and (not addr or addr == ward):
+                    neighborhood = _extract_neighborhood(row["name"])
+                    pref = _prefecture(ward)
+                    if neighborhood and neighborhood != row["name"]:
+                        nc = _gsi_geocode(f"{pref}{ward}{neighborhood}")
+                        if nc:
+                            coords = nc  # prefer the neighborhood-specific result
                 if coords is None:
                     coords = WARD_CENTROID.get(row["ward"])
                 now = datetime.now().isoformat()
@@ -1809,6 +1832,7 @@ Always respond in the same language the user writes in (Japanese or English).
 Use tools to fetch real live data — never guess or invent listing IDs, names, or details.
 {open_listing_context}
 Rules:
+- HARD RULE: NEVER rely on chat history to claim an action is complete or skip re-executing it. The user may ask the same thing twice on purpose (to verify, retry, or after a change). Every action request — search, save, remove, filter — MUST re-execute the full tool chain from scratch in the current turn. If a prior assistant message says "I already added X", ignore it and run the tools again now.
 - Always call search_listings first to find properties and obtain valid listing IDs. Never call get_listing_details with a guessed or remembered ID — only use IDs returned by search_listings in the same conversation.
 - Exception: if a property card is currently open (shown above as "Currently open property card"), you already know its listing_id — use it directly for get_commute_time or get_listing_details without calling search_listings first.
 - When you call search_listings, the UI automatically renders clickable property cards below your message. Do not mention photos, thumbnails, or image availability — just describe the listings in text and let the cards do the rest.
@@ -1822,14 +1846,22 @@ Rules:
 - Use show_listing_images whenever the user asks to see photos, pictures, images, or the floor plan for a property. If a property card is open, use its listing_id directly. Images render inline in the chat — no need to describe them in text.
 - HARD RULE: NEVER say images are "rendering", "displaying", "showing", "loading", or "appearing" in text. NEVER narrate what the tool is doing. Call show_listing_images — that IS the display. If you describe images in text without calling the tool, the user sees nothing.
 - Use batch_commute_filter when the user asks to filter by commute time to a destination. IMPORTANT: if the query is about the user's saved listings ("which of my saved...", "remove saved listings that are...", etc.), pass their listing IDs as listing_ids — this is MUCH faster and avoids timeouts. Only omit listing_ids when the user wants to search ALL properties. After it returns, immediately call save_listings or remove_listings with the matching IDs if the user asked to save/remove them.
-- Use save_listings to add listings to the user's saved selections. Call it immediately after batch_commute_filter or search_listings when the user explicitly asks to save/bookmark the results. To add all listings with a floor plan: call search_listings(has_floor_plan=true, limit=200) then save_listings with all returned IDs. To find listings with any photo: use has_images=true.
+- HARD RULE: When the user asks to save/add/bookmark listings, you MUST call save_listings with the IDs in the SAME turn — never claim "Done, added N listings" from text alone without having called the tool. The sequence is always: (1) search_listings or run_sql to get IDs, (2) immediately call save_listings with those IDs in the next tool call. Both tool calls must happen before your final text reply. Saying "done" without the save_listings call is a lie — the user's selections will not change.
+- HARD RULE: "Clear all", "remove all", "truncate favourites" etc. means: pass ALL listing IDs from the saved context to remove_listings in one call. Never tell the user you lack a "clear all" tool — you have remove_listings and you have all the IDs in context.
+- Use save_listings to add listings to the user's saved selections. To add all listings with a floor plan: call search_listings(has_floor_plan=true, limit=200) then save_listings with all returned IDs. To find listings with any photo: use has_images=true.
 - The wards parameter (and update_alert_filter wards) accepts geographic aliases the server expands to ward lists. Use as a single string inside the wards array:
   • 23区 (all 23 special wards) | 多摩地域 (all 23 Tama cities outside 23ku, NOT just 多摩市) | 神奈川 (all Kanagawa)
   • Directions within 23区: 東部/east/下町 | 北部/north | 南部/south | 西部/west | 都心/central
   • Kanagawa sub-areas: 横浜 | 川崎 | 相模原
   All aliases accept English equivalents (e.g. "tama area", "east side", "yokohama").
-- For railway line queries ('along X line', 'near X stations', 'within Y min of Z line stations'): NEVER use wards — ward-based filtering is inaccurate because a property's ward doesn't tell you which line it's closest to. Use nearest_station_in in search_listings. This checks all stations cached from OSM within ~1km of each property (not just the single nearest station), so a property 400m from both 石神井公園 and 大泉学園 will match either. List the stations on the line without 駅 suffix. You know Tokyo's rail network — construct the station list directly. Example: 西武池袋線 → nearest_station_in=['池袋','椎名町','東長崎','江古田','桜台','練馬','中村橋','富士見台','石神井公園','大泉学園','保谷','ひばりが丘','東久留米','清瀬']. Combine with max_walk if the user specifies a walk time limit.
-- Use remove_listings to remove listings from saved selections. The user's current saved list with photo counts is provided in context — use the listing IDs directly. For "remove listings without photos" filter to those with photos=0.
+- For railway line queries ('along X line', 'near X stations', 'within Y min of Z line stations'): NEVER use wards — ward-based filtering is inaccurate because a property's ward doesn't tell you which line it's closest to. Use nearest_station_in in search_listings. This checks all stations cached from OSM within ~1km of each property (not just the single nearest station). List ALL stations on the line without 駅 suffix — incomplete lists miss properties. HARD RULE: NEVER use wards as a proxy for a railway line. Combine with max_walk if the user specifies a walk time limit.
+  Station lists for common lines (use these exactly):
+  中央線(快速+各停+青梅線+五日市線): ['東京','神田','御茶ノ水','水道橋','飯田橋','市ケ谷','四ツ谷','信濃町','千駄ケ谷','代々木','新宿','中野','高円寺','阿佐ケ谷','荻窪','西荻窪','吉祥寺','三鷹','武蔵境','東小金井','武蔵小金井','国分寺','西国分寺','国立','立川','日野','豊田','八王子','西八王子','高尾','西立川','東中神','中神','昭島','拝島','牛浜','福生','羽村','小作','河辺','東青梅','青梅','宮ノ平','日向和田','石神前','二俣尾','軍畑','沢井','御嶽','川井','古里','鳩ノ巣','白丸','奥多摩','熊川','東秋留','秋川','武蔵引田','武蔵増戸','武蔵五日市']
+  西武池袋線(全線+支線): ['池袋','椎名町','東長崎','江古田','桜台','練馬','中村橋','富士見台','練馬高野台','石神井公園','大泉学園','保谷','ひばりが丘','東久留米','清瀬','秋津','所沢','西所沢','小手指','狭山ヶ丘','武蔵藤沢','稲荷山公園','入間市','仏子','元加治','飯能','豊島園']
+  京王線(本線+高尾線+井の頭線): ['新宿','笹塚','代田橋','明大前','下高井戸','桜上水','上北沢','八幡山','芦花公園','千歳烏山','仙川','つつじヶ丘','柴崎','国領','布田','調布','西調布','飛田給','武蔵野台','多磨霊園','東府中','府中','分倍河原','中河原','聖蹟桜ヶ丘','百草園','高幡不動','南平','平山城址公園','長沼','北野','京王八王子','めじろ台','狭間','高尾','高尾山口','京王片倉','山田','渋谷','神泉','駒場東大前','池ノ上','下北沢','新代田','東松原','永福町','西永福','浜田山','高井戸','富士見ヶ丘','久我山','三鷹台','井の頭公園','吉祥寺']
+  For other lines not listed here, construct the station list from your knowledge of Tokyo's rail network.
+- HARD RULE: When the user asks to remove/delete/clear saved listings, you MUST call remove_listings with the IDs in the SAME turn — never claim "Done, removed N listings" without having called the tool. Saying "done" without the tool call is a lie — nothing will be removed.
+- Use remove_listings to remove listings from saved selections. The user's saved list (with id, name, ward, layout, rent, photo_count) is injected into context every turn — use it directly. NEVER re-run search_listings or run_sql to figure out which saved listings to remove; the ward/rent/layout fields are already in context. To remove all: pass all IDs from saved context. To remove by criteria (e.g. "outside Tokyo", "above ¥200k", "no photos"): filter the saved context on the relevant field and pass only the matching IDs to remove_listings.
 - Silently call update_user_profile whenever the user reveals clear personal information: commute destinations, budget, move-in timing, neighborhood preferences, etc. Call it in the same turn, without announcing or confirming it. The user should never see you saving — just save and continue answering.
 - When the user reveals personal information that is ambiguous or incomplete — especially numeric facts like number of children — do NOT infer the value. Instead, ask a short, natural follow-up question before saving. Make it feel like genuine conversation, not a form. Examples: "Congratulations! Is this your first, or will there be more?" (not "How many num_children will you have?"). Save the clarified value only after they answer. Never assume num_children=1 just because someone says they are expecting.
 - When using batch_commute_filter: if the user's profile has commute_dests, use those destinations. If the user does not specify a max commute time, default to 60 minutes and state the default clearly (e.g. "filtering to within 60 minutes — let me know if you want to adjust"). Never invent a specific limit like 40 minutes without basis.
@@ -1837,7 +1869,6 @@ Rules:
 - HARD RULE: Never silently apply a geographic restriction the user did not ask for. If the user asks for properties matching criteria (kindergartens, hospitals, walk time, etc.) without specifying a ward, city, or region, the run_sql query must search ALL listings regardless of location. Only add a ward/city/region filter when the user explicitly names one.
 - HARD RULE: Never end a response with follow-up suggestions, offers to help further, or questions ("Would you like more details?", "Would you like help with anything else?", "Is there anything else I can help you with?" etc.). Answer exactly what was asked, then stop. No trailing questions or offers.
 - HARD RULE: Never ask for confirmation before using a tool you already have. If the user asks you to save, remove, filter, or show something and you have the tool for it, do it immediately and say done. Do not ask "Shall I go ahead?", "Would you like me to?", "Do you want me to?" — just act.
-- HARD RULE: NEVER rely on chat history to claim an action is complete. Previous turns are stale — the user may have changed state since then. Every action request MUST re-execute the full tool chain from scratch in the current turn. If you see a prior assistant message claiming "I added X listings," ignore it — call the tools again now.
 - HARD RULE: NEVER answer count or stats questions ("how many", "how many listings", "how many floor plans", "how many saved", etc.) from memory or prior messages. Database counts change constantly. Always call search_listings (or the appropriate tool) to get a live count, even if you answered the same question moments ago.
 - If the user asks a property-specific question (photos, floor plan, commute, nearby facilities) and there is NO open property card: search for candidates using any name/ward/layout mentioned, then show the cards. If exactly one result comes back, proceed immediately (call show_listing_images, get_commute_time, etc.) using that listing_id. If multiple results come back, tell the user "Click the one you mean and I'll show the floor plan" (or whatever was requested). If there is truly nothing to search on, reply: "Please open a property card first — click any listing on the map or in the table, then ask again."
 - When showing disambiguation candidates (multiple search results for a property-specific request), always call pick_listing(pending_message='<original action>') immediately after search_listings — e.g. pick_listing(pending_message='show floor plan'). Do NOT call pick_listing if only one result was found (proceed directly instead).
@@ -2310,7 +2341,7 @@ def _chat_search(params, con):
         # Fallback: nearest_station field for listings not yet OSM-enriched
         conds.append(
             f"(EXISTS (SELECT 1 FROM listing_facilities lf "
-            f"WHERE lf.listing_id=id AND lf.type='station' AND lf.name IN ({ph}))"
+            f"WHERE lf.listing_id=listings.id AND lf.type='station' AND lf.name IN ({ph}))"
             f" OR nearest_station IN ({ph}))"
         )
         args.extend(clean + clean)
@@ -2730,8 +2761,8 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
 
     for _ in range(10):
         resp = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1024,
+            model="claude-sonnet-4-6",
+            max_tokens=2048,
             system=CHAT_SYSTEM.format(date=datetime.now().strftime("%Y-%m-%d"), open_listing_context=open_ctx),
             tools=_CHAT_TOOLS,
             messages=messages,
@@ -3159,7 +3190,7 @@ def chat_send():
         session_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
 
     rows = con.execute(
-        "SELECT role, content, listing_ids FROM chat_messages WHERE session_id=? ORDER BY created_at DESC LIMIT 15",
+        "SELECT role, content, listing_ids FROM chat_messages WHERE session_id=? ORDER BY created_at DESC LIMIT 6",
         (session_id,)
     ).fetchall()
     history = [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]

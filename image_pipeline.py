@@ -7,6 +7,8 @@ thumbnail selection, and floor plan analysis.
 """
 
 import os, json, logging, base64, requests, sqlite3
+import numpy as np
+from PIL import Image as _PILImage
 from datetime import datetime
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
@@ -140,6 +142,45 @@ def _merge_appliances(lid: str, new_items: list[str], con: sqlite3.Connection) -
     con.commit()
 
 
+def autocrop_whitespace(fpath: str) -> None:
+    """
+    Remove white letterbox borders (top/bottom/left/right) from a JPEG/PNG.
+    Uses row/column mean to be robust against JPEG compression artifacts.
+    Skips if total border pixels < 8 (avoids spurious crops on edge-to-edge photos).
+    Overwrites the file in place.
+    """
+    BG_MEAN = 235
+    MIN_TOTAL_PX = 8
+    try:
+        img = _PILImage.open(fpath)
+        fmt = img.format
+        exif = img.info.get("exif")
+        arr = np.array(img.convert("RGB"), dtype=np.float32)
+        h, w = arr.shape[:2]
+        row_means = arr.mean(axis=(1, 2))
+        col_means = arr.mean(axis=(0, 2))
+        cr = np.where(row_means < BG_MEAN)[0]
+        cc = np.where(col_means < BG_MEAN)[0]
+        if not len(cr) or not len(cc):
+            return
+        top, bot = int(cr[0]), int(cr[-1])
+        left, right = int(cc[0]), int(cc[-1])
+        total = top + (h - 1 - bot) + left + (w - 1 - right)
+        if total < MIN_TOTAL_PX:
+            return
+        cropped = img.crop((left, top, right + 1, bot + 1))
+        kw = {}
+        if fmt == "JPEG":
+            kw = {"quality": 92, "subsampling": 0}
+            if exif:
+                kw["exif"] = exif
+        elif fmt == "PNG" and exif:
+            kw["exif"] = exif
+        cropped.save(fpath, **kw)
+    except Exception as e:
+        log.debug(f"autocrop failed for {fpath}: {e}")
+
+
 def download_image(url: str, row_id: int, lid: str, img_type: str,
                    con: sqlite3.Connection) -> str | None:
     """
@@ -163,7 +204,9 @@ def download_image(url: str, row_id: int, lid: str, img_type: str,
         fpath = os.path.join(img_dir, f"{row_id}.{ext}")
         with open(fpath, "wb") as f:
             f.write(r.content)
-        # AI classification overrides the URL heuristic
+        # AI classification overrides the URL heuristic, except:
+        # - 'skip' always wins (junk removal)
+        # - AI 'interior' does NOT override a URL-confident 'floor_plan' signal
         ai_type = classify_image_ai(fpath)
         if ai_type == "skip":
             os.remove(fpath)
@@ -171,10 +214,15 @@ def download_image(url: str, row_id: int, lid: str, img_type: str,
             con.commit()
             log.debug(f"Skipped junk image {url}")
             return None
-        if ai_type != img_type:
+        if ai_type == "interior" and img_type == "floor_plan":
+            pass  # trust the URL heuristic (e.g. img_madori) over an uncertain AI call
+        elif ai_type != img_type:
             log.debug(f"Reclassified {url}: {img_type} → {ai_type}")
             img_type = ai_type
         con.execute("UPDATE listing_images SET image_type=? WHERE id=?", (img_type, row_id))
+
+        if img_type != "floor_plan":
+            autocrop_whitespace(fpath)
 
         ocr_text = None
         if img_type == "floor_plan":

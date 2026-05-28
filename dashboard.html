@@ -1116,6 +1116,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
       <span class="rail-tip" data-i18n="panel_favourites">お気に入り</span>
     </button>
+    <button class="rail-btn" id="rail-disappeared" onclick="openPanel('disappeared')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="17" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/><line x1="16" y1="2" x2="22" y2="8"/><line x1="22" y1="2" x2="16" y2="8"/></svg>
+      <span class="rail-tip" data-i18n="panel_disappeared">消えた物件</span>
+    </button>
     <button class="rail-btn" id="rail-layers" onclick="openPanel('layers')" style="margin-top:auto;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
       <span class="rail-tip" data-i18n="map_layers">地図レイヤー</span>
@@ -1384,18 +1388,8 @@
           <p class="section-label" style="margin:0;" data-i18n="vacancies">空室一覧</p>
           <span id="available-count" style="font-size:11px;color:var(--muted);"></span>
         </div>
-        <div style="overflow-x:auto;margin-bottom:1.2rem;">
-          <div id="available-table" style="color:var(--muted);font-size:11px;" data-i18n="loading">読み込み中…</div>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <p class="section-label" style="margin:0;" data-i18n="disappeared_title">最近消えた物件</p>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span id="disappeared-count" style="font-size:11px;color:var(--muted);"></span>
-            <button class="refresh-btn" onclick="loadDisappeared()" data-i18n="refresh">更新</button>
-          </div>
-        </div>
         <div style="overflow-x:auto;">
-          <div id="disappeared-table" style="color:var(--muted);font-size:11px;" data-i18n="loading">読み込み中…</div>
+          <div id="available-table" style="color:var(--muted);font-size:11px;" data-i18n="loading">読み込み中…</div>
         </div>
       </div>
 
@@ -1407,6 +1401,20 @@
         </div>
         <div style="overflow-x:auto;">
           <div id="favourites-table" style="color:var(--muted);font-size:11px;"></div>
+        </div>
+      </div>
+
+      <!-- Disappeared page -->
+      <div class="panel-page" id="panel-disappeared">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <p class="section-label" style="margin:0;" data-i18n="disappeared_title">最近消えた物件</p>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span id="disappeared-count" style="font-size:11px;color:var(--muted);"></span>
+            <button class="refresh-btn" onclick="loadDisappeared()" data-i18n="refresh">更新</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <div id="disappeared-table" style="color:var(--muted);font-size:11px;" data-i18n="loading">読み込み中…</div>
         </div>
       </div>
 
@@ -1460,7 +1468,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 17:35 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 23:39 JST</p>
       </div>
 
 
@@ -1942,6 +1950,7 @@ const STRINGS = {
   ftab_rent:            { ja:'家賃',                    en:'Rent',              uk:'Оренда' },
   ftab_other:           { ja:'その他',                  en:'Others',            uk:'Інше' },
   panel_listings:       { ja:'空室一覧',                en:'Vacancies',         uk:'Вакансії' },
+  panel_disappeared:    { ja:'消えた物件',              en:'Removed Properties', uk:'Видалені об\'єкти' },
   panel_notif:          { ja:'通知設定',                en:'Alerts',            uk:'Сповіщення' },
   tab_account:          { ja:'アカウント',              en:'Account',           uk:'Акаунт' },
   tab_personal_info:    { ja:'プロフィール',             en:'Profile',           uk:'Профіль' },
@@ -5483,9 +5492,10 @@ function closeAuthModal() { document.getElementById('auth-modal').classList.remo
 
 // ── Icon-rail panel ───────────────────────────────────────────────────────────
 let _activePanel = null;
-const _allPanels  = ['filter','listings','favourites','account','layers','about'];
+const _allPanels  = ['filter','listings','favourites','disappeared','account','layers','about'];
 const _panelTitles = {
   filter: 'panel_filter', listings: 'panel_listings', favourites: 'panel_favourites',
+  disappeared: 'panel_disappeared',
   account: 'panel_account', layers: 'panel_layers', about: 'panel_about',
 };
 
@@ -5505,11 +5515,12 @@ function openPanel(name) {
     document.getElementById(`rail-${n}`)?.classList.toggle('active', n === name);
     document.getElementById(`panel-${n}`)?.classList.toggle('active', n === name);
   });
-  panel.style.width = (name === 'listings' || name === 'favourites') ? '864px' : (name === 'filter' ? '406px' : '260px');
+  panel.style.width = (name === 'listings' || name === 'favourites' || name === 'disappeared') ? '864px' : (name === 'filter' ? '406px' : '260px');
   document.getElementById('panel-title').textContent = _panelTitles[name] ? t(_panelTitles[name]) : '';
   panel.classList.add('open');
   backdrop.classList.add('open');
   if (name === 'favourites') renderFavouritesTable();
+  if (name === 'disappeared') loadDisappeared();
   setTimeout(() => { if (map) google.maps.event.trigger(map, 'resize'); }, 230);
 }
 

@@ -452,20 +452,22 @@ class JKKScraper(BaseScraper):
                 with open(fpath, "wb") as f:
                     f.write(body)
 
-                img_type = classify_image_ai(fpath)
-                if img_type == "skip":
+                ai_type = classify_image_ai(fpath)
+                if ai_type == "skip":
                     os.remove(fpath)
                     con.execute("DELETE FROM listing_images WHERE id=?", (row_id,))
                     con.commit()
                     continue
+                if ai_type == "interior" and hint_type == "floor_plan":
+                    img_type = "floor_plan"  # trust scraper URL heuristic over AI
+                else:
+                    img_type = ai_type
 
                 ocr_text = None
                 if img_type == "floor_plan":
                     ocr_text = ocr_floor_plan(fpath)
                     if ocr_text:
                         log.info(f"    OCR {lid[:8]}: {ocr_text[:80]}")
-                    else:
-                        img_type = "exterior"
                 elif img_type == "appliances":
                     items = extract_appliances(fpath)
                     if items:
