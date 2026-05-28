@@ -1460,7 +1460,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 15:05 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-28 15:08 JST</p>
       </div>
 
 
@@ -3031,8 +3031,7 @@ const TRAIN_STATION_COORD_OVERRIDES = {
   'TM:万願寺駅': { lat: 35.671806, lng: 139.420633 },
   'TM:高幡不動駅': { lat: 35.662361, lng: 139.412953 },
   'TM:程久保駅': { lat: 35.656141, lng: 139.410016 },
-  'TM:多摩動物公園駅': { lat: 35.649299, lng: 139.404599 },
-  'KO:山田駅': { lat: 35.6444, lng: 139.3213 }
+  'TM:多摩動物公園駅': { lat: 35.649299, lng: 139.404599 }
 };
 let _trainGeocoder = null;
 const _openTrainLineIds = new Set(_readOpenTrainLineIds());
@@ -3115,6 +3114,19 @@ async function _readTrainStationCoords() {
       pendingWrites.push([key, value]);
     }
   });
+  // Apply server-curated overrides (takes priority over all cached/seeded values)
+  try {
+    const resp = await fetch(`${API}/train-station-coords`);
+    if (resp.ok) {
+      const serverOverrides = await resp.json();
+      Object.entries(serverOverrides).forEach(([key, value]) => {
+        if (_validTrainStationPoint(value) && !_sameTrainStationPoint(_trainStationCoordCache[key], value)) {
+          _trainStationCoordCache[key] = value;
+          pendingWrites.push([key, value]);
+        }
+      });
+    }
+  } catch (_) {}
   if (pendingWrites.length) {
     await _writeTrainStationCoordsBulk(pendingWrites);
   }

@@ -257,6 +257,11 @@ def db():
             view_count  INTEGER DEFAULT 1,
             PRIMARY KEY (user_id, listing_id)
         );
+        CREATE TABLE IF NOT EXISTS train_station_coords (
+            key   TEXT PRIMARY KEY,
+            lat   REAL NOT NULL,
+            lng   REAL NOT NULL
+        );
     """)
     con.commit()
 
@@ -973,6 +978,25 @@ def get_floor_plan_analysis(listing_id):
     import json as _json
     return jsonify(_json.loads(row["floor_plan_data"]))
 
+
+@app.route("/api/train-station-coords")
+def get_train_station_coords():
+    con = db()
+    rows = con.execute("SELECT key, lat, lng FROM train_station_coords").fetchall()
+    con.close()
+    return jsonify({r["key"]: {"lat": r["lat"], "lng": r["lng"]} for r in rows})
+
+@app.route("/api/train-station-coords/<path:key>", methods=["PUT"])
+@jwt_required()
+def put_train_station_coord(key):
+    data = request.get_json()
+    lat, lng = float(data["lat"]), float(data["lng"])
+    con = db()
+    con.execute("INSERT OR REPLACE INTO train_station_coords (key, lat, lng) VALUES (?,?,?)",
+                (key, lat, lng))
+    con.commit()
+    con.close()
+    return jsonify({"ok": True})
 
 @app.route("/api/listings/<listing_id>/facilities")
 def get_listing_facilities(listing_id):
