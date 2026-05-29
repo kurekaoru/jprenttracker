@@ -45,6 +45,7 @@
   .rail-icon:hover,.rail-icon.active{background:rgba(255,255,255,.08);color:var(--accent);}
   .rail-icon svg{width:15px;height:15px;}
   .main{padding:18px 22px;overflow-y:auto;height:calc(100vh - 38px);}
+  .main.map-mode{padding:0;overflow:hidden;}
 
   /* cards */
   .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:20px;}
@@ -65,9 +66,16 @@
   @media(max-width:760px){.charts-row{grid-template-columns:1fr;}}
 
   /* map */
-  #stats-map{width:100%;height:420px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);}
-  .map-legend{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11px;color:var(--muted);}
-  .legend-bar{flex:1;height:8px;border-radius:4px;background:linear-gradient(to right,#3B82F6,#FCD34D,#EF4444);}
+  .map-wrap{position:relative;width:100%;height:calc(100vh - 38px);}
+  #stats-map{width:100%;height:100%;}
+  .map-legend-overlay{
+    position:absolute;bottom:28px;left:10px;z-index:5;
+    background:rgba(0,0,0,.62);backdrop-filter:blur(6px);
+    border-radius:8px;padding:8px 10px;min-width:150px;
+    font-size:10px;color:rgba(255,255,255,.8);
+  }
+  .map-legend-bar{height:6px;border-radius:3px;margin:5px 0 3px;background:linear-gradient(to right,#3B82F6,#FCD34D,#EF4444);}
+  .map-legend-labels{display:flex;justify-content:space-between;font-size:9px;color:rgba(255,255,255,.5);font-family:var(--mono);}
 
   /* tables */
   .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:18px;}
@@ -121,13 +129,13 @@
 
 <div class="layout">
   <div class="left-rail">
-    <!-- Overview -->
-    <div class="rail-icon active" title="概要" onclick="showSection('overview')">
-      <svg viewBox="0 0 20 20" fill="currentColor"><rect x="2" y="2" width="7" height="7" rx="1.5"/><rect x="11" y="2" width="7" height="7" rx="1.5"/><rect x="2" y="11" width="7" height="7" rx="1.5"/><rect x="11" y="11" width="7" height="7" rx="1.5"/></svg>
-    </div>
-    <!-- Map -->
-    <div class="rail-icon" title="ヒートマップ" onclick="showSection('map')">
+    <!-- Map (top) -->
+    <div class="rail-icon active" title="ヒートマップ" onclick="showSection('map')">
       <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2C6.69 2 4 4.69 4 8c0 4.5 6 10 6 10s6-5.5 6-10c0-3.31-2.69-6-6-6zm0 8a2 2 0 110-4 2 2 0 010 4z"/></svg>
+    </div>
+    <!-- Overview -->
+    <div class="rail-icon" title="概要" onclick="showSection('overview')">
+      <svg viewBox="0 0 20 20" fill="currentColor"><rect x="2" y="2" width="7" height="7" rx="1.5"/><rect x="11" y="2" width="7" height="7" rx="1.5"/><rect x="2" y="11" width="7" height="7" rx="1.5"/><rect x="11" y="11" width="7" height="7" rx="1.5"/></svg>
     </div>
     <!-- Ward table -->
     <div class="rail-icon" title="区別分析" onclick="showSection('ward')">
@@ -152,7 +160,7 @@ const TOPO_FILES = ['N03-21_13_210101.json','N03-21_14_210101.json','N03-21_11_2
 let _listings = [], _wardStats = {}, _globalAvg = 0;
 let _walkMean = 10, _ageMean = 20;
 let _model = null;
-let _currentSection = 'overview';
+let _currentSection = 'map';
 let _charts = {};
 
 // ── Maps ──────────────────────────────────────────────────────────────────────
@@ -220,7 +228,10 @@ function _styleChoropleth() {
     const n3 = feature.getProperty('N03_003') || '';
     const n4 = feature.getProperty('N03_004') || '';
     const ward = _wardStats[n3+n4] ? n3+n4 : (_wardStats[n4] ? n4 : null);
-    if (!ward) return { visible: false };
+    if (!ward) return {
+      fillColor: '#888', fillOpacity: 0.12,
+      strokeColor: 'rgba(180,180,180,0.25)', strokeWeight: 0.4, clickable: false,
+    };
     const t  = (_wardStats[ward].avgRpsq - minV) / (maxV - minV || 1);
     const h  = Math.round(220 * (1 - t)); // 220=blue, 0=red
     return {
@@ -241,6 +252,7 @@ async function loadData() {
     _trainModel();
     document.getElementById('status-label').textContent =
       `${_listings.length} 件 · ${new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}`;
+    document.getElementById('main').classList.toggle('map-mode', _currentSection === 'map');
     renderSection(_currentSection);
   } catch {
     document.getElementById('main').innerHTML =
@@ -355,7 +367,8 @@ const escH   = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace
 function showSection(sec) {
   _currentSection = sec;
   document.querySelectorAll('.rail-icon').forEach((el, i) =>
-    el.classList.toggle('active', ['overview','map','ward','ml'][i] === sec));
+    el.classList.toggle('active', ['map','overview','ward','ml'][i] === sec));
+  document.getElementById('main').classList.toggle('map-mode', sec === 'map');
   renderSection(sec);
 }
 
@@ -397,16 +410,18 @@ function _renderOverview() {
 
 // ── Map ───────────────────────────────────────────────────────────────────────
 function _renderMap() {
+  const vals = Object.values(_wardStats).map(w => w.avgRpsq);
+  const minV = vals.length ? Math.min(...vals) : 0;
+  const maxV = vals.length ? Math.max(...vals) : 1;
   document.getElementById('main').innerHTML = `
-    <div class="section-header">
-      <span class="section-title">区・市別 ㎡単価 ヒートマップ</span>
-      <span class="section-sub">青=安い → 赤=高い · クリックで詳細</span>
-    </div>
-    <div id="stats-map"></div>
-    <div class="map-legend">
-      <span>安い</span>
-      <div class="legend-bar"></div>
-      <span>高い</span>
+    <div class="map-wrap">
+      <div id="stats-map"></div>
+      <div class="map-legend-overlay">
+        <div style="font-size:10px;font-weight:600;letter-spacing:.04em;margin-bottom:2px;">㎡単価 (円/㎡/月)</div>
+        <div class="map-legend-bar"></div>
+        <div class="map-legend-labels"><span>¥${fmt(minV)}</span><span>¥${fmt(maxV)}</span></div>
+        <div style="margin-top:5px;font-size:9px;color:rgba(255,255,255,.4);">クリックで詳細 · 灰色=データなし</div>
+      </div>
     </div>`;
   if (_mapsApiReady) _initMap();
 }
