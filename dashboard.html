@@ -1197,7 +1197,7 @@
               <div class="layer-row" style="border-bottom:none;align-items:center;">
                 <span class="layer-label" style="flex:1;min-width:0;">築年数上限</span>
                 <div style="display:flex;align-items:center;gap:4px;">
-                  <input type="number" id="filter-max-age" placeholder="−" step="5" min="0" style="width:58px;margin:0;padding:4px 6px;font-size:12px;" oninput="applyMapFilters()">
+                  <input type="number" id="filter-max-age" placeholder="−" step="5" min="0" style="width:58px;margin:0;padding:4px 6px;font-size:12px;" oninput="_debouncedFilter()">
                   <span style="font-size:11px;color:var(--muted);">年以下</span>
                 </div>
               </div>
@@ -1213,15 +1213,15 @@
             <div class="ftab-pane" id="ftab-rent">
               <p class="section-label" data-i18n="rent">家賃</p>
               <label data-i18n="min_rent">最低家賃 (円)</label>
-              <input type="number" id="min-rent" placeholder="0" step="1000" oninput="applyMapFilters()" />
+              <input type="number" id="min-rent" placeholder="0" step="1000" oninput="_debouncedFilter()" />
               <label data-i18n="max_rent_label">上限家賃 (円)</label>
-              <input type="number" id="max-rent" data-i18n-ph="max_rent_ph" placeholder="例: 200000 (0=上限なし)" step="1000" oninput="applyMapFilters()" />
+              <input type="number" id="max-rent" data-i18n-ph="max_rent_ph" placeholder="例: 200000 (0=上限なし)" step="1000" oninput="_debouncedFilter()" />
               <p class="section-label" style="margin-top:10px;" data-i18n="floor_area">専有面積</p>
               <label data-i18n="min_area">最低面積 (m²)</label>
-              <input type="number" id="min-size" placeholder="0" step="1" oninput="applyMapFilters()" />
+              <input type="number" id="min-size" placeholder="0" step="1" oninput="_debouncedFilter()" />
               <p class="section-label" style="margin-top:10px;" data-i18n="walk_station">駅徒歩</p>
               <label data-i18n="max_walk">最大徒歩分数 (分)</label>
-              <input type="number" id="max-walk" data-i18n-ph="max_walk_ph" placeholder="例: 10 (0=上限なし)" step="1" min="0" oninput="applyMapFilters()" />
+              <input type="number" id="max-walk" data-i18n-ph="max_walk_ph" placeholder="例: 10 (0=上限なし)" step="1" min="0" oninput="_debouncedFilter()" />
               <p class="section-label" style="margin-top:10px;" data-i18n="layout">間取り</p>
               <div class="layout-chips" id="layout-chips"></div>
               <p class="section-label" style="margin-top:10px;" data-i18n="source">データソース</p>
@@ -1386,7 +1386,7 @@
         <div style="padding:6px 0 8px;">
           <input id="name-search" type="search" autocomplete="off"
             placeholder="検索 / Search…"
-            oninput="applyFilters()"
+            oninput="_debouncedFilter()"
             style="width:100%;box-sizing:border-box;padding:5px 9px;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:6px;font-size:12px;font-family:inherit;outline:none;" />
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
@@ -1473,7 +1473,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 10:27 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 10:35 JST</p>
       </div>
 
 
@@ -5589,30 +5589,53 @@ function renderAvailableTable() {
   if (countEl) countEl.textContent = t('count_items', sorted.length);
 }
 
+function debounce(fn, ms) {
+  let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
+const _debouncedFilter = debounce(applyMapFilters, 220);
+
+const _CACHE_KEY = 'jkk_listings_v1';
+const _CACHE_TTL = 90_000;
+
+function _applyListingData(d) {
+  _allListings       = d.listings;
+  _pendingCount      = d.pending        ?? 0;
+  _geoPending        = d.geo_pending    ?? 0;
+  _stationPending    = d.station_pending ?? 0;
+  applyMapFilters();
+  if (!_deepLinkHandled) {
+    _deepLinkHandled = true;
+    const sharedId = new URLSearchParams(window.location.search).get('listing');
+    if (sharedId) setTimeout(() => selectListing(sharedId), 0);
+  }
+}
+
 async function loadListings() {
   const summary = document.getElementById('map-summary');
+
+  // Serve from cache immediately if fresh enough
+  try {
+    const cached = JSON.parse(localStorage.getItem(_CACHE_KEY) || 'null');
+    if (cached && Date.now() - cached.ts < _CACHE_TTL) {
+      _applyListingData(cached.data);
+    }
+  } catch (_) {}
+
+  // Always fetch fresh data in background
   try {
     const r = await fetch(`${API}/listings`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
 
-    _allListings = d.listings;
-    _pendingCount = d.pending ?? 0;
-    _geoPending      = d.geo_pending      ?? 0;
-    _stationPending  = d.station_pending  ?? 0;
-    applyMapFilters();
-    if (!_deepLinkHandled) {
-      _deepLinkHandled = true;
-      const sharedId = new URLSearchParams(window.location.search).get('listing');
-      if (sharedId) setTimeout(() => selectListing(sharedId), 0);
-    }
+    try { localStorage.setItem(_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: d })); } catch (_) {}
+    _applyListingData(d);
 
     clearTimeout(_listingsPollTimer);
     if (_pendingCount > 0) {
       _listingsPollTimer = setTimeout(loadListings, 2500);
     }
   } catch (e) {
-    summary.textContent = t('server_offline');
+    if (!_allListings.length) summary.textContent = t('server_offline');
   }
 }
 
