@@ -1473,7 +1473,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 10:05 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 10:27 JST</p>
       </div>
 
 
@@ -4911,6 +4911,7 @@ async function renderDetailTab(listingId) {
        listing.available_from && '入居可能時期',
        (listing.has_parking || listing.parking_fee) && '敷地内駐車場',
        listing.nearby_features && '特徴',
+       listing.appliances && '設備',
       ].filter(Boolean)
     );
     // JKK fields to suppress (table column headers, internal codes, duplicates)
