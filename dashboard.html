@@ -1473,7 +1473,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 10:35 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 10:56 JST</p>
       </div>
 
 
@@ -4575,7 +4575,7 @@ function markerIcon(source, selected, saved) {
   const isUR   = source === 'ur';
   const fill   = selected ? (isUR ? '#1d4ed8' : '#b91c1c') : (isUR ? '#3a86ff' : '#dc2626');
   const border = selected ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.7)';
-  const w = selected ? 30 : 22;
+  const w = selected ? 21 : 15;
   const h = Math.round(w * 1.45);
   const cx = w / 2, cr = w * 0.28;
   const innerFill = saved ? '#FCD34D' : 'rgba(255,255,255,0.88)';
