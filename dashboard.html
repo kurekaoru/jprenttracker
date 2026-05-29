@@ -1481,7 +1481,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 11:59 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 12:38 JST</p>
       </div>
 
 
@@ -5630,9 +5630,35 @@ function _applyListingData(d) {
   applyMapFilters();
   if (!_deepLinkHandled) {
     _deepLinkHandled = true;
-    const sharedId = new URLSearchParams(window.location.search).get('listing');
-    if (sharedId) setTimeout(() => selectListing(sharedId), 0);
+    const params = new URLSearchParams(window.location.search);
+    const sharedId  = params.get('listing');
+    const focusWard = params.get('focus_ward');
+    if (sharedId) {
+      setTimeout(() => selectListing(sharedId), 0);
+    } else if (focusWard) {
+      setTimeout(() => _focusWard(focusWard), 0);
+    }
   }
+}
+
+function _focusWard(ward) {
+  if (!map) return;
+  const entries = Object.values(_markers).filter(e => e.listing.ward === ward);
+  if (!entries.length) return;
+  if (entries.length === 1) {
+    map.panTo(entries[0].marker.getPosition());
+    map.setZoom(14);
+  } else {
+    const bounds = new google.maps.LatLngBounds();
+    entries.forEach(e => bounds.extend(e.marker.getPosition()));
+    map.fitBounds(bounds, { top: 60, right: 40, bottom: 40, left: 40 });
+  }
+  // Brief pulse highlight on ward markers
+  entries.forEach(e => {
+    const orig = e.marker.getIcon();
+    e.marker.setAnimation(google.maps.Animation.BOUNCE);
+    setTimeout(() => e.marker.setAnimation(null), 1400);
+  });
 }
 
 function _setServerStatus(online) {

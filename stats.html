@@ -231,6 +231,7 @@ const STRINGS = {
   col_deviation:    { ja:'乖離率',             en:'Deviation',             uk:'Відхилення' },
   ml_no_results:    { ja:'該当なし',           en:'No results',            uk:'Немає результатів' },
   ml_not_ready:     { ja:'モデルが準備できていません', en:'Model not ready', uk:'Модель не готова' },
+  view_props:       { ja:'物件を見る →',       en:'View Properties →',    uk:'Переглянути →' },
 };
 
 function t(key, ...args) {
@@ -311,7 +312,7 @@ function _initMap() {
       { featureType:'poi', elementType:'all', stylers:[{visibility:'off'}] },
     ],
   });
-  _infoWindow = new google.maps.InfoWindow();
+  _infoWindow = new google.maps.InfoWindow({ headerDisabled: true });
   _loadChoropleth();
 }
 
@@ -331,12 +332,17 @@ async function _loadChoropleth() {
     const ward = _wardStats[n3+n4] ? n3+n4 : (_wardStats[n4] ? n4 : null);
     if (!ward) return;
     const s = _wardStats[ward];
+    const viewUrl = `dashboard.html?focus_ward=${encodeURIComponent(ward)}`;
     _infoWindow.setContent(`
-      <div style="font-family:'DM Sans',sans-serif;font-size:12px;padding:2px 0;min-width:140px;">
-        <div style="font-weight:600;margin-bottom:4px;">${ward}</div>
-        <div>${t('map_rpsq')}: <b>¥${fmt(s.avgRpsq)}/㎡</b></div>
-        <div>${t('map_avg_rent')}: ¥${fmt(s.avgRent)}</div>
-        <div>${t('map_count')}: ${s.count}</div>
+      <div style="font-family:'DM Sans',sans-serif;font-size:12px;padding:4px 0 2px;min-width:160px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+          <span style="font-weight:600;font-size:12px;">${ward}</span>
+          <span onclick="_infoWindow.close()" style="cursor:pointer;font-size:12px;color:#999;line-height:1;padding-left:10px;flex-shrink:0;">✕</span>
+        </div>
+        <div style="color:#555;line-height:1.7;">${t('map_rpsq')}: <b>¥${fmt(s.avgRpsq)}/㎡</b></div>
+        <div style="color:#555;">${t('map_avg_rent')}: ¥${fmt(s.avgRent)}</div>
+        <div style="color:#555;">${t('map_count')}: ${s.count}</div>
+        <a href="${viewUrl}" style="display:block;margin-top:7px;text-align:center;padding:4px 0;background:#1D9E75;color:#fff;border-radius:5px;font-size:11px;font-weight:600;text-decoration:none;">${t('view_props')}</a>
       </div>`);
     _infoWindow.setPosition(ev.latLng);
     _infoWindow.open(_map);
