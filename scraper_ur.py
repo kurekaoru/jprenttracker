@@ -202,7 +202,9 @@ def _normalize_layout(raw):
     return s or raw
 
 
-def _parse_room(room, danchi, ward_name):
+_TDFK_PREF = {"13": "東京都", "14": "神奈川県", "11": "埼玉県", "12": "千葉県"}
+
+def _parse_room(room, danchi, ward_name, tdfk):
     rent_m = _RENT_RE.search(room.get("rent") or "")
     rent = int(rent_m.group(1).replace(",", "")) if rent_m else 0
     if rent == 0:
@@ -234,6 +236,7 @@ def _parse_room(room, danchi, ward_name):
         "url":           url,
         "source":        "ur",
         "thumbnail_url": thumbnail_url,
+        "prefecture":    _TDFK_PREF.get(tdfk),
     }
 
 
@@ -260,7 +263,7 @@ def _fetch_all_ur_listings():
                     log.error(f"UR: rooms fetch failed for {d.get('danchiNm','?')}: {e}")
                     continue
                 for r in rooms:
-                    parsed = _parse_room(r, d, ward_name)
+                    parsed = _parse_room(r, d, ward_name, tdfk)
                     if parsed:
                         listings.append(parsed)
                         ward_count += 1

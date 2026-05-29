@@ -320,6 +320,7 @@ class JKKScraper(BaseScraper):
             "rent": rent_raw, "layout": layout, "size_m2": size_m2,
             "url": url, "source": "jkk", "thumbnail_url": thumbnail_url,
             "priority": priority_text, "building_type": building_type,
+            "prefecture": "東京都",
         }
 
     def _process_listing_detail(self, popup, ctx, lid: str, lst: dict,

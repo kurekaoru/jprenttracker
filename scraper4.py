@@ -129,6 +129,7 @@ def init_db() -> sqlite3.Connection:
         ("age_years",       "INTEGER"),
         ("available_from",  "TEXT"),
         ("nearby_features", "TEXT"),
+        ("prefecture",      "TEXT"),
         ("scrape_complete", "INTEGER DEFAULT 0"),
         ("data_issues",     "TEXT"),
     ]:
@@ -160,24 +161,27 @@ def upsert_listing(con, lid: str, listing: dict, notified: bool = False) -> bool
     building_type = listing.get("building_type") or None
     is_new   = not get_listing_row(con, lid)
 
+    prefecture = listing.get("prefecture") or None
+
     if not is_new:
         con.execute(
             "UPDATE listings SET last_seen=?, rent=?, source=?, address=?, disappeared_at=NULL,"
             " notified=MAX(notified,?),"
+            " prefecture=COALESCE(prefecture,?),"
             " priority=COALESCE(priority,?), building_type=COALESCE(building_type,?)"
             " WHERE id=?",
             (now, listing["rent"], source, address, int(notified),
-             priority, building_type, lid),
+             prefecture, priority, building_type, lid),
         )
     else:
         con.execute(
             "INSERT INTO listings "
             "(id,name,ward,layout,rent,size_m2,url,first_seen,last_seen,notified,"
-            " source,address,thumbnail_url,priority,building_type) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " source,address,thumbnail_url,priority,building_type,prefecture) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (lid, listing["name"], listing["ward"], listing["layout"],
              listing["rent"], listing["size_m2"], listing["url"], now, now,
-             int(notified), source, address, thumb, priority, building_type),
+             int(notified), source, address, thumb, priority, building_type, prefecture),
         )
         if thumb:
             con.execute(

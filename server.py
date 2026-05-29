@@ -149,6 +149,7 @@ def db():
         ("age_years",       "INTEGER"),
         ("available_from",   "TEXT"),
         ("nearby_features",  "TEXT"),
+        ("prefecture",       "TEXT"),
         ("scrape_complete",  "INTEGER DEFAULT 0"),
         ("data_issues",      "TEXT"),
     ]:
@@ -380,54 +381,7 @@ def _nearest_station(lat, lng):
         return None
 
 
-_PREF_MAP = {
-    # Kanagawa — designated cities (prefix-match covers all wards)
-    "横浜市": "神奈川県", "川崎市": "神奈川県", "相模原市": "神奈川県",
-    # Kanagawa — other cities and towns
-    "横須賀市": "神奈川県", "平塚市": "神奈川県", "鎌倉市": "神奈川県",
-    "藤沢市": "神奈川県", "小田原市": "神奈川県", "茅ヶ崎市": "神奈川県",
-    "逗子市": "神奈川県", "三浦市": "神奈川県", "秦野市": "神奈川県",
-    "厚木市": "神奈川県", "大和市": "神奈川県", "伊勢原市": "神奈川県",
-    "海老名市": "神奈川県", "座間市": "神奈川県", "南足柄市": "神奈川県",
-    "綾瀬市": "神奈川県", "葉山町": "神奈川県", "寒川町": "神奈川県",
-    "大磯町": "神奈川県", "二宮町": "神奈川県", "中井町": "神奈川県",
-    "大井町": "神奈川県", "松田町": "神奈川県", "山北町": "神奈川県",
-    "開成町": "神奈川県", "箱根町": "神奈川県", "真鶴町": "神奈川県",
-    "湯河原町": "神奈川県", "愛川町": "神奈川県", "清川村": "神奈川県",
-    # Saitama — designated city
-    "さいたま市": "埼玉県",
-    # Saitama — other cities and towns
-    "川越市": "埼玉県", "熊谷市": "埼玉県", "川口市": "埼玉県",
-    "行田市": "埼玉県", "秩父市": "埼玉県", "所沢市": "埼玉県",
-    "飯能市": "埼玉県", "加須市": "埼玉県", "本庄市": "埼玉県",
-    "東松山市": "埼玉県", "春日部市": "埼玉県", "狭山市": "埼玉県",
-    "羽生市": "埼玉県", "鴻巣市": "埼玉県", "深谷市": "埼玉県",
-    "上尾市": "埼玉県", "草加市": "埼玉県", "越谷市": "埼玉県",
-    "蕨市": "埼玉県", "戸田市": "埼玉県", "入間市": "埼玉県",
-    "朝霞市": "埼玉県", "志木市": "埼玉県", "和光市": "埼玉県",
-    "新座市": "埼玉県", "桶川市": "埼玉県", "久喜市": "埼玉県",
-    "北本市": "埼玉県", "八潮市": "埼玉県", "富士見市": "埼玉県",
-    "三郷市": "埼玉県", "蓮田市": "埼玉県", "坂戸市": "埼玉県",
-    "幸手市": "埼玉県", "鶴ヶ島市": "埼玉県", "日高市": "埼玉県",
-    "吉川市": "埼玉県", "ふじみ野市": "埼玉県", "白岡市": "埼玉県",
-    # Chiba — designated city
-    "千葉市": "千葉県",
-    # Chiba — other cities and towns
-    "銚子市": "千葉県", "市川市": "千葉県", "船橋市": "千葉県",
-    "館山市": "千葉県", "木更津市": "千葉県", "松戸市": "千葉県",
-    "野田市": "千葉県", "茂原市": "千葉県", "成田市": "千葉県",
-    "佐倉市": "千葉県", "東金市": "千葉県", "旭市": "千葉県",
-    "習志野市": "千葉県", "柏市": "千葉県", "勝浦市": "千葉県",
-    "市原市": "千葉県", "流山市": "千葉県", "八千代市": "千葉県",
-    "我孫子市": "千葉県", "鴨川市": "千葉県", "鎌ケ谷市": "千葉県",
-    "君津市": "千葉県", "富津市": "千葉県", "浦安市": "千葉県",
-    "四街道市": "千葉県", "袖ケ浦市": "千葉県", "八街市": "千葉県",
-    "印西市": "千葉県", "白井市": "千葉県", "富里市": "千葉県",
-    "南房総市": "千葉県", "匝瑳市": "千葉県", "香取市": "千葉県",
-    "山武市": "千葉県", "いすみ市": "千葉県", "大網白里市": "千葉県",
-}
-
-# Approximate bounding boxes (lat_min, lat_max, lng_min, lng_max) per prefecture
+# Bounding boxes (lat_min, lat_max, lng_min, lng_max) per prefecture for sanity-checking geocode results
 _PREF_BOUNDS = {
     "東京都":   (35.50, 35.90, 138.83, 139.92),
     "神奈川県": (35.10, 35.70, 138.90, 139.82),
@@ -439,12 +393,6 @@ def _in_pref_bounds(lat, lng, pref):
     b = _PREF_BOUNDS.get(pref)
     return b is None or (b[0] <= lat <= b[1] and b[2] <= lng <= b[3])
 
-def _prefecture(ward):
-    for prefix, pref in _PREF_MAP.items():
-        if ward.startswith(prefix):
-            return pref
-    return "東京都"
-
 _JKK_NAME_PREFIXES = re.compile(
     r'^(コーシャハイム|パルタウン|シティハイツ|グリーンパーク|ライフパーク|'
     r'グランドパーク|コスモス|メゾン|ハイツ|コーポ|ビレッジ|タウン)'
@@ -452,21 +400,21 @@ _JKK_NAME_PREFIXES = re.compile(
 _JKK_NAME_SUFFIXES = re.compile(r'[第\s]*[\d一二三四五六七八九十]+[期棟号]?$')
 
 def _extract_neighborhood(name: str) -> str:
-    """Strip JKK/UR building-type prefixes and number suffixes to get the town name."""
     s = _JKK_NAME_PREFIXES.sub("", name).strip()
     s = _JKK_NAME_SUFFIXES.sub("", s).strip()
     return s
 
 def _build_geocode_query(row):
-    name    = (row["name"]    or "").strip()
-    address = (row["address"] or "").strip()
-    ward    = (row["ward"]    or "").strip()
-    pref    = _prefecture(ward)
+    name    = (row["name"]       or "").strip()
+    address = (row["address"]    or "").strip()
+    ward    = (row["ward"]       or "").strip()
+    pref    = (row["prefecture"] or "").strip()
+    prefix  = pref if pref else ""
     if address and address != ward:
-        return f"{pref}{address}"
+        return f"{prefix}{address}"
     if name:
-        return f"{pref}{ward} {name}"
-    return f"{pref}{ward}"
+        return f"{prefix}{ward} {name}"
+    return f"{prefix}{ward}"
 
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
@@ -558,18 +506,18 @@ def _geocode_worker():
             cutoff = (datetime.now() - timedelta(hours=GEOCODE_LOOKBACK_HOURS)).isoformat()
 
             row = con.execute(
-                "SELECT id, name, ward, COALESCE(address, ward) AS address "
+                "SELECT id, name, ward, prefecture, COALESCE(address, ward) AS address "
                 "  FROM listings "
                 " WHERE last_seen >= ? AND lat IS NULL AND geocoded_at IS NULL "
                 " LIMIT 1",
                 (cutoff,),
             ).fetchone()
             if row:
-                addr = (row["address"] or "").strip()
-                ward = (row["ward"] or "").strip()
-                pref = _prefecture(ward)
+                addr = (row["address"]    or "").strip()
+                ward = (row["ward"]       or "").strip()
+                pref = (row["prefecture"] or "").strip()  # from scraper, no fallback
                 coords = _gsi_geocode(_build_geocode_query(row))
-                if coords and not _in_pref_bounds(coords[0], coords[1], pref):
+                if coords and pref and not _in_pref_bounds(coords[0], coords[1], pref):
                     logging.warning(
                         f"Geocode for {row['id']} ({ward}) landed outside {pref} bounds "
                         f"at {coords}, discarding"
@@ -581,8 +529,8 @@ def _geocode_worker():
                     neighborhood = _extract_neighborhood(row["name"])
                     if neighborhood and neighborhood != row["name"]:
                         nc = _gsi_geocode(f"{pref}{ward}{neighborhood}")
-                        if nc and _in_pref_bounds(nc[0], nc[1], pref):
-                            coords = nc  # prefer the neighborhood-specific result
+                        if nc and (not pref or _in_pref_bounds(nc[0], nc[1], pref)):
+                            coords = nc
                 if coords is None:
                     coords = WARD_CENTROID.get(row["ward"])
                 now = datetime.now().isoformat()
