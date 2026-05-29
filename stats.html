@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JKK Stats</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
+  :root {
+    --bg: #f6f5f0;
+    --surface: #ffffff;
+    --rail-bg: #27272b;
+    --surface2: #f0ede6;
+    --border: rgba(0,0,0,0.1);
+    --text: #1a1a18;
+    --muted: #6b6b66;
+    --accent: #1D9E75;
+    --accent-light: #E1F5EE;
+    --accent-dark: #0F6E56;
+    --danger: #E24B4A;
+    --warn: #EF9F27;
+    --radius: 10px;
+    --font: 'DM Sans', system-ui, sans-serif;
+    --mono: 'DM Mono', monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #18181a;
+      --surface: #242426;
+      --surface2: #2e2e30;
+      --border: rgba(255,255,255,0.1);
+      --text: #f0ede6;
+      --muted: #9a9a94;
+      --accent: #5DCAA5;
+      --accent-light: #04342C;
+      --accent-dark: #9FE1CB;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* ── Topbar ── */
+  .topbar {
+    display: grid;
+    grid-template-columns: 38px 1fr;
+    height: 38px;
+    position: sticky; top: 0; z-index: 16;
+  }
+  .topbar-rail {
+    background: var(--rail-bg);
+    display: flex; align-items: center; justify-content: center;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  .topbar-main {
+    background: var(--rail-bg);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    display: flex; align-items: center; gap: 12px;
+    padding: 0 1.2rem;
+  }
+  .topbar-title { font-size: 13px; font-weight: 600; letter-spacing: -0.02em; color: rgba(255,255,255,0.85); flex-shrink: 0; }
+  .dot { width: 22px; height: 22px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; font-weight: 700; }
+  .dev-badge { font-size: 9px; font-weight: 700; background: rgba(239,159,39,0.2); color: var(--warn); border: 1px solid rgba(239,159,39,0.3); border-radius: 4px; padding: 1px 5px; letter-spacing: 0.04em; flex-shrink: 0; }
+  .topbar-back { font-size: 11px; color: rgba(255,255,255,0.4); text-decoration: none; transition: color 0.15s; flex-shrink: 0; }
+  .topbar-back:hover { color: var(--accent); }
+  .topbar-status { font-size: 11px; color: rgba(255,255,255,0.3); margin-left: auto; white-space: nowrap; }
+
+  /* ── Layout ── */
+  .layout { display: grid; grid-template-columns: 38px 1fr; min-height: calc(100vh - 38px); }
+  .left-rail {
+    background: var(--rail-bg);
+    border-right: 1px solid rgba(255,255,255,0.07);
+    display: flex; flex-direction: column; align-items: center;
+    padding: 10px 0; gap: 6px;
+  }
+  .rail-icon { width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.12s; color: rgba(255,255,255,0.35); }
+  .rail-icon:hover, .rail-icon.active { background: rgba(255,255,255,0.08); color: var(--accent); }
+  .rail-icon svg { width: 16px; height: 16px; }
+  .main { padding: 20px 24px; overflow-y: auto; }
+
+  /* ── Summary cards ── */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .card-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .card-value { font-size: 22px; font-weight: 600; font-family: var(--mono); color: var(--text); line-height: 1; }
+  .card-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* ── Section headers ── */
+  .section { margin-bottom: 28px; }
+  .section-header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .section-title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .section-sub { font-size: 11px; color: var(--muted); }
+
+  /* ── Charts ── */
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .chart-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .chart-title { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 12px; }
+  .chart-wrap { position: relative; }
+
+  /* ── Ward table ── */
+  .ward-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 24px; }
+  .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .data-table th { padding: 8px 12px; text-align: left; font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; background: var(--surface2); border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; user-select: none; }
+  .data-table th:hover { color: var(--accent); }
+  .data-table td { padding: 7px 12px; border-bottom: 1px solid var(--border); color: var(--text); }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: var(--surface2); }
+  .mono { font-family: var(--mono); }
+  .badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+  .badge-up   { background: rgba(226,75,74,0.12);  color: var(--danger); }
+  .badge-down { background: rgba(29,158,117,0.12); color: var(--accent); }
+  .badge-neu  { background: var(--surface2);        color: var(--muted);  }
+  .bar-inline { display: flex; align-items: center; gap: 6px; }
+  .bar-track { flex: 1; height: 4px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
+  .bar-fill  { height: 100%; border-radius: 2px; background: var(--accent); }
+
+  /* ── Scatter / listings table ── */
+  .listings-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .table-controls { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--surface2); }
+  .tctl-label { font-size: 11px; color: var(--muted); }
+  .tctl-select { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 11px; font-family: var(--font); padding: 3px 7px; outline: none; }
+  .tctl-input { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 11px; font-family: var(--font); padding: 3px 8px; outline: none; width: 130px; }
+  .tctl-input::placeholder { color: var(--muted); }
+
+  /* ── Loading ── */
+  .loading { display: flex; align-items: center; justify-content: center; padding: 48px; color: var(--muted); font-size: 13px; gap: 8px; }
+  .spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) { .charts-row { grid-template-columns: 1fr; } .cards { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-rail">
+    <div class="dot">S</div>
+  </div>
+  <div class="topbar-main">
+    <span class="topbar-title">Stats Dashboard</span>
+    <span class="dev-badge">DEV</span>
+    <a class="topbar-back" href="dashboard.html">← メインダッシュボード</a>
+    <span class="topbar-status" id="status">読み込み中…</span>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="left-rail">
+    <div class="rail-icon active" title="概要" onclick="showSection('overview')">
+      <svg viewBox="0 0 20 20" fill="currentColor"><rect x="2" y="2" width="7" height="7" rx="1.5"/><rect x="11" y="2" width="7" height="7" rx="1.5"/><rect x="2" y="11" width="7" height="7" rx="1.5"/><rect x="11" y="11" width="7" height="7" rx="1.5"/></svg>
+    </div>
+    <div class="rail-icon" title="区別分析" onclick="showSection('ward')">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 15h2V8H3v7zm4 0h2V5H7v10zm4 0h2v-5h-2v5zm4 0h2V2h-2v13z"/></svg>
+    </div>
+    <div class="rail-icon" title="物件リスト" onclick="showSection('listings')">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 4h14v2H3V4zm0 5h14v2H3V9zm0 5h10v2H3v-2z"/></svg>
+    </div>
+  </div>
+
+  <div class="main" id="main-content">
+    <div class="loading"><div class="spinner"></div>データを読み込み中…</div>
+  </div>
+</div>
+
+<script>
+const API = 'https://jkk-monitor.duckdns.org/api';
+let _listings = [];
+let _wardStats = {};
+let _globalAvgRentPerSqm = 0;
+let _currentSection = 'overview';
+let _chartInstances = {};
+
+// ── Data loading ─────────────────────────────────────────────────────────────
+
+async function loadData() {
+  try {
+    const r = await fetch(`${API}/listings`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    _listings = (d.listings || []).filter(l => !l.disappeared_at && l.size_m2 > 0 && l.rent > 0);
+    computeStats();
+    document.getElementById('status').textContent =
+      `${_listings.length} 件 · ${new Date().toLocaleTimeString('ja-JP', {hour:'2-digit',minute:'2-digit'})} 更新`;
+    renderSection(_currentSection);
+  } catch (e) {
+    document.getElementById('main-content').innerHTML =
+      `<div class="loading" style="color:var(--danger)">サーバーに接続できません: ${e.message}</div>`;
+  }
+}
+
+function computeStats() {
+  const byWard = {};
+  for (const l of _listings) {
+    if (!byWard[l.ward]) byWard[l.ward] = { rents: [], sqms: [], rpsqs: [], listings: [] };
+    const rpsq = l.rent / l.size_m2;
+    byWard[l.ward].rents.push(l.rent);
+    byWard[l.ward].sqms.push(l.size_m2);
+    byWard[l.ward].rpsqs.push(rpsq);
+    byWard[l.ward].listings.push(l);
+  }
+  const allRpsq = _listings.map(l => l.rent / l.size_m2);
+  _globalAvgRentPerSqm = mean(allRpsq);
+
+  _wardStats = {};
+  for (const [ward, d] of Object.entries(byWard)) {
+    const avgRpsq = mean(d.rpsqs);
+    _wardStats[ward] = {
+      count:      d.listings.length,
+      avgRent:    mean(d.rents),
+      avgSqm:     mean(d.sqms),
+      avgRpsq,
+      medianRent: median(d.rents),
+      minRent:    Math.min(...d.rents),
+      maxRent:    Math.max(...d.rents),
+      listings:   d.listings,
+    };
+  }
+}
+
+// ── Stats helpers ─────────────────────────────────────────────────────────────
+
+const mean   = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+const median = arr => { const s = [...arr].sort((a,b)=>a-b); const m = s.length>>1; return s.length%2 ? s[m] : (s[m-1]+s[m])/2; };
+const fmt    = n => Math.round(n).toLocaleString('ja-JP');
+const fmtK   = n => n >= 10000 ? (n/10000).toFixed(1)+'万' : fmt(n);
+const pct    = (v, ref) => ((v - ref) / ref * 100).toFixed(1);
+
+function predictedRent(listing) {
+  const ws = _wardStats[listing.ward];
+  return ws ? ws.avgRpsq * listing.size_m2 : _globalAvgRentPerSqm * listing.size_m2;
+}
+
+// ── Section routing ───────────────────────────────────────────────────────────
+
+function showSection(sec) {
+  _currentSection = sec;
+  document.querySelectorAll('.rail-icon').forEach((el, i) => {
+    el.classList.toggle('active', ['overview','ward','listings'][i] === sec);
+  });
+  renderSection(sec);
+}
+
+function renderSection(sec) {
+  if (!_listings.length) return;
+  destroyCharts();
+  if (sec === 'overview') renderOverview();
+  else if (sec === 'ward')  renderWard();
+  else                      renderListings();
+}
+
+function destroyCharts() {
+  for (const c of Object.values(_chartInstances)) c.destroy();
+  _chartInstances = {};
+}
+
+// ── Overview ──────────────────────────────────────────────────────────────────
+
+function renderOverview() {
+  const total   = _listings.length;
+  const avgRent = mean(_listings.map(l => l.rent));
+  const avgSqm  = mean(_listings.map(l => l.size_m2));
+  const avgRpsq = _globalAvgRentPerSqm;
+  const wardCount = Object.keys(_wardStats).length;
+
+  const urCount  = _listings.filter(l => l.source === 'ur').length;
+  const jkkCount = total - urCount;
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="cards">
+      <div class="card"><div class="card-label">物件数</div><div class="card-value">${total}</div><div class="card-sub">JKK ${jkkCount} · UR ${urCount}</div></div>
+      <div class="card"><div class="card-label">平均家賃</div><div class="card-value">¥${fmtK(avgRent)}</div><div class="card-sub">月額</div></div>
+      <div class="card"><div class="card-label">平均面積</div><div class="card-value">${avgSqm.toFixed(1)}<span style="font-size:13px;font-weight:400"> m²</span></div><div class="card-sub"></div></div>
+      <div class="card"><div class="card-label">㎡単価（平均）</div><div class="card-value">¥${fmtK(avgRpsq)}</div><div class="card-sub">円/㎡/月</div></div>
+      <div class="card"><div class="card-label">対象区市数</div><div class="card-value">${wardCount}</div><div class="card-sub">区・市</div></div>
+      <div class="card"><div class="card-label">中央値家賃</div><div class="card-value">¥${fmtK(median(_listings.map(l=>l.rent)))}</div><div class="card-sub">月額</div></div>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-box">
+        <div class="chart-title">家賃分布（¥千円単位）</div>
+        <div class="chart-wrap"><canvas id="chart-rent-hist" height="220"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">㎡単価 分布（円/㎡/月）</div>
+        <div class="chart-wrap"><canvas id="chart-rpsq-hist" height="220"></canvas></div>
+      </div>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-box">
+        <div class="chart-title">面積 vs 家賃（散布図）</div>
+        <div class="chart-wrap"><canvas id="chart-scatter" height="240"></canvas></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">ソース別・間取り別 物件数</div>
+        <div class="chart-wrap"><canvas id="chart-layout" height="240"></canvas></div>
+      </div>
+    </div>
+  `;
+
+  drawRentHist();
+  drawRpsqHist();
+  drawScatter();
+  drawLayoutBar();
+}
+
+function chartColors() {
+  const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  return {
+    grid:    dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+    text:    dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)',
+    accent:  dark ? '#5DCAA5' : '#1D9E75',
+    blue:    dark ? '#60A5FA' : '#3B82F6',
+    red:     dark ? '#F87171' : '#DC2626',
+    warn:    '#EF9F27',
+    surface: dark ? '#242426' : '#ffffff',
+    muted:   dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+  };
+}
+
+function baseChartOpts(cc) {
+  return {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: { legend: { display: false }, tooltip: { bodyFont: { family: 'DM Mono' }, titleFont: { family: 'DM Sans' } } },
+    scales: {
+      x: { grid: { color: cc.grid }, ticks: { color: cc.text, font: { family: 'DM Mono', size: 10 } } },
+      y: { grid: { color: cc.grid }, ticks: { color: cc.text, font: { family: 'DM Mono', size: 10 } } },
+    },
+  };
+}
+
+function histogram(values, bucketSize) {
+  const min = Math.floor(Math.min(...values) / bucketSize) * bucketSize;
+  const max = Math.ceil( Math.max(...values) / bucketSize) * bucketSize;
+  const buckets = [];
+  for (let v = min; v < max; v += bucketSize) {
+    buckets.push({ label: v, count: values.filter(x => x >= v && x < v + bucketSize).length });
+  }
+  return buckets;
+}
+
+function drawRentHist() {
+  const cc = chartColors();
+  const vals = _listings.map(l => l.rent / 1000);
+  const bkts = histogram(vals, 10);
+  const ctx  = document.getElementById('chart-rent-hist').getContext('2d');
+  _chartInstances['rent-hist'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels:   bkts.map(b => `${b.label}k`),
+      datasets: [{ data: bkts.map(b => b.count), backgroundColor: cc.accent + 'cc', borderRadius: 3, borderSkipped: false }],
+    },
+    options: { ...baseChartOpts(cc), plugins: { ...baseChartOpts(cc).plugins, tooltip: { callbacks: { label: ctx => `${ctx.parsed.y} 件` } } } },
+  });
+}
+
+function drawRpsqHist() {
+  const cc = chartColors();
+  const vals = _listings.map(l => l.rent / l.size_m2);
+  const bkts = histogram(vals, 200);
+  const ctx  = document.getElementById('chart-rpsq-hist').getContext('2d');
+  _chartInstances['rpsq-hist'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels:   bkts.map(b => `¥${b.label}`),
+      datasets: [{ data: bkts.map(b => b.count), backgroundColor: cc.blue + 'cc', borderRadius: 3, borderSkipped: false }],
+    },
+    options: { ...baseChartOpts(cc), plugins: { ...baseChartOpts(cc).plugins, tooltip: { callbacks: { label: ctx => `${ctx.parsed.y} 件` } } } },
+  });
+}
+
+function drawScatter() {
+  const cc  = chartColors();
+  const ctx = document.getElementById('chart-scatter').getContext('2d');
+  const pts = _listings.map(l => ({ x: l.size_m2, y: l.rent / 1000, label: l.name, source: l.source }));
+  _chartInstances['scatter'] = new Chart(ctx, {
+    type: 'scatter',
+    data: {
+      datasets: [
+        { label: 'JKK', data: pts.filter(p => p.source !== 'ur'), backgroundColor: cc.red + '99', pointRadius: 4, pointHoverRadius: 6 },
+        { label: 'UR',  data: pts.filter(p => p.source === 'ur'), backgroundColor: cc.blue + '99', pointRadius: 4, pointHoverRadius: 6 },
+      ],
+    },
+    options: {
+      ...baseChartOpts(cc),
+      plugins: {
+        legend: { display: true, labels: { color: cc.text, font: { family: 'DM Sans', size: 11 } } },
+        tooltip: { callbacks: { label: ctx => `${ctx.raw.label} · ${ctx.raw.x}㎡ · ¥${ctx.raw.y}k` } },
+      },
+    },
+  });
+}
+
+function drawLayoutBar() {
+  const cc = chartColors();
+  const layouts = [...new Set(_listings.map(l => l.layout))].sort();
+  const jkk = layouts.map(lay => _listings.filter(l => l.layout === lay && l.source !== 'ur').length);
+  const ur  = layouts.map(lay => _listings.filter(l => l.layout === lay && l.source === 'ur').length);
+  const ctx = document.getElementById('chart-layout').getContext('2d');
+  _chartInstances['layout'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: layouts,
+      datasets: [
+        { label: 'JKK', data: jkk, backgroundColor: cc.red  + 'cc', borderRadius: 3, borderSkipped: false },
+        { label: 'UR',  data: ur,  backgroundColor: cc.blue + 'cc', borderRadius: 3, borderSkipped: false },
+      ],
+    },
+    options: {
+      ...baseChartOpts(cc),
+      plugins: { legend: { display: true, labels: { color: cc.text, font: { family: 'DM Sans', size: 11 } } } },
+      scales: { ...baseChartOpts(cc).scales, x: { ...baseChartOpts(cc).scales.x, stacked: true }, y: { ...baseChartOpts(cc).scales.y, stacked: true } },
+    },
+  });
+}
+
+// ── Ward analysis ─────────────────────────────────────────────────────────────
+
+let _wardSortCol = 'avgRpsq';
+let _wardSortAsc = false;
+
+function renderWard() {
+  const maxRpsq = Math.max(...Object.values(_wardStats).map(w => w.avgRpsq));
+  const sorted  = Object.entries(_wardStats).sort((a, b) => {
+    const [ka, kb] = _wardSortAsc ? [a, b] : [b, a];
+    const va = ka[1][_wardSortCol], vb = kb[1][_wardSortCol];
+    return typeof va === 'string' ? va.localeCompare(vb) : va - vb;
+  });
+
+  const rows = sorted.map(([ward, s]) => {
+    const diff = parseFloat(pct(s.avgRpsq, _globalAvgRentPerSqm));
+    const badge = diff > 5  ? `<span class="badge badge-up">+${diff}%</span>`
+                : diff < -5 ? `<span class="badge badge-down">${diff}%</span>`
+                :             `<span class="badge badge-neu">±0</span>`;
+    const barPct = Math.round(s.avgRpsq / maxRpsq * 100);
+    return `<tr>
+      <td>${ward}</td>
+      <td class="mono">${s.count}</td>
+      <td class="mono">¥${fmt(s.avgRent)}</td>
+      <td class="mono">¥${fmt(s.medianRent)}</td>
+      <td class="mono">¥${fmt(s.minRent)} – ¥${fmt(s.maxRent)}</td>
+      <td><div class="bar-inline"><span class="mono">¥${fmt(s.avgRpsq)}</span><div class="bar-track"><div class="bar-fill" style="width:${barPct}%"></div></div></div></td>
+      <td>${badge}</td>
+      <td class="mono">${s.avgSqm.toFixed(1)} m²</td>
+    </tr>`;
+  }).join('');
+
+  const sortTh = (col, label) => {
+    const active = col === _wardSortCol;
+    const arrow  = active ? (_wardSortAsc ? ' ▲' : ' ▼') : '';
+    return `<th onclick="sortWard('${col}')">${label}${arrow}</th>`;
+  };
+
+  document.getElementById('main-content').innerHTML = `
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">区・市 別 家賃分析</span>
+        <span class="section-sub">全体平均 ㎡単価: ¥${fmt(_globalAvgRentPerSqm)}/㎡/月</span>
+      </div>
+      <div class="chart-box" style="margin-bottom:16px;">
+        <div class="chart-title">区・市 別 平均㎡単価 ランキング（上位20）</div>
+        <div class="chart-wrap"><canvas id="chart-ward-bar" height="140"></canvas></div>
+      </div>
+      <div class="ward-table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            ${sortTh('ward','区・市')}
+            ${sortTh('count','件数')}
+            ${sortTh('avgRent','平均家賃')}
+            ${sortTh('medianRent','中央値')}
+            <th>最小 – 最大</th>
+            ${sortTh('avgRpsq','㎡単価')}
+            <th>全体比</th>
+            ${sortTh('avgSqm','平均面積')}
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  drawWardBar();
+}
+
+function sortWard(col) {
+  if (_wardSortCol === col) _wardSortAsc = !_wardSortAsc;
+  else { _wardSortCol = col; _wardSortAsc = false; }
+  renderWard();
+}
+
+function drawWardBar() {
+  const cc = chartColors();
+  const sorted = Object.entries(_wardStats)
+    .sort((a, b) => b[1].avgRpsq - a[1].avgRpsq)
+    .slice(0, 20);
+  const avgLine = _globalAvgRentPerSqm;
+  const ctx = document.getElementById('chart-ward-bar').getContext('2d');
+  _chartInstances['ward-bar'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels:   sorted.map(([w]) => w),
+      datasets: [
+        { label: '㎡単価', data: sorted.map(([,s]) => Math.round(s.avgRpsq)), backgroundColor: sorted.map(([,s]) => s.avgRpsq > avgLine ? cc.red + 'bb' : cc.accent + 'bb'), borderRadius: 3 },
+      ],
+    },
+    options: {
+      ...baseChartOpts(cc),
+      plugins: {
+        ...baseChartOpts(cc).plugins,
+        annotation: { annotations: { avgLine: { type: 'line', yMin: avgLine, yMax: avgLine, borderColor: cc.warn, borderWidth: 1.5, borderDash: [4,3] } } },
+        tooltip: { callbacks: { label: ctx => `¥${fmt(ctx.parsed.y)}/㎡/月` } },
+      },
+    },
+  });
+}
+
+// ── Listings table ────────────────────────────────────────────────────────────
+
+let _listingFilter = '';
+let _listingSource = 'all';
+let _listingSort   = 'diff';
+let _listingSortAsc = false;
+
+function renderListings() {
+  document.getElementById('main-content').innerHTML = `
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">物件別 予測価格比較</span>
+        <span class="section-sub">予測 = 同一区市の平均㎡単価 × 面積</span>
+      </div>
+      <div class="listings-table-wrap">
+        <div class="table-controls">
+          <span class="tctl-label">ソース</span>
+          <select class="tctl-select" onchange="_listingSource=this.value;renderListingsTable()">
+            <option value="all">すべて</option>
+            <option value="jkk">JKK</option>
+            <option value="ur">UR</option>
+          </select>
+          <input class="tctl-input" placeholder="物件名・区市で絞込…" oninput="_listingFilter=this.value.toLowerCase();renderListingsTable()">
+        </div>
+        <div id="listings-tbody-wrap">
+          <div class="loading"><div class="spinner"></div>計算中…</div>
+        </div>
+      </div>
+    </div>
+  `;
+  renderListingsTable();
+}
+
+function renderListingsTable() {
+  let filtered = _listings.filter(l => {
+    if (_listingSource !== 'all' && l.source !== _listingSource) return false;
+    if (_listingFilter) { const h = (l.name + l.ward).toLowerCase(); if (!h.includes(_listingFilter)) return false; }
+    return true;
+  });
+
+  filtered = filtered.map(l => {
+    const pred = predictedRent(l);
+    const diff = l.rent - pred;
+    const diffPct = (diff / pred * 100);
+    return { ...l, pred, diff, diffPct };
+  });
+
+  filtered.sort((a, b) => {
+    const [ka, kb] = _listingSortAsc ? [a, b] : [b, a];
+    return (kb[_listingSort] ?? 0) - (ka[_listingSort] ?? 0);
+  });
+
+  const sortTh = (col, label) => {
+    const active = col === _listingSort;
+    const arrow  = active ? (_listingSortAsc ? ' ▲' : ' ▼') : '';
+    return `<th onclick="sortListings('${col}')">${label}${arrow}</th>`;
+  };
+
+  const rows = filtered.map(l => {
+    const dp = l.diffPct.toFixed(1);
+    const badge = l.diffPct > 5  ? `<span class="badge badge-up">+${dp}%</span>`
+                : l.diffPct < -5 ? `<span class="badge badge-down">${dp}%</span>`
+                :                  `<span class="badge badge-neu">±${Math.abs(dp)}%</span>`;
+    const srcColor = l.source === 'ur' ? '#3B82F6' : '#DC2626';
+    return `<tr>
+      <td><span style="font-size:9px;font-weight:700;color:${srcColor};text-transform:uppercase;">${l.source}</span></td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escH(l.name)}">${escH(l.name)}</td>
+      <td>${escH(l.ward)}</td>
+      <td class="mono">${l.layout}</td>
+      <td class="mono">${l.size_m2}m²</td>
+      <td class="mono">¥${fmt(l.rent)}</td>
+      <td class="mono">¥${fmt(Math.round(l.pred))}</td>
+      <td class="mono" style="color:${l.diff > 0 ? 'var(--danger)' : 'var(--accent)'};">${l.diff > 0 ? '+' : ''}¥${fmt(Math.round(l.diff))}</td>
+      <td>${badge}</td>
+      <td class="mono">${fmt(l.rent / l.size_m2)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('listings-tbody-wrap').innerHTML = `
+    <table class="data-table">
+      <thead><tr>
+        <th>元</th>
+        ${sortTh('name','物件名')}
+        ${sortTh('ward','区・市')}
+        <th>間取</th>
+        ${sortTh('size_m2','面積')}
+        ${sortTh('rent','実際家賃')}
+        ${sortTh('pred','予測家賃')}
+        ${sortTh('diff','差額')}
+        ${sortTh('diffPct','乖離率')}
+        ${sortTh('rpsq','㎡単価')}
+      </tr></thead>
+      <tbody>${rows || '<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--muted)">該当なし</td></tr>'}</tbody>
+    </table>
+  `;
+}
+
+function sortListings(col) {
+  if (_listingSort === col) _listingSortAsc = !_listingSortAsc;
+  else { _listingSort = col; _listingSortAsc = col === 'name' || col === 'ward'; }
+  renderListingsTable();
+}
+
+const escH = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+
+loadData();
+</script>
+</body>
+</html>
