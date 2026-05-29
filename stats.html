@@ -329,11 +329,11 @@ function _initMap() {
     ],
   });
   _infoWindow = new google.maps.InfoWindow({ headerDisabled: true });
-  // Ensure tiles paint even if the container dimensions settle after construction
-  requestAnimationFrame(() => {
-    google.maps.event.trigger(_map, 'resize');
-    _map.setCenter({ lat: 35.55, lng: 139.55 });
-  });
+  // Double-RAF + 400ms backup for tile-paint reliability across navigation.
+  const _sc = { lat: 35.55, lng: 139.55 };
+  const _tr = () => { google.maps.event.trigger(_map, 'resize'); _map.setCenter(_sc); };
+  requestAnimationFrame(() => requestAnimationFrame(_tr));
+  setTimeout(_tr, 400);
   _loadChoropleth();
 }
 

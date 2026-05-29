@@ -1481,7 +1481,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 12:51 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 18:09 JST</p>
       </div>
 
 
@@ -4666,20 +4666,22 @@ function initMap() {
     }
   };
 
-  // Always trigger resize on next frame — tiles can fail to paint even when
-  // offsetWidth > 0 if the GPU hasn't rasterised the container yet.
+  // Double-RAF ensures we're past the browser's layout phase before
+  // telling Maps to recalculate its size. A 400ms belt-and-suspenders
+  // timeout catches navigation-time races (e.g. stats → dashboard link).
   const _mapEl = document.getElementById('map');
-  requestAnimationFrame(() => {
+  const _mapCenter = { lat: 35.660, lng: 139.745 };
+  const _triggerResize = () => {
     google.maps.event.trigger(map, 'resize');
-    map.setCenter({ lat: 35.660, lng: 139.745 });
-  });
-  // Secondary fallback: if the element genuinely had zero size at construction
-  // time, ResizeObserver handles the delayed layout case.
+    map.setCenter(_mapCenter);
+  };
+  requestAnimationFrame(() => requestAnimationFrame(_triggerResize));
+  setTimeout(_triggerResize, 400);
+  // ResizeObserver handles the genuine zero-size case.
   if (_mapEl.offsetWidth === 0 || _mapEl.offsetHeight === 0) {
     const _ro = new ResizeObserver(() => {
       if (_mapEl.offsetWidth > 0 && _mapEl.offsetHeight > 0) {
-        google.maps.event.trigger(map, 'resize');
-        map.setCenter({ lat: 35.660, lng: 139.745 });
+        _triggerResize();
         _ro.disconnect();
       }
     });
