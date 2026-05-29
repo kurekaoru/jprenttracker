@@ -77,6 +77,19 @@
   .map-legend-bar{height:6px;border-radius:3px;margin:5px 0 3px;background:linear-gradient(to right,#3B82F6,#FCD34D,#EF4444);}
   .map-legend-labels{display:flex;justify-content:space-between;font-size:9px;color:rgba(255,255,255,.5);font-family:var(--mono);}
 
+  /* layer picker */
+  .map-layer-pill{position:absolute;top:10px;right:10px;z-index:5;}
+  .map-layer-btn{display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.62);backdrop-filter:blur(6px);border:none;border-radius:8px;padding:6px 10px;color:rgba(255,255,255,.85);font-size:11px;font-family:var(--font);cursor:pointer;white-space:nowrap;}
+  .map-layer-btn:hover{background:rgba(0,0,0,.78);}
+  .map-layer-chevron{font-size:9px;color:rgba(255,255,255,.45);transition:transform .15s;}
+  .map-layer-pill.open .map-layer-chevron{transform:rotate(180deg);}
+  .map-layer-menu{display:none;position:absolute;top:calc(100% + 5px);right:0;background:rgba(22,22,24,.96);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.1);border-radius:8px;overflow:hidden;min-width:170px;box-shadow:0 6px 24px rgba(0,0,0,.4);}
+  .map-layer-pill.open .map-layer-menu{display:block;}
+  .map-layer-opt{padding:8px 12px;font-size:11px;color:rgba(255,255,255,.65);cursor:pointer;transition:background .1s;display:flex;align-items:center;gap:8px;}
+  .map-layer-opt:hover{background:rgba(255,255,255,.08);}
+  .map-layer-opt.active{color:var(--accent);font-weight:600;}
+  .map-layer-opt .opt-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,#3B82F6,#EF4444);}
+
   /* tables */
   .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:18px;}
   .data-table{width:100%;border-collapse:collapse;font-size:11px;}
@@ -232,6 +245,8 @@ const STRINGS = {
   ml_no_results:    { ja:'該当なし',           en:'No results',            uk:'Немає результатів' },
   ml_not_ready:     { ja:'モデルが準備できていません', en:'Model not ready', uk:'Модель не готова' },
   view_props:       { ja:'物件を見る →',       en:'View Properties →',    uk:'Переглянути →' },
+  layer_rpsq:       { ja:'平均㎡単価',          en:'Avg ¥/m²',             uk:'Сер. ¥/м²' },
+  layer_count:      { ja:'物件集中度',          en:'Property Concentration', uk:'Концентрація' },
 };
 
 function t(key, ...args) {
@@ -291,6 +306,7 @@ let _charts = {};
 // ── Maps ──────────────────────────────────────────────────────────────────────
 let _map = null, _mapReady = false, _mapsApiReady = false;
 let _choroplethLayer = null, _infoWindow = null;
+let _mapLayer = 'rpsq'; // 'rpsq' | 'count'
 
 window._mapsReady = () => {
   _mapsApiReady = true;
@@ -352,7 +368,8 @@ async function _loadChoropleth() {
 
 function _styleChoropleth() {
   if (!_choroplethLayer || !Object.keys(_wardStats).length) return;
-  const vals = Object.values(_wardStats).map(w => w.avgRpsq);
+  const key  = _mapLayer === 'count' ? 'count' : 'avgRpsq';
+  const vals = Object.values(_wardStats).map(w => w[key]);
   const minV = Math.min(...vals), maxV = Math.max(...vals);
   _choroplethLayer.setStyle(feature => {
     const n3 = feature.getProperty('N03_003') || '';
@@ -362,10 +379,10 @@ function _styleChoropleth() {
       fillColor: '#888', fillOpacity: 0.12,
       strokeColor: 'rgba(180,180,180,0.25)', strokeWeight: 0.4, clickable: false,
     };
-    const t  = (_wardStats[ward].avgRpsq - minV) / (maxV - minV || 1);
-    const h  = Math.round(220 * (1 - t)); // 220=blue, 0=red
+    const ratio = (_wardStats[ward][key] - minV) / (maxV - minV || 1);
+    const hue   = Math.round(220 * (1 - ratio)); // 220=blue→0=red
     return {
-      fillColor: `hsl(${h},70%,52%)`, fillOpacity: 0.65,
+      fillColor: `hsl(${hue},70%,52%)`, fillOpacity: 0.65,
       strokeColor: 'rgba(255,255,255,0.5)', strokeWeight: 0.7, clickable: true,
     };
   });
@@ -536,20 +553,77 @@ function _renderOverview() {
 
 // ── Map ───────────────────────────────────────────────────────────────────────
 function _renderMap() {
-  const vals = Object.values(_wardStats).map(w => w.avgRpsq);
-  const minV = vals.length ? Math.min(...vals) : 0;
-  const maxV = vals.length ? Math.max(...vals) : 1;
   document.getElementById('main').innerHTML = `
     <div class="map-wrap">
       <div id="stats-map"></div>
-      <div class="map-legend-overlay">
-        <div style="font-size:10px;font-weight:600;letter-spacing:.04em;margin-bottom:2px;">${t('map_rpsq_label')}</div>
+      <div class="map-legend-overlay" id="map-legend-overlay">
+        <div id="map-legend-title" style="font-size:10px;font-weight:600;letter-spacing:.04em;margin-bottom:2px;"></div>
         <div class="map-legend-bar"></div>
-        <div class="map-legend-labels"><span>¥${fmt(minV)}</span><span>¥${fmt(maxV)}</span></div>
+        <div class="map-legend-labels" id="map-legend-labels"></div>
         <div style="margin-top:5px;font-size:9px;color:rgba(255,255,255,.4);">${t('map_hint')}</div>
       </div>
+      <div class="map-layer-pill" id="map-layer-pill">
+        <button class="map-layer-btn" onclick="_toggleLayerMenu(event)">
+          <span id="map-layer-label">${t('layer_' + _mapLayer)}</span>
+          <span class="map-layer-chevron">▾</span>
+        </button>
+        <div class="map-layer-menu">
+          <div class="map-layer-opt${_mapLayer==='rpsq'?' active':''}" onclick="_setMapLayer('rpsq')">
+            <span class="opt-dot"></span>${t('layer_rpsq')}
+          </div>
+          <div class="map-layer-opt${_mapLayer==='count'?' active':''}" onclick="_setMapLayer('count')">
+            <span class="opt-dot"></span>${t('layer_count')}
+          </div>
+        </div>
+      </div>
     </div>`;
+  _updateLegend();
   if (_mapsApiReady) _initMap();
+  document.addEventListener('click', _closeLayerMenu, { once: false, capture: true });
+}
+
+function _toggleLayerMenu(ev) {
+  ev.stopPropagation();
+  document.getElementById('map-layer-pill')?.classList.toggle('open');
+}
+
+function _closeLayerMenu(ev) {
+  const pill = document.getElementById('map-layer-pill');
+  if (!pill) { document.removeEventListener('click', _closeLayerMenu, true); return; }
+  if (!pill.contains(ev.target)) pill.classList.remove('open');
+}
+
+function _setMapLayer(layer) {
+  _mapLayer = layer;
+  const pill = document.getElementById('map-layer-pill');
+  if (pill) {
+    pill.classList.remove('open');
+    pill.querySelectorAll('.map-layer-opt').forEach(el =>
+      el.classList.toggle('active', el.textContent.trim() === t('layer_' + layer)));
+    const lbl = document.getElementById('map-layer-label');
+    if (lbl) lbl.textContent = t('layer_' + layer);
+  }
+  _updateLegend();
+  _styleChoropleth();
+}
+
+function _updateLegend() {
+  const titleEl  = document.getElementById('map-legend-title');
+  const labelsEl = document.getElementById('map-legend-labels');
+  if (!titleEl || !labelsEl) return;
+  if (_mapLayer === 'rpsq') {
+    const vals = Object.values(_wardStats).map(w => w.avgRpsq);
+    const minV = vals.length ? Math.min(...vals) : 0;
+    const maxV = vals.length ? Math.max(...vals) : 1;
+    titleEl.textContent  = t('map_rpsq_label');
+    labelsEl.innerHTML   = `<span>¥${fmt(minV)}</span><span>¥${fmt(maxV)}</span>`;
+  } else {
+    const vals = Object.values(_wardStats).map(w => w.count);
+    const minV = vals.length ? Math.min(...vals) : 0;
+    const maxV = vals.length ? Math.max(...vals) : 1;
+    titleEl.textContent  = t('layer_count');
+    labelsEl.innerHTML   = `<span>${minV}</span><span>${maxV}</span>`;
+  }
 }
 
 // ── Ward table ────────────────────────────────────────────────────────────────
