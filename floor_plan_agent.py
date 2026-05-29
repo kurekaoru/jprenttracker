@@ -297,10 +297,12 @@ class FloorPlanAgent:
           Case B — LD pixel_fraction << 1.0 (envelope-relative mode) OR no LD with known area
             → use envelope_area as the scale reference (all fractions sum to ~1.0)
         """
-        # Find LD/LDK with a known area
+        # Find LD/LDK/DK/kitchen with a known area — use as calibration reference
+        _CALIB_KW = ("LDK", "LD", "リビング", "Living", "洋室", "和室",
+                     "ダイニングキッチン", "ダイニング", "キッチン", "DK", "D")
         ld = next(
             (r for r in rooms if r.area_m2 is not None and any(
-                kw in r.label for kw in ("LDK", "LD", "リビング", "Living", "洋室", "和室")
+                kw in r.label for kw in _CALIB_KW
             )),
             None,
         )

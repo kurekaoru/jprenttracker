@@ -1481,7 +1481,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 11:23 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 11:30 JST</p>
       </div>
 
 
@@ -4529,6 +4529,21 @@ async function loadSavedListings() {
   } catch {}
 }
 
+function copyListingId(id, btn) {
+  const copy = () => {
+    const tip = document.createElement('span');
+    tip.className = 'share-copied';
+    tip.textContent = 'Copied!';
+    btn.appendChild(tip);
+    tip.addEventListener('animationend', () => tip.remove());
+  };
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(id).then(copy).catch(() => window.prompt('Listing ID:', id));
+  } else {
+    window.prompt('Listing ID:', id);
+  }
+}
+
 function shareListing(id, btn) {
   const url = window.location.origin + window.location.pathname + '?listing=' + encodeURIComponent(id);
   const copy = () => {
@@ -4771,6 +4786,7 @@ function popupHtml(l) {
           title="${isSaved ? t('saved_listing') : t('save_listing')}"
           onclick="toggleSave('${l.id}')">★</button>
         <button class="share-listing-btn" title="Share" onclick="shareListing('${l.id}',this)">⤴</button>
+        <button class="share-listing-btn" title="Copy listing ID" onclick="copyListingId('${l.id}',this)" style="font-size:10px;font-family:var(--mono);">ID</button>
       </div>
       <div><span class="pin-rent">${rent}</span> · ${escHtml(l.layout || '—')} · ${size}</div>
       ${station ? `<div style="margin-top:3px;">${escHtml(station)}</div>` : ''}
