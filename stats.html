@@ -4,624 +4,569 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>JKK Stats</title>
+<script>
+(function(){
+  var s = document.createElement('script'); s.async = true;
+  s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyBHw3d6FU73jXiJxUJoZ4MlDGu2CmhC4i8&callback=_mapsReady';
+  document.head.appendChild(s);
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
   :root {
-    --bg: #f6f5f0;
-    --surface: #ffffff;
-    --rail-bg: #27272b;
-    --surface2: #f0ede6;
-    --border: rgba(0,0,0,0.1);
-    --text: #1a1a18;
-    --muted: #6b6b66;
-    --accent: #1D9E75;
-    --accent-light: #E1F5EE;
-    --accent-dark: #0F6E56;
-    --danger: #E24B4A;
-    --warn: #EF9F27;
-    --radius: 10px;
-    --font: 'DM Sans', system-ui, sans-serif;
-    --mono: 'DM Mono', monospace;
+    --bg:#f6f5f0;--surface:#fff;--rail-bg:#27272b;--surface2:#f0ede6;
+    --border:rgba(0,0,0,.1);--text:#1a1a18;--muted:#6b6b66;
+    --accent:#1D9E75;--accent-light:#E1F5EE;--danger:#E24B4A;--warn:#EF9F27;
+    --radius:10px;--font:'DM Sans',system-ui,sans-serif;--mono:'DM Mono',monospace;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #18181a;
-      --surface: #242426;
-      --surface2: #2e2e30;
-      --border: rgba(255,255,255,0.1);
-      --text: #f0ede6;
-      --muted: #9a9a94;
-      --accent: #5DCAA5;
-      --accent-light: #04342C;
-      --accent-dark: #9FE1CB;
-    }
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+  @media(prefers-color-scheme:dark){:root{
+    --bg:#18181a;--surface:#242426;--surface2:#2e2e30;--border:rgba(255,255,255,.1);
+    --text:#f0ede6;--muted:#9a9a94;--accent:#5DCAA5;--accent-light:#04342C;
+  }}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;}
 
-  /* ── Topbar ── */
-  .topbar {
-    display: grid;
-    grid-template-columns: 38px 1fr;
-    height: 38px;
-    position: sticky; top: 0; z-index: 16;
-  }
-  .topbar-rail {
-    background: var(--rail-bg);
-    display: flex; align-items: center; justify-content: center;
-    border-bottom: 1px solid rgba(255,255,255,0.07);
-  }
-  .topbar-main {
-    background: var(--rail-bg);
-    border-bottom: 1px solid rgba(255,255,255,0.07);
-    display: flex; align-items: center; gap: 12px;
-    padding: 0 1.2rem;
-  }
-  .topbar-title { font-size: 13px; font-weight: 600; letter-spacing: -0.02em; color: rgba(255,255,255,0.85); flex-shrink: 0; }
-  .dot { width: 22px; height: 22px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; font-weight: 700; }
-  .dev-badge { font-size: 9px; font-weight: 700; background: rgba(239,159,39,0.2); color: var(--warn); border: 1px solid rgba(239,159,39,0.3); border-radius: 4px; padding: 1px 5px; letter-spacing: 0.04em; flex-shrink: 0; }
-  .topbar-back { font-size: 11px; color: rgba(255,255,255,0.4); text-decoration: none; transition: color 0.15s; flex-shrink: 0; }
-  .topbar-back:hover { color: var(--accent); }
-  .topbar-status { font-size: 11px; color: rgba(255,255,255,0.3); margin-left: auto; white-space: nowrap; }
+  /* topbar */
+  .topbar{display:grid;grid-template-columns:38px 1fr;height:38px;position:sticky;top:0;z-index:16;}
+  .topbar-rail{background:var(--rail-bg);display:flex;align-items:center;justify-content:center;border-bottom:1px solid rgba(255,255,255,.07);}
+  .topbar-main{background:var(--rail-bg);border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:10px;padding:0 1.2rem;}
+  .topbar-title{font-size:13px;font-weight:600;letter-spacing:-.02em;color:rgba(255,255,255,.85);flex-shrink:0;}
+  .dot{width:22px;height:22px;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:700;}
+  .dev-badge{font-size:9px;font-weight:700;background:rgba(239,159,39,.2);color:var(--warn);border:1px solid rgba(239,159,39,.3);border-radius:4px;padding:1px 5px;letter-spacing:.04em;flex-shrink:0;}
+  .topbar-btn{background:none;border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:2px 9px;font-size:10px;color:rgba(255,255,255,.45);cursor:pointer;font-family:var(--font);text-decoration:none;transition:all .15s;white-space:nowrap;display:flex;align-items:center;}
+  .topbar-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .topbar-status{font-size:11px;color:rgba(255,255,255,.3);margin-left:auto;white-space:nowrap;}
 
-  /* ── Layout ── */
-  .layout { display: grid; grid-template-columns: 38px 1fr; min-height: calc(100vh - 38px); }
-  .left-rail {
-    background: var(--rail-bg);
-    border-right: 1px solid rgba(255,255,255,0.07);
-    display: flex; flex-direction: column; align-items: center;
-    padding: 10px 0; gap: 6px;
-  }
-  .rail-icon { width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.12s; color: rgba(255,255,255,0.35); }
-  .rail-icon:hover, .rail-icon.active { background: rgba(255,255,255,0.08); color: var(--accent); }
-  .rail-icon svg { width: 16px; height: 16px; }
-  .main { padding: 20px 24px; overflow-y: auto; }
+  /* layout */
+  .layout{display:grid;grid-template-columns:38px 1fr;min-height:calc(100vh - 38px);}
+  .left-rail{background:var(--rail-bg);border-right:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:4px;}
+  .rail-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .12s;color:rgba(255,255,255,.35);}
+  .rail-icon:hover,.rail-icon.active{background:rgba(255,255,255,.08);color:var(--accent);}
+  .rail-icon svg{width:15px;height:15px;}
+  .main{padding:18px 22px;overflow-y:auto;height:calc(100vh - 38px);}
 
-  /* ── Summary cards ── */
-  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
-  .card-label { font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
-  .card-value { font-size: 22px; font-weight: 600; font-family: var(--mono); color: var(--text); line-height: 1; }
-  .card-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  /* cards */
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:20px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;}
+  .card-label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;}
+  .card-value{font-size:20px;font-weight:600;font-family:var(--mono);line-height:1;}
+  .card-sub{font-size:11px;color:var(--muted);margin-top:3px;}
 
-  /* ── Section headers ── */
-  .section { margin-bottom: 28px; }
-  .section-header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
-  .section-title { font-size: 13px; font-weight: 600; color: var(--text); }
-  .section-sub { font-size: 11px; color: var(--muted); }
+  /* section */
+  .section-header{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+  .section-title{font-size:13px;font-weight:600;}
+  .section-sub{font-size:11px;color:var(--muted);}
 
-  /* ── Charts ── */
-  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
-  .chart-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
-  .chart-title { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 12px; }
-  .chart-wrap { position: relative; }
+  /* charts */
+  .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;}
+  .chart-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
+  .chart-title{font-size:11px;font-weight:600;color:var(--text);margin-bottom:10px;}
+  @media(max-width:760px){.charts-row{grid-template-columns:1fr;}}
 
-  /* ── Ward table ── */
-  .ward-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 24px; }
-  .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  .data-table th { padding: 8px 12px; text-align: left; font-size: 10px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; background: var(--surface2); border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; user-select: none; }
-  .data-table th:hover { color: var(--accent); }
-  .data-table td { padding: 7px 12px; border-bottom: 1px solid var(--border); color: var(--text); }
-  .data-table tr:last-child td { border-bottom: none; }
-  .data-table tr:hover td { background: var(--surface2); }
-  .mono { font-family: var(--mono); }
-  .badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; white-space: nowrap; }
-  .badge-up   { background: rgba(226,75,74,0.12);  color: var(--danger); }
-  .badge-down { background: rgba(29,158,117,0.12); color: var(--accent); }
-  .badge-neu  { background: var(--surface2);        color: var(--muted);  }
-  .bar-inline { display: flex; align-items: center; gap: 6px; }
-  .bar-track { flex: 1; height: 4px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
-  .bar-fill  { height: 100%; border-radius: 2px; background: var(--accent); }
+  /* map */
+  #stats-map{width:100%;height:420px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);}
+  .map-legend{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11px;color:var(--muted);}
+  .legend-bar{flex:1;height:8px;border-radius:4px;background:linear-gradient(to right,#3B82F6,#FCD34D,#EF4444);}
 
-  /* ── Scatter / listings table ── */
-  .listings-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-  .table-controls { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--surface2); }
-  .tctl-label { font-size: 11px; color: var(--muted); }
-  .tctl-select { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 11px; font-family: var(--font); padding: 3px 7px; outline: none; }
-  .tctl-input { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 11px; font-family: var(--font); padding: 3px 8px; outline: none; width: 130px; }
-  .tctl-input::placeholder { color: var(--muted); }
+  /* tables */
+  .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:18px;}
+  .data-table{width:100%;border-collapse:collapse;font-size:11px;}
+  .data-table th{padding:7px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;background:var(--surface2);border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;}
+  .data-table th:hover{color:var(--accent);}
+  .data-table td{padding:6px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
+  .data-table tr:last-child td{border-bottom:none;}
+  .data-table tr:hover td{background:var(--surface2);}
+  .mono{font-family:var(--mono);}
+  .badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;white-space:nowrap;font-family:var(--mono);}
+  .badge-up{background:rgba(226,75,74,.12);color:var(--danger);}
+  .badge-down{background:rgba(29,158,117,.12);color:var(--accent);}
+  .badge-neu{background:var(--surface2);color:var(--muted);}
 
-  /* ── Loading ── */
-  .loading { display: flex; align-items: center; justify-content: center; padding: 48px; color: var(--muted); font-size: 13px; gap: 8px; }
-  .spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  /* model metrics row */
+  .metrics-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;}
+  .metric-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;text-align:center;}
+  .metric-val{font-size:22px;font-weight:600;font-family:var(--mono);}
+  .metric-label{font-size:10px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.05em;}
 
-  /* ── Responsive ── */
-  @media (max-width: 768px) { .charts-row { grid-template-columns: 1fr; } .cards { grid-template-columns: repeat(2, 1fr); } }
+  /* table controls */
+  .tbl-ctrl{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .tbl-ctrl select,.tbl-ctrl input{background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;font-family:var(--font);padding:3px 7px;outline:none;}
+  .tbl-ctrl input{width:140px;}
+  .tbl-ctrl input::placeholder{color:var(--muted);}
+
+  /* loading */
+  .loading{display:flex;align-items:center;justify-content:center;padding:48px;color:var(--muted);font-size:13px;gap:8px;}
+  .spinner{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .bar-row{display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:11px;}
+  .bar-label{width:160px;flex-shrink:0;text-align:right;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .bar-track{flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:4px;background:var(--accent);}
+  .bar-fill.neg{background:var(--danger);}
+  .bar-val{width:52px;flex-shrink:0;font-family:var(--mono);font-size:10px;color:var(--muted);}
 </style>
 </head>
 <body>
 
 <div class="topbar">
-  <div class="topbar-rail">
-    <div class="dot">S</div>
-  </div>
+  <div class="topbar-rail"><div class="dot">S</div></div>
   <div class="topbar-main">
-    <span class="topbar-title">Stats Dashboard</span>
+    <span class="topbar-title">Stats</span>
     <span class="dev-badge">DEV</span>
-    <a class="topbar-back" href="dashboard.html">← メインダッシュボード</a>
-    <span class="topbar-status" id="status">読み込み中…</span>
+    <a class="topbar-btn" href="dashboard.html">← Dashboard</a>
+    <span class="topbar-status" id="status-label">読み込み中…</span>
   </div>
 </div>
 
 <div class="layout">
   <div class="left-rail">
+    <!-- Overview -->
     <div class="rail-icon active" title="概要" onclick="showSection('overview')">
       <svg viewBox="0 0 20 20" fill="currentColor"><rect x="2" y="2" width="7" height="7" rx="1.5"/><rect x="11" y="2" width="7" height="7" rx="1.5"/><rect x="2" y="11" width="7" height="7" rx="1.5"/><rect x="11" y="11" width="7" height="7" rx="1.5"/></svg>
     </div>
+    <!-- Map -->
+    <div class="rail-icon" title="ヒートマップ" onclick="showSection('map')">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2C6.69 2 4 4.69 4 8c0 4.5 6 10 6 10s6-5.5 6-10c0-3.31-2.69-6-6-6zm0 8a2 2 0 110-4 2 2 0 010 4z"/></svg>
+    </div>
+    <!-- Ward table -->
     <div class="rail-icon" title="区別分析" onclick="showSection('ward')">
       <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 15h2V8H3v7zm4 0h2V5H7v10zm4 0h2v-5h-2v5zm4 0h2V2h-2v13z"/></svg>
     </div>
-    <div class="rail-icon" title="物件リスト" onclick="showSection('listings')">
-      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 4h14v2H3V4zm0 5h14v2H3V9zm0 5h10v2H3v-2z"/></svg>
+    <!-- ML -->
+    <div class="rail-icon" title="ML価格予測" onclick="showSection('ml')">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M2 10l4-6 4 4 4-5 4 3v10H2V10z"/></svg>
     </div>
   </div>
 
-  <div class="main" id="main-content">
+  <div class="main" id="main">
     <div class="loading"><div class="spinner"></div>データを読み込み中…</div>
   </div>
 </div>
 
 <script>
-const API = 'https://jkk-monitor.duckdns.org/api';
-let _listings = [];
-let _wardStats = {};
-let _globalAvgRentPerSqm = 0;
+const API       = 'https://jkk-monitor.duckdns.org/api';
+const TOPO_BASE = 'https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/data/municipality/geojson/s0010/';
+const TOPO_FILES = ['N03-21_13_210101.json','N03-21_14_210101.json','N03-21_11_210101.json','N03-21_12_210101.json'];
+
+let _listings = [], _wardStats = {}, _globalAvg = 0;
+let _walkMean = 10, _ageMean = 20;
+let _model = null;
 let _currentSection = 'overview';
-let _chartInstances = {};
+let _charts = {};
 
-// ── Data loading ─────────────────────────────────────────────────────────────
+// ── Maps ──────────────────────────────────────────────────────────────────────
+let _map = null, _mapReady = false, _mapsApiReady = false;
+let _choroplethLayer = null, _infoWindow = null;
 
+window._mapsReady = () => {
+  _mapsApiReady = true;
+  if (_currentSection === 'map' && _listings.length) _initMap();
+};
+
+function _initMap() {
+  if (_map) { _styleChoropleth(); return; }
+  const el = document.getElementById('stats-map');
+  if (!el || !_mapsApiReady) return;
+  _map = new google.maps.Map(el, {
+    center: { lat: 35.55, lng: 139.55 }, zoom: 10,
+    mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
+    styles: [
+      { featureType:'all', elementType:'labels.text.fill', stylers:[{color:'#7c7c7c'}] },
+      { featureType:'water', elementType:'geometry', stylers:[{color:'#c8d7e0'}] },
+      { featureType:'landscape', elementType:'geometry', stylers:[{color:'#f5f5f0'}] },
+      { featureType:'road', elementType:'geometry', stylers:[{color:'#e8e4dd'}] },
+      { featureType:'poi', elementType:'all', stylers:[{visibility:'off'}] },
+    ],
+  });
+  _infoWindow = new google.maps.InfoWindow();
+  _loadChoropleth();
+}
+
+async function _loadChoropleth() {
+  const allFeatures = [];
+  await Promise.all(TOPO_FILES.map(async f => {
+    try {
+      const r = await fetch(TOPO_BASE + f);
+      if (r.ok) allFeatures.push(...(await r.json()).features);
+    } catch (_) {}
+  }));
+  _choroplethLayer = new google.maps.Data({ map: _map });
+  _choroplethLayer.addGeoJson({ type:'FeatureCollection', features: allFeatures });
+  _choroplethLayer.addListener('click', ev => {
+    const n3 = ev.feature.getProperty('N03_003') || '';
+    const n4 = ev.feature.getProperty('N03_004') || '';
+    const ward = _wardStats[n3+n4] ? n3+n4 : (_wardStats[n4] ? n4 : null);
+    if (!ward) return;
+    const s = _wardStats[ward];
+    _infoWindow.setContent(`
+      <div style="font-family:'DM Sans',sans-serif;font-size:12px;padding:2px 0;min-width:140px;">
+        <div style="font-weight:600;margin-bottom:4px;">${ward}</div>
+        <div>㎡単価: <b>¥${fmt(s.avgRpsq)}/㎡</b></div>
+        <div>平均家賃: ¥${fmt(s.avgRent)}</div>
+        <div>物件数: ${s.count} 件</div>
+      </div>`);
+    _infoWindow.setPosition(ev.latLng);
+    _infoWindow.open(_map);
+  });
+  _styleChoropleth();
+}
+
+function _styleChoropleth() {
+  if (!_choroplethLayer || !Object.keys(_wardStats).length) return;
+  const vals = Object.values(_wardStats).map(w => w.avgRpsq);
+  const minV = Math.min(...vals), maxV = Math.max(...vals);
+  _choroplethLayer.setStyle(feature => {
+    const n3 = feature.getProperty('N03_003') || '';
+    const n4 = feature.getProperty('N03_004') || '';
+    const ward = _wardStats[n3+n4] ? n3+n4 : (_wardStats[n4] ? n4 : null);
+    if (!ward) return { visible: false };
+    const t  = (_wardStats[ward].avgRpsq - minV) / (maxV - minV || 1);
+    const h  = Math.round(220 * (1 - t)); // 220=blue, 0=red
+    return {
+      fillColor: `hsl(${h},70%,52%)`, fillOpacity: 0.65,
+      strokeColor: 'rgba(255,255,255,0.5)', strokeWeight: 0.7, clickable: true,
+    };
+  });
+}
+
+// ── Data ──────────────────────────────────────────────────────────────────────
 async function loadData() {
   try {
     const r = await fetch(`${API}/listings`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!r.ok) throw new Error();
     const d = await r.json();
     _listings = (d.listings || []).filter(l => !l.disappeared_at && l.size_m2 > 0 && l.rent > 0);
-    computeStats();
-    document.getElementById('status').textContent =
-      `${_listings.length} 件 · ${new Date().toLocaleTimeString('ja-JP', {hour:'2-digit',minute:'2-digit'})} 更新`;
+    _computeStats();
+    _trainModel();
+    document.getElementById('status-label').textContent =
+      `${_listings.length} 件 · ${new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}`;
     renderSection(_currentSection);
-  } catch (e) {
-    document.getElementById('main-content').innerHTML =
-      `<div class="loading" style="color:var(--danger)">サーバーに接続できません: ${e.message}</div>`;
+  } catch {
+    document.getElementById('main').innerHTML =
+      `<div class="loading" style="color:var(--danger)">サーバーに接続できません</div>`;
   }
 }
 
-function computeStats() {
+function _computeStats() {
   const byWard = {};
   for (const l of _listings) {
-    if (!byWard[l.ward]) byWard[l.ward] = { rents: [], sqms: [], rpsqs: [], listings: [] };
-    const rpsq = l.rent / l.size_m2;
-    byWard[l.ward].rents.push(l.rent);
-    byWard[l.ward].sqms.push(l.size_m2);
-    byWard[l.ward].rpsqs.push(rpsq);
-    byWard[l.ward].listings.push(l);
+    if (!byWard[l.ward]) byWard[l.ward] = [];
+    byWard[l.ward].push(l);
   }
-  const allRpsq = _listings.map(l => l.rent / l.size_m2);
-  _globalAvgRentPerSqm = mean(allRpsq);
-
+  _walkMean = mean(_listings.filter(l => l.walk_min != null).map(l => l.walk_min));
+  _ageMean  = mean(_listings.filter(l => l.age_years != null).map(l => l.age_years));
   _wardStats = {};
-  for (const [ward, d] of Object.entries(byWard)) {
-    const avgRpsq = mean(d.rpsqs);
+  for (const [ward, ls] of Object.entries(byWard)) {
+    const rents = ls.map(l => l.rent), sqms = ls.map(l => l.size_m2);
+    const rpsqs = ls.map(l => l.rent / l.size_m2);
     _wardStats[ward] = {
-      count:      d.listings.length,
-      avgRent:    mean(d.rents),
-      avgSqm:     mean(d.sqms),
-      avgRpsq,
-      medianRent: median(d.rents),
-      minRent:    Math.min(...d.rents),
-      maxRent:    Math.max(...d.rents),
-      listings:   d.listings,
+      count: ls.length, listings: ls,
+      avgRent: mean(rents), medianRent: median(rents), minRent: Math.min(...rents), maxRent: Math.max(...rents),
+      avgSqm: mean(sqms), avgRpsq: mean(rpsqs),
     };
   }
+  _globalAvg = mean(_listings.map(l => l.rent / l.size_m2));
+}
+
+// ── ML model ──────────────────────────────────────────────────────────────────
+const FEATURE_NAMES = [
+  '面積 (m²)','徒歩分','築年数','駐車場','UR物件','同区平均㎡単価',
+  'エアコン','床暖房','追い焚き','浴室乾燥','オートロック','温水洗浄便座','モニター付き','エレベーター',
+  '1K','1DK','1LDK','2DK','2LDK','3DK','3LDK',
+];
+const LAYOUTS_OH = ['1K','1DK','1LDK','2DK','2LDK','3DK','3LDK'];
+
+function _featureVec(l) {
+  const a = ((l.appliances||'')+' '+(l.features||'')).toLowerCase();
+  const has = kw => a.includes(kw) ? 1 : 0;
+  return [
+    l.size_m2,
+    l.walk_min  ?? _walkMean,
+    l.age_years ?? _ageMean,
+    l.has_parking ? 1 : 0,
+    l.source === 'ur' ? 1 : 0,
+    _wardStats[l.ward]?.avgRpsq ?? _globalAvg,
+    has('エアコン'), has('床暖房'), has('追い焚き'), has('浴室乾燥'),
+    has('オートロック'), has('温水洗浄便座'), has('モニター'), has('エレベーター'),
+    ...LAYOUTS_OH.map(lay => l.layout === lay ? 1 : 0),
+  ];
+}
+
+function _trainModel() {
+  const valid = _listings.filter(l => l.size_m2 > 0);
+  if (valid.length < 10) return;
+  const X = valid.map(_featureVec);
+  const y = valid.map(l => l.rent);
+  const n = X.length, m = X[0].length;
+
+  // Normalize
+  const fMu  = X[0].map((_, j) => mean(X.map(r => r[j])));
+  const fSig = X[0].map((_, j) => { const mu = fMu[j]; return Math.sqrt(mean(X.map(r => (r[j]-mu)**2))) || 1; });
+  const yMu  = mean(y);
+  const ySig = Math.sqrt(mean(y.map(v => (v-yMu)**2)));
+  const Xn   = X.map(r => r.map((v, j) => (v - fMu[j]) / fSig[j]));
+  const yn   = y.map(v => (v - yMu) / ySig);
+
+  // Gradient descent
+  let w = new Array(m).fill(0), b = 0;
+  for (let e = 0; e < 4000; e++) {
+    const lr = e < 2000 ? 0.05 : 0.02;
+    let dw = new Array(m).fill(0), db = 0;
+    for (let i = 0; i < n; i++) {
+      const err = Xn[i].reduce((s, v, j) => s + v * w[j], b) - yn[i];
+      Xn[i].forEach((v, j) => dw[j] += err * v / n);
+      db += err / n;
+    }
+    w = w.map((v, j) => v - lr * dw[j]);
+    b -= lr * db;
+  }
+
+  const predict = l => {
+    const xn = _featureVec(l).map((v, j) => (v - fMu[j]) / fSig[j]);
+    return xn.reduce((s, v, j) => s + v * w[j], b) * ySig + yMu;
+  };
+
+  // Metrics
+  const preds   = valid.map(predict);
+  const ssTot   = sum(y.map(v => (v - yMu)**2));
+  const ssRes   = sum(y.map((v, i) => (v - preds[i])**2));
+  const r2      = 1 - ssRes / ssTot;
+  const rmse    = Math.sqrt(ssRes / n);
+  const mape    = mean(y.map((v, i) => Math.abs((v - preds[i]) / v) * 100));
+
+  // Feature importance: |w_j| (weights already in normalized space)
+  const importance = w.map((wi, j) => ({ name: FEATURE_NAMES[j], val: wi, abs: Math.abs(wi) }))
+    .sort((a, b) => b.abs - a.abs);
+
+  _model = { predict, r2, rmse, mape, importance };
 }
 
 // ── Stats helpers ─────────────────────────────────────────────────────────────
-
-const mean   = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
-const median = arr => { const s = [...arr].sort((a,b)=>a-b); const m = s.length>>1; return s.length%2 ? s[m] : (s[m-1]+s[m])/2; };
+const sum    = a => a.reduce((s, v) => s + v, 0);
+const mean   = a => a.length ? sum(a) / a.length : 0;
+const median = a => { const s = [...a].sort((a,b)=>a-b); const m = s.length>>1; return s.length%2 ? s[m] : (s[m-1]+s[m])/2; };
 const fmt    = n => Math.round(n).toLocaleString('ja-JP');
 const fmtK   = n => n >= 10000 ? (n/10000).toFixed(1)+'万' : fmt(n);
-const pct    = (v, ref) => ((v - ref) / ref * 100).toFixed(1);
-
-function predictedRent(listing) {
-  const ws = _wardStats[listing.ward];
-  return ws ? ws.avgRpsq * listing.size_m2 : _globalAvgRentPerSqm * listing.size_m2;
-}
+const pct    = (v, r) => ((v-r)/r*100).toFixed(1);
+const escH   = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
 // ── Section routing ───────────────────────────────────────────────────────────
-
 function showSection(sec) {
   _currentSection = sec;
-  document.querySelectorAll('.rail-icon').forEach((el, i) => {
-    el.classList.toggle('active', ['overview','ward','listings'][i] === sec);
-  });
+  document.querySelectorAll('.rail-icon').forEach((el, i) =>
+    el.classList.toggle('active', ['overview','map','ward','ml'][i] === sec));
   renderSection(sec);
 }
 
 function renderSection(sec) {
   if (!_listings.length) return;
-  destroyCharts();
-  if (sec === 'overview') renderOverview();
-  else if (sec === 'ward')  renderWard();
-  else                      renderListings();
-}
-
-function destroyCharts() {
-  for (const c of Object.values(_chartInstances)) c.destroy();
-  _chartInstances = {};
+  Object.values(_charts).forEach(c => c.destroy());
+  _charts = {};
+  if (sec === 'overview') _renderOverview();
+  else if (sec === 'map')  _renderMap();
+  else if (sec === 'ward') _renderWard();
+  else                     _renderML();
 }
 
 // ── Overview ──────────────────────────────────────────────────────────────────
-
-function renderOverview() {
-  const total   = _listings.length;
-  const avgRent = mean(_listings.map(l => l.rent));
-  const avgSqm  = mean(_listings.map(l => l.size_m2));
-  const avgRpsq = _globalAvgRentPerSqm;
-  const wardCount = Object.keys(_wardStats).length;
-
-  const urCount  = _listings.filter(l => l.source === 'ur').length;
-  const jkkCount = total - urCount;
-
-  document.getElementById('main-content').innerHTML = `
+function _renderOverview() {
+  const ur = _listings.filter(l => l.source==='ur').length;
+  document.getElementById('main').innerHTML = `
     <div class="cards">
-      <div class="card"><div class="card-label">物件数</div><div class="card-value">${total}</div><div class="card-sub">JKK ${jkkCount} · UR ${urCount}</div></div>
-      <div class="card"><div class="card-label">平均家賃</div><div class="card-value">¥${fmtK(avgRent)}</div><div class="card-sub">月額</div></div>
-      <div class="card"><div class="card-label">平均面積</div><div class="card-value">${avgSqm.toFixed(1)}<span style="font-size:13px;font-weight:400"> m²</span></div><div class="card-sub"></div></div>
-      <div class="card"><div class="card-label">㎡単価（平均）</div><div class="card-value">¥${fmtK(avgRpsq)}</div><div class="card-sub">円/㎡/月</div></div>
-      <div class="card"><div class="card-label">対象区市数</div><div class="card-value">${wardCount}</div><div class="card-sub">区・市</div></div>
-      <div class="card"><div class="card-label">中央値家賃</div><div class="card-value">¥${fmtK(median(_listings.map(l=>l.rent)))}</div><div class="card-sub">月額</div></div>
+      <div class="card"><div class="card-label">物件数</div><div class="card-value">${_listings.length}</div><div class="card-sub">JKK ${_listings.length-ur} · UR ${ur}</div></div>
+      <div class="card"><div class="card-label">平均家賃</div><div class="card-value">¥${fmtK(mean(_listings.map(l=>l.rent)))}</div><div class="card-sub">月額</div></div>
+      <div class="card"><div class="card-label">平均面積</div><div class="card-value">${mean(_listings.map(l=>l.size_m2)).toFixed(1)}<small> m²</small></div><div class="card-sub"></div></div>
+      <div class="card"><div class="card-label">平均㎡単価</div><div class="card-value">¥${fmtK(_globalAvg)}</div><div class="card-sub">円/㎡/月</div></div>
+      <div class="card"><div class="card-label">対象区市数</div><div class="card-value">${Object.keys(_wardStats).length}</div><div class="card-sub">区・市</div></div>
+      ${_model ? `<div class="card"><div class="card-label">モデル R²</div><div class="card-value">${(_model.r2*100).toFixed(1)}<small>%</small></div><div class="card-sub">RMSE ¥${fmtK(_model.rmse)}</div></div>` : ''}
     </div>
-
     <div class="charts-row">
-      <div class="chart-box">
-        <div class="chart-title">家賃分布（¥千円単位）</div>
-        <div class="chart-wrap"><canvas id="chart-rent-hist" height="220"></canvas></div>
-      </div>
-      <div class="chart-box">
-        <div class="chart-title">㎡単価 分布（円/㎡/月）</div>
-        <div class="chart-wrap"><canvas id="chart-rpsq-hist" height="220"></canvas></div>
-      </div>
+      <div class="chart-box"><div class="chart-title">家賃分布（¥千円）</div><canvas id="ch-rent" height="200"></canvas></div>
+      <div class="chart-box"><div class="chart-title">㎡単価分布（円/㎡/月）</div><canvas id="ch-rpsq" height="200"></canvas></div>
     </div>
-
     <div class="charts-row">
-      <div class="chart-box">
-        <div class="chart-title">面積 vs 家賃（散布図）</div>
-        <div class="chart-wrap"><canvas id="chart-scatter" height="240"></canvas></div>
-      </div>
-      <div class="chart-box">
-        <div class="chart-title">ソース別・間取り別 物件数</div>
-        <div class="chart-wrap"><canvas id="chart-layout" height="240"></canvas></div>
-      </div>
+      <div class="chart-box"><div class="chart-title">面積 vs 家賃</div><canvas id="ch-scatter" height="220"></canvas></div>
+      <div class="chart-box"><div class="chart-title">間取り × ソース</div><canvas id="ch-layout" height="220"></canvas></div>
+    </div>`;
+  _drawHist('ch-rent',  _listings.map(l=>l.rent/1000), 10, v=>`${v}k`, c=>c.accent+'cc');
+  _drawHist('ch-rpsq',  _listings.map(l=>l.rent/l.size_m2), 200, v=>`¥${v}`, c=>c.blue+'cc');
+  _drawScatter();
+  _drawLayout();
+}
+
+// ── Map ───────────────────────────────────────────────────────────────────────
+function _renderMap() {
+  document.getElementById('main').innerHTML = `
+    <div class="section-header">
+      <span class="section-title">区・市別 ㎡単価 ヒートマップ</span>
+      <span class="section-sub">青=安い → 赤=高い · クリックで詳細</span>
     </div>
-  `;
-
-  drawRentHist();
-  drawRpsqHist();
-  drawScatter();
-  drawLayoutBar();
+    <div id="stats-map"></div>
+    <div class="map-legend">
+      <span>安い</span>
+      <div class="legend-bar"></div>
+      <span>高い</span>
+    </div>`;
+  if (_mapsApiReady) _initMap();
 }
 
-function chartColors() {
-  const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  return {
-    grid:    dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-    text:    dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)',
-    accent:  dark ? '#5DCAA5' : '#1D9E75',
-    blue:    dark ? '#60A5FA' : '#3B82F6',
-    red:     dark ? '#F87171' : '#DC2626',
-    warn:    '#EF9F27',
-    surface: dark ? '#242426' : '#ffffff',
-    muted:   dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-  };
-}
-
-function baseChartOpts(cc) {
-  return {
-    responsive: true,
-    maintainAspectRatio: true,
-    plugins: { legend: { display: false }, tooltip: { bodyFont: { family: 'DM Mono' }, titleFont: { family: 'DM Sans' } } },
-    scales: {
-      x: { grid: { color: cc.grid }, ticks: { color: cc.text, font: { family: 'DM Mono', size: 10 } } },
-      y: { grid: { color: cc.grid }, ticks: { color: cc.text, font: { family: 'DM Mono', size: 10 } } },
-    },
-  };
-}
-
-function histogram(values, bucketSize) {
-  const min = Math.floor(Math.min(...values) / bucketSize) * bucketSize;
-  const max = Math.ceil( Math.max(...values) / bucketSize) * bucketSize;
-  const buckets = [];
-  for (let v = min; v < max; v += bucketSize) {
-    buckets.push({ label: v, count: values.filter(x => x >= v && x < v + bucketSize).length });
-  }
-  return buckets;
-}
-
-function drawRentHist() {
-  const cc = chartColors();
-  const vals = _listings.map(l => l.rent / 1000);
-  const bkts = histogram(vals, 10);
-  const ctx  = document.getElementById('chart-rent-hist').getContext('2d');
-  _chartInstances['rent-hist'] = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels:   bkts.map(b => `${b.label}k`),
-      datasets: [{ data: bkts.map(b => b.count), backgroundColor: cc.accent + 'cc', borderRadius: 3, borderSkipped: false }],
-    },
-    options: { ...baseChartOpts(cc), plugins: { ...baseChartOpts(cc).plugins, tooltip: { callbacks: { label: ctx => `${ctx.parsed.y} 件` } } } },
-  });
-}
-
-function drawRpsqHist() {
-  const cc = chartColors();
-  const vals = _listings.map(l => l.rent / l.size_m2);
-  const bkts = histogram(vals, 200);
-  const ctx  = document.getElementById('chart-rpsq-hist').getContext('2d');
-  _chartInstances['rpsq-hist'] = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels:   bkts.map(b => `¥${b.label}`),
-      datasets: [{ data: bkts.map(b => b.count), backgroundColor: cc.blue + 'cc', borderRadius: 3, borderSkipped: false }],
-    },
-    options: { ...baseChartOpts(cc), plugins: { ...baseChartOpts(cc).plugins, tooltip: { callbacks: { label: ctx => `${ctx.parsed.y} 件` } } } },
-  });
-}
-
-function drawScatter() {
-  const cc  = chartColors();
-  const ctx = document.getElementById('chart-scatter').getContext('2d');
-  const pts = _listings.map(l => ({ x: l.size_m2, y: l.rent / 1000, label: l.name, source: l.source }));
-  _chartInstances['scatter'] = new Chart(ctx, {
-    type: 'scatter',
-    data: {
-      datasets: [
-        { label: 'JKK', data: pts.filter(p => p.source !== 'ur'), backgroundColor: cc.red + '99', pointRadius: 4, pointHoverRadius: 6 },
-        { label: 'UR',  data: pts.filter(p => p.source === 'ur'), backgroundColor: cc.blue + '99', pointRadius: 4, pointHoverRadius: 6 },
-      ],
-    },
-    options: {
-      ...baseChartOpts(cc),
-      plugins: {
-        legend: { display: true, labels: { color: cc.text, font: { family: 'DM Sans', size: 11 } } },
-        tooltip: { callbacks: { label: ctx => `${ctx.raw.label} · ${ctx.raw.x}㎡ · ¥${ctx.raw.y}k` } },
-      },
-    },
-  });
-}
-
-function drawLayoutBar() {
-  const cc = chartColors();
-  const layouts = [...new Set(_listings.map(l => l.layout))].sort();
-  const jkk = layouts.map(lay => _listings.filter(l => l.layout === lay && l.source !== 'ur').length);
-  const ur  = layouts.map(lay => _listings.filter(l => l.layout === lay && l.source === 'ur').length);
-  const ctx = document.getElementById('chart-layout').getContext('2d');
-  _chartInstances['layout'] = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: layouts,
-      datasets: [
-        { label: 'JKK', data: jkk, backgroundColor: cc.red  + 'cc', borderRadius: 3, borderSkipped: false },
-        { label: 'UR',  data: ur,  backgroundColor: cc.blue + 'cc', borderRadius: 3, borderSkipped: false },
-      ],
-    },
-    options: {
-      ...baseChartOpts(cc),
-      plugins: { legend: { display: true, labels: { color: cc.text, font: { family: 'DM Sans', size: 11 } } } },
-      scales: { ...baseChartOpts(cc).scales, x: { ...baseChartOpts(cc).scales.x, stacked: true }, y: { ...baseChartOpts(cc).scales.y, stacked: true } },
-    },
-  });
-}
-
-// ── Ward analysis ─────────────────────────────────────────────────────────────
-
-let _wardSortCol = 'avgRpsq';
-let _wardSortAsc = false;
-
-function renderWard() {
+// ── Ward table ────────────────────────────────────────────────────────────────
+let _wSort = 'avgRpsq', _wAsc = false;
+function _renderWard() {
   const maxRpsq = Math.max(...Object.values(_wardStats).map(w => w.avgRpsq));
-  const sorted  = Object.entries(_wardStats).sort((a, b) => {
-    const [ka, kb] = _wardSortAsc ? [a, b] : [b, a];
-    const va = ka[1][_wardSortCol], vb = kb[1][_wardSortCol];
-    return typeof va === 'string' ? va.localeCompare(vb) : va - vb;
-  });
+  const rows = Object.entries(_wardStats)
+    .sort((a, b) => { const [ka,kb] = _wAsc?[a,b]:[b,a]; const va=ka[1][_wSort],vb=kb[1][_wSort]; return typeof va==='string'?va.localeCompare(vb):va-vb; })
+    .map(([ward, s]) => {
+      const d = parseFloat(pct(s.avgRpsq, _globalAvg));
+      const badge = d>5 ? `<span class="badge badge-up">+${d}%</span>` : d<-5 ? `<span class="badge badge-down">${d}%</span>` : `<span class="badge badge-neu">±0</span>`;
+      const barW = Math.round(s.avgRpsq/maxRpsq*100);
+      return `<tr><td>${ward}</td><td class="mono">${s.count}</td><td class="mono">¥${fmt(s.avgRent)}</td><td class="mono">¥${fmt(s.medianRent)}</td><td class="mono">¥${fmt(s.minRent)}–¥${fmt(s.maxRent)}</td>
+        <td><div style="display:flex;align-items:center;gap:5px;"><span class="mono">¥${fmt(s.avgRpsq)}</span><div style="flex:1;height:4px;background:var(--surface2);border-radius:2px;min-width:40px;"><div style="width:${barW}%;height:100%;background:var(--accent);border-radius:2px;"></div></div></div></td>
+        <td>${badge}</td><td class="mono">${s.avgSqm.toFixed(1)} m²</td></tr>`;
+    }).join('');
 
-  const rows = sorted.map(([ward, s]) => {
-    const diff = parseFloat(pct(s.avgRpsq, _globalAvgRentPerSqm));
-    const badge = diff > 5  ? `<span class="badge badge-up">+${diff}%</span>`
-                : diff < -5 ? `<span class="badge badge-down">${diff}%</span>`
-                :             `<span class="badge badge-neu">±0</span>`;
-    const barPct = Math.round(s.avgRpsq / maxRpsq * 100);
-    return `<tr>
-      <td>${ward}</td>
-      <td class="mono">${s.count}</td>
-      <td class="mono">¥${fmt(s.avgRent)}</td>
-      <td class="mono">¥${fmt(s.medianRent)}</td>
-      <td class="mono">¥${fmt(s.minRent)} – ¥${fmt(s.maxRent)}</td>
-      <td><div class="bar-inline"><span class="mono">¥${fmt(s.avgRpsq)}</span><div class="bar-track"><div class="bar-fill" style="width:${barPct}%"></div></div></div></td>
-      <td>${badge}</td>
-      <td class="mono">${s.avgSqm.toFixed(1)} m²</td>
-    </tr>`;
+  const th = (col, label) => `<th onclick="sortWard('${col}')">${label}${col===_wSort?(_wAsc?' ▲':' ▼'):''}</th>`;
+  document.getElementById('main').innerHTML = `
+    <div class="section-header"><span class="section-title">区・市別 家賃分析</span><span class="section-sub">全体平均 ¥${fmt(_globalAvg)}/㎡/月</span></div>
+    <div class="chart-box" style="margin-bottom:14px;"><div class="chart-title">上位20区・市 平均㎡単価</div><canvas id="ch-ward" height="130"></canvas></div>
+    <div class="table-wrap">
+      <table class="data-table"><thead><tr>${th('ward','区・市')}${th('count','件数')}${th('avgRent','平均家賃')}${th('medianRent','中央値')}<th>最小–最大</th>${th('avgRpsq','㎡単価')}<th>全体比</th>${th('avgSqm','平均面積')}</tr></thead><tbody>${rows}</tbody></table>
+    </div>`;
+  _drawWardBar();
+}
+function sortWard(col) { _wAsc = _wSort===col ? !_wAsc : false; _wSort = col; _renderWard(); }
+
+// ── ML section ────────────────────────────────────────────────────────────────
+let _mlSrc = 'all', _mlQ = '', _mlSort = 'absDiff', _mlAsc = false;
+
+function _renderML() {
+  if (!_model) { document.getElementById('main').innerHTML = `<div class="loading">モデルが準備できていません</div>`; return; }
+  const { r2, rmse, mape, importance } = _model;
+  const topImp = importance.slice(0, 12);
+  const maxImp = topImp[0].abs;
+  const impBars = topImp.map(f => {
+    const w = Math.round(f.abs / maxImp * 100);
+    return `<div class="bar-row"><span class="bar-label">${f.name}</span><div class="bar-track"><div class="bar-fill${f.val<0?' neg':''}" style="width:${w}%"></div></div><span class="bar-val">${f.val>0?'+':''}${f.val.toFixed(2)}</span></div>`;
   }).join('');
 
-  const sortTh = (col, label) => {
-    const active = col === _wardSortCol;
-    const arrow  = active ? (_wardSortAsc ? ' ▲' : ' ▼') : '';
-    return `<th onclick="sortWard('${col}')">${label}${arrow}</th>`;
-  };
-
-  document.getElementById('main-content').innerHTML = `
-    <div class="section">
-      <div class="section-header">
-        <span class="section-title">区・市 別 家賃分析</span>
-        <span class="section-sub">全体平均 ㎡単価: ¥${fmt(_globalAvgRentPerSqm)}/㎡/月</span>
+  document.getElementById('main').innerHTML = `
+    <div class="section-header"><span class="section-title">ML価格予測モデル</span><span class="section-sub">重回帰（勾配降下法）· ${FEATURE_NAMES.length} 特徴量 · ${_listings.length} 件で学習</span></div>
+    <div class="metrics-row">
+      <div class="metric-card"><div class="metric-val" style="color:var(--accent)">${(r2*100).toFixed(1)}%</div><div class="metric-label">R² スコア</div></div>
+      <div class="metric-card"><div class="metric-val">¥${fmtK(rmse)}</div><div class="metric-label">RMSE</div></div>
+      <div class="metric-card"><div class="metric-val">${mape.toFixed(1)}%</div><div class="metric-label">MAPE</div></div>
+    </div>
+    <div class="charts-row">
+      <div class="chart-box">
+        <div class="chart-title">特徴量 重要度（正規化係数）</div>
+        <div style="padding-top:4px;">${impBars}</div>
       </div>
-      <div class="chart-box" style="margin-bottom:16px;">
-        <div class="chart-title">区・市 別 平均㎡単価 ランキング（上位20）</div>
-        <div class="chart-wrap"><canvas id="chart-ward-bar" height="140"></canvas></div>
-      </div>
-      <div class="ward-table-wrap">
-        <table class="data-table">
-          <thead><tr>
-            ${sortTh('ward','区・市')}
-            ${sortTh('count','件数')}
-            ${sortTh('avgRent','平均家賃')}
-            ${sortTh('medianRent','中央値')}
-            <th>最小 – 最大</th>
-            ${sortTh('avgRpsq','㎡単価')}
-            <th>全体比</th>
-            ${sortTh('avgSqm','平均面積')}
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
+      <div class="chart-box">
+        <div class="chart-title">実際 vs 予測（散布図）</div>
+        <canvas id="ch-pred" height="260"></canvas>
       </div>
     </div>
-  `;
-  drawWardBar();
-}
-
-function sortWard(col) {
-  if (_wardSortCol === col) _wardSortAsc = !_wardSortAsc;
-  else { _wardSortCol = col; _wardSortAsc = false; }
-  renderWard();
-}
-
-function drawWardBar() {
-  const cc = chartColors();
-  const sorted = Object.entries(_wardStats)
-    .sort((a, b) => b[1].avgRpsq - a[1].avgRpsq)
-    .slice(0, 20);
-  const avgLine = _globalAvgRentPerSqm;
-  const ctx = document.getElementById('chart-ward-bar').getContext('2d');
-  _chartInstances['ward-bar'] = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels:   sorted.map(([w]) => w),
-      datasets: [
-        { label: '㎡単価', data: sorted.map(([,s]) => Math.round(s.avgRpsq)), backgroundColor: sorted.map(([,s]) => s.avgRpsq > avgLine ? cc.red + 'bb' : cc.accent + 'bb'), borderRadius: 3 },
-      ],
-    },
-    options: {
-      ...baseChartOpts(cc),
-      plugins: {
-        ...baseChartOpts(cc).plugins,
-        annotation: { annotations: { avgLine: { type: 'line', yMin: avgLine, yMax: avgLine, borderColor: cc.warn, borderWidth: 1.5, borderDash: [4,3] } } },
-        tooltip: { callbacks: { label: ctx => `¥${fmt(ctx.parsed.y)}/㎡/月` } },
-      },
-    },
-  });
-}
-
-// ── Listings table ────────────────────────────────────────────────────────────
-
-let _listingFilter = '';
-let _listingSource = 'all';
-let _listingSort   = 'diff';
-let _listingSortAsc = false;
-
-function renderListings() {
-  document.getElementById('main-content').innerHTML = `
-    <div class="section">
-      <div class="section-header">
-        <span class="section-title">物件別 予測価格比較</span>
-        <span class="section-sub">予測 = 同一区市の平均㎡単価 × 面積</span>
+    <div class="table-wrap">
+      <div class="tbl-ctrl">
+        <select onchange="_mlSrc=this.value;_renderMLTable()"><option value="all">すべて</option><option value="jkk">JKK</option><option value="ur">UR</option></select>
+        <input placeholder="物件名・区市で絞込…" oninput="_mlQ=this.value.toLowerCase();_renderMLTable()">
       </div>
-      <div class="listings-table-wrap">
-        <div class="table-controls">
-          <span class="tctl-label">ソース</span>
-          <select class="tctl-select" onchange="_listingSource=this.value;renderListingsTable()">
-            <option value="all">すべて</option>
-            <option value="jkk">JKK</option>
-            <option value="ur">UR</option>
-          </select>
-          <input class="tctl-input" placeholder="物件名・区市で絞込…" oninput="_listingFilter=this.value.toLowerCase();renderListingsTable()">
-        </div>
-        <div id="listings-tbody-wrap">
-          <div class="loading"><div class="spinner"></div>計算中…</div>
-        </div>
-      </div>
-    </div>
-  `;
-  renderListingsTable();
+      <div id="ml-table-body"></div>
+    </div>`;
+  _drawPredScatter();
+  _renderMLTable();
 }
 
-function renderListingsTable() {
-  let filtered = _listings.filter(l => {
-    if (_listingSource !== 'all' && l.source !== _listingSource) return false;
-    if (_listingFilter) { const h = (l.name + l.ward).toLowerCase(); if (!h.includes(_listingFilter)) return false; }
+function _renderMLTable() {
+  let rows = _listings.filter(l => {
+    if (_mlSrc !== 'all' && l.source !== _mlSrc) return false;
+    if (_mlQ) { const h=(l.name+l.ward).toLowerCase(); if (!h.includes(_mlQ)) return false; }
     return true;
+  }).map(l => {
+    const pred    = _model.predict(l);
+    const diff    = l.rent - pred;
+    const diffPct = diff / pred * 100;
+    return { ...l, pred, diff, absDiff: Math.abs(diff), diffPct };
   });
+  rows.sort((a, b) => { const [ka,kb]=_mlAsc?[a,b]:[b,a]; return (kb[_mlSort]??0)-(ka[_mlSort]??0); });
 
-  filtered = filtered.map(l => {
-    const pred = predictedRent(l);
-    const diff = l.rent - pred;
-    const diffPct = (diff / pred * 100);
-    return { ...l, pred, diff, diffPct };
-  });
-
-  filtered.sort((a, b) => {
-    const [ka, kb] = _listingSortAsc ? [a, b] : [b, a];
-    return (kb[_listingSort] ?? 0) - (ka[_listingSort] ?? 0);
-  });
-
-  const sortTh = (col, label) => {
-    const active = col === _listingSort;
-    const arrow  = active ? (_listingSortAsc ? ' ▲' : ' ▼') : '';
-    return `<th onclick="sortListings('${col}')">${label}${arrow}</th>`;
-  };
-
-  const rows = filtered.map(l => {
+  const th = (col, label) => `<th onclick="sortML('${col}')">${label}${col===_mlSort?(_mlAsc?' ▲':' ▼'):''}</th>`;
+  const tbody = rows.map(l => {
     const dp = l.diffPct.toFixed(1);
-    const badge = l.diffPct > 5  ? `<span class="badge badge-up">+${dp}%</span>`
-                : l.diffPct < -5 ? `<span class="badge badge-down">${dp}%</span>`
-                :                  `<span class="badge badge-neu">±${Math.abs(dp)}%</span>`;
-    const srcColor = l.source === 'ur' ? '#3B82F6' : '#DC2626';
+    const badge = l.diffPct > 8 ? `<span class="badge badge-up">+${dp}%</span>` : l.diffPct < -8 ? `<span class="badge badge-down">${dp}%</span>` : `<span class="badge badge-neu">±${Math.abs(dp)}%</span>`;
+    const sc = l.source==='ur'?'#3B82F6':'#DC2626';
     return `<tr>
-      <td><span style="font-size:9px;font-weight:700;color:${srcColor};text-transform:uppercase;">${l.source}</span></td>
-      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escH(l.name)}">${escH(l.name)}</td>
+      <td><span style="font-size:9px;font-weight:700;color:${sc};text-transform:uppercase">${l.source}</span></td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escH(l.name)}">${escH(l.name)}</td>
       <td>${escH(l.ward)}</td>
       <td class="mono">${l.layout}</td>
       <td class="mono">${l.size_m2}m²</td>
       <td class="mono">¥${fmt(l.rent)}</td>
       <td class="mono">¥${fmt(Math.round(l.pred))}</td>
-      <td class="mono" style="color:${l.diff > 0 ? 'var(--danger)' : 'var(--accent)'};">${l.diff > 0 ? '+' : ''}¥${fmt(Math.round(l.diff))}</td>
+      <td class="mono" style="color:${l.diff>0?'var(--danger)':'var(--accent)'}">${l.diff>0?'+':''}¥${fmt(Math.round(l.diff))}</td>
       <td>${badge}</td>
-      <td class="mono">${fmt(l.rent / l.size_m2)}</td>
     </tr>`;
   }).join('');
 
-  document.getElementById('listings-tbody-wrap').innerHTML = `
-    <table class="data-table">
-      <thead><tr>
-        <th>元</th>
-        ${sortTh('name','物件名')}
-        ${sortTh('ward','区・市')}
-        <th>間取</th>
-        ${sortTh('size_m2','面積')}
-        ${sortTh('rent','実際家賃')}
-        ${sortTh('pred','予測家賃')}
-        ${sortTh('diff','差額')}
-        ${sortTh('diffPct','乖離率')}
-        ${sortTh('rpsq','㎡単価')}
-      </tr></thead>
-      <tbody>${rows || '<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--muted)">該当なし</td></tr>'}</tbody>
-    </table>
-  `;
+  document.getElementById('ml-table-body').innerHTML = `
+    <table class="data-table"><thead><tr>
+      <th>元</th>${th('name','物件名')}${th('ward','区・市')}<th>間取</th>${th('size_m2','面積')}${th('rent','実際')}${th('pred','予測')}${th('diff','差額')}${th('diffPct','乖離率')}
+    </tr></thead><tbody>${tbody||'<tr><td colspan="9" style="text-align:center;padding:16px;color:var(--muted)">該当なし</td></tr>'}</tbody></table>`;
 }
+function sortML(col) { _mlAsc = _mlSort===col ? !_mlAsc : false; _mlSort = col; _renderMLTable(); }
 
-function sortListings(col) {
-  if (_listingSort === col) _listingSortAsc = !_listingSortAsc;
-  else { _listingSort = col; _listingSortAsc = col === 'name' || col === 'ward'; }
-  renderListingsTable();
+// ── Chart helpers ─────────────────────────────────────────────────────────────
+function cc() {
+  const d = window.matchMedia('(prefers-color-scheme:dark)').matches;
+  return { grid:d?'rgba(255,255,255,.06)':'rgba(0,0,0,.06)', tick:d?'rgba(255,255,255,.45)':'rgba(0,0,0,.45)', accent:d?'#5DCAA5':'#1D9E75', blue:d?'#60A5FA':'#3B82F6', red:d?'#F87171':'#DC2626' };
 }
-
-const escH = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function baseOpts(c) {
+  return { responsive:true, maintainAspectRatio:true,
+    plugins:{ legend:{display:false}, tooltip:{bodyFont:{family:'DM Mono'}} },
+    scales:{ x:{grid:{color:c.grid},ticks:{color:c.tick,font:{family:'DM Mono',size:10}}}, y:{grid:{color:c.grid},ticks:{color:c.tick,font:{family:'DM Mono',size:10}}} } };
+}
+function hist(vals, step) {
+  const lo = Math.floor(Math.min(...vals)/step)*step, hi = Math.ceil(Math.max(...vals)/step)*step;
+  const bs = [];
+  for (let v=lo; v<hi; v+=step) bs.push({ l:v, n:vals.filter(x=>x>=v&&x<v+step).length });
+  return bs;
+}
+function _drawHist(id, vals, step, labelFn, colorFn) {
+  const c=cc(), bs=hist(vals,step);
+  _charts[id]=new Chart(document.getElementById(id),{type:'bar',data:{labels:bs.map(b=>labelFn(b.l)),datasets:[{data:bs.map(b=>b.n),backgroundColor:colorFn(c),borderRadius:3,borderSkipped:false}]},options:baseOpts(c)});
+}
+function _drawScatter() {
+  const c=cc();
+  _charts['sc']=new Chart(document.getElementById('ch-scatter'),{type:'scatter',data:{datasets:[
+    {label:'JKK',data:_listings.filter(l=>l.source!=='ur').map(l=>({x:l.size_m2,y:l.rent/1000,n:l.name})),backgroundColor:c.red+'99',pointRadius:4},
+    {label:'UR', data:_listings.filter(l=>l.source==='ur').map(l=>({x:l.size_m2,y:l.rent/1000,n:l.name})),backgroundColor:c.blue+'99',pointRadius:4},
+  ]},options:{...baseOpts(c),plugins:{legend:{display:true,labels:{color:c.tick,font:{family:'DM Sans',size:11}}},tooltip:{callbacks:{label:ctx=>`${ctx.raw.n} · ${ctx.raw.x}㎡ · ¥${ctx.raw.y}k`}}}},});
+}
+function _drawLayout() {
+  const c=cc(), lays=[...new Set(_listings.map(l=>l.layout))].sort();
+  _charts['lay']=new Chart(document.getElementById('ch-layout'),{type:'bar',data:{labels:lays,datasets:[
+    {label:'JKK',data:lays.map(lay=>_listings.filter(l=>l.layout===lay&&l.source!=='ur').length),backgroundColor:c.red+'cc',borderRadius:3,borderSkipped:false},
+    {label:'UR', data:lays.map(lay=>_listings.filter(l=>l.layout===lay&&l.source==='ur').length), backgroundColor:c.blue+'cc',borderRadius:3,borderSkipped:false},
+  ]},options:{...baseOpts(c),plugins:{legend:{display:true,labels:{color:c.tick,font:{family:'DM Sans',size:11}}}},scales:{x:{...baseOpts(c).scales.x,stacked:true},y:{...baseOpts(c).scales.y,stacked:true}}}});
+}
+function _drawWardBar() {
+  const c=cc(), avg=_globalAvg;
+  const sorted=Object.entries(_wardStats).sort((a,b)=>b[1].avgRpsq-a[1].avgRpsq).slice(0,20);
+  _charts['ward']=new Chart(document.getElementById('ch-ward'),{type:'bar',data:{labels:sorted.map(([w])=>w),datasets:[{label:'㎡単価',data:sorted.map(([,s])=>Math.round(s.avgRpsq)),backgroundColor:sorted.map(([,s])=>s.avgRpsq>avg?c.red+'bb':c.accent+'bb'),borderRadius:3}]},options:{...baseOpts(c),plugins:{...baseOpts(c).plugins,tooltip:{callbacks:{label:ctx=>`¥${fmt(ctx.parsed.y)}/㎡/月`}}}},});
+}
+function _drawPredScatter() {
+  const c=cc();
+  const pts=_listings.map(l=>({x:l.rent/1000,y:Math.round(_model.predict(l))/1000,n:l.name,s:l.source}));
+  const maxV=Math.max(..._listings.map(l=>l.rent/1000));
+  _charts['pred']=new Chart(document.getElementById('ch-pred'),{type:'scatter',data:{datasets:[
+    {label:'JKK',data:pts.filter(p=>p.s!=='ur'),backgroundColor:c.red+'99',pointRadius:3,pointHoverRadius:5},
+    {label:'UR', data:pts.filter(p=>p.s==='ur'), backgroundColor:c.blue+'99',pointRadius:3,pointHoverRadius:5},
+    {label:'理想線',data:[{x:0,y:0},{x:maxV,y:maxV}],type:'line',borderColor:c.accent+'88',borderDash:[4,3],borderWidth:1.5,pointRadius:0,fill:false},
+  ]},options:{...baseOpts(c),plugins:{legend:{display:true,labels:{color:c.tick,font:{family:'DM Sans',size:11}}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label==='理想線'?null:`${ctx.raw.n} · 実:¥${ctx.raw.x}k 予:¥${ctx.raw.y}k`}}},scales:{x:{...baseOpts(c).scales.x,title:{display:true,text:'実際 (千円)',color:c.tick}},y:{...baseOpts(c).scales.y,title:{display:true,text:'予測 (千円)',color:c.tick}}}}});
+}
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-
 loadData();
 </script>
 </body>
