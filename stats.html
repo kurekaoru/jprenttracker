@@ -113,6 +113,11 @@
   .bar-fill{height:100%;border-radius:4px;background:var(--accent);}
   .bar-fill.neg{background:var(--danger);}
   .bar-val{width:52px;flex-shrink:0;font-family:var(--mono);font-size:10px;color:var(--muted);}
+
+  /* lang selector */
+  .lang-select{background:none;border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:2px 6px;font-size:10px;color:rgba(255,255,255,.45);cursor:pointer;font-family:var(--font);outline:none;margin-left:auto;}
+  .lang-select:hover{border-color:var(--accent);color:var(--accent);}
+  .lang-select option{background:#27272b;color:#fff;}
 </style>
 </head>
 <body>
@@ -120,39 +125,158 @@
 <div class="topbar">
   <div class="topbar-rail"><div class="dot">S</div></div>
   <div class="topbar-main">
-    <span class="topbar-title">Stats</span>
+    <span class="topbar-title" data-i18n="stats_title">Stats</span>
     <span class="dev-badge">DEV</span>
-    <a class="topbar-btn" href="dashboard.html">← Dashboard</a>
-    <span class="topbar-status" id="status-label">読み込み中…</span>
+    <a class="topbar-btn" href="dashboard.html" data-i18n="back_dashboard">← Dashboard</a>
+    <span class="topbar-status" id="status-label" data-i18n="loading">読み込み中…</span>
+    <select class="lang-select" id="lang-select" onchange="setLang(this.value)">
+      <option value="ja">🇯🇵 JP</option>
+      <option value="en">🇬🇧 EN</option>
+      <option value="uk">🇺🇦 UA</option>
+    </select>
   </div>
 </div>
 
 <div class="layout">
   <div class="left-rail">
-    <!-- Map (top) -->
-    <div class="rail-icon active" title="ヒートマップ" onclick="showSection('map')">
+    <div class="rail-icon active" data-i18n-title="section_map" onclick="showSection('map')">
       <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2C6.69 2 4 4.69 4 8c0 4.5 6 10 6 10s6-5.5 6-10c0-3.31-2.69-6-6-6zm0 8a2 2 0 110-4 2 2 0 010 4z"/></svg>
     </div>
-    <!-- Overview -->
-    <div class="rail-icon" title="概要" onclick="showSection('overview')">
+    <div class="rail-icon" data-i18n-title="section_overview" onclick="showSection('overview')">
       <svg viewBox="0 0 20 20" fill="currentColor"><rect x="2" y="2" width="7" height="7" rx="1.5"/><rect x="11" y="2" width="7" height="7" rx="1.5"/><rect x="2" y="11" width="7" height="7" rx="1.5"/><rect x="11" y="11" width="7" height="7" rx="1.5"/></svg>
     </div>
-    <!-- Ward table -->
-    <div class="rail-icon" title="区別分析" onclick="showSection('ward')">
+    <div class="rail-icon" data-i18n-title="section_ward" onclick="showSection('ward')">
       <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 15h2V8H3v7zm4 0h2V5H7v10zm4 0h2v-5h-2v5zm4 0h2V2h-2v13z"/></svg>
     </div>
-    <!-- ML -->
-    <div class="rail-icon" title="ML価格予測" onclick="showSection('ml')">
+    <div class="rail-icon" data-i18n-title="section_ml" onclick="showSection('ml')">
       <svg viewBox="0 0 20 20" fill="currentColor"><path d="M2 10l4-6 4 4 4-5 4 3v10H2V10z"/></svg>
     </div>
   </div>
 
   <div class="main" id="main">
-    <div class="loading"><div class="spinner"></div>データを読み込み中…</div>
+    <div class="loading"><div class="spinner"></div><span data-i18n="loading">読み込み中…</span></div>
   </div>
 </div>
 
 <script>
+// ── i18n ─────────────────────────────────────────────────────────────────────
+let _lang = localStorage.getItem('jkktrackr_lang') || 'ja';
+
+const STRINGS = {
+  // Topbar / nav
+  stats_title:      { ja:'Stats',              en:'Stats',                  uk:'Статистика' },
+  back_dashboard:   { ja:'← ダッシュボード',    en:'← Dashboard',           uk:'← Дашборд' },
+  loading:          { ja:'読み込み中…',         en:'Loading…',              uk:'Завантаження…' },
+  error_server:     { ja:'サーバーに接続できません', en:'Server unreachable',  uk:'Сервер недоступний' },
+  // Rail sections
+  section_map:      { ja:'ヒートマップ',        en:'Heat Map',              uk:'Теплокарта' },
+  section_overview: { ja:'概要',               en:'Overview',              uk:'Огляд' },
+  section_ward:     { ja:'区別分析',            en:'Ward Analysis',         uk:'Аналіз районів' },
+  section_ml:       { ja:'ML価格予測',         en:'ML Prediction',         uk:'ML Прогноз' },
+  // Map overlay
+  map_rpsq_label:   { ja:'㎡単価 (円/㎡/月)',  en:'Avg ¥/m² (per month)',  uk:'Сер. ¥/м² (на місяць)' },
+  map_hint:         { ja:'クリックで詳細 · 灰色=データなし', en:'Click for details · grey=no data', uk:'Клік для деталей · сірий=немає даних' },
+  map_rpsq:         { ja:'㎡単価',             en:'¥/m²',                  uk:'¥/м²' },
+  map_avg_rent:     { ja:'平均家賃',            en:'Avg Rent',              uk:'Сер. оренда' },
+  map_count:        { ja:'物件数',              en:'Listings',              uk:'Оголошень' },
+  // Overview cards
+  card_listings:    { ja:'物件数',              en:'Listings',              uk:'Оголошень' },
+  card_avg_rent:    { ja:'平均家賃',            en:'Avg Rent',              uk:'Сер. оренда' },
+  card_monthly:     { ja:'月額',               en:'/month',                uk:'/місяць' },
+  card_avg_area:    { ja:'平均面積',            en:'Avg Area',              uk:'Сер. площа' },
+  card_rpsq:        { ja:'平均㎡単価',          en:'Avg ¥/m²',              uk:'Сер. ¥/м²' },
+  card_rpsq_sub:    { ja:'円/㎡/月',           en:'¥/m²/month',            uk:'¥/м²/міс' },
+  card_wards:       { ja:'対象区市数',          en:'Wards',                 uk:'Районів' },
+  card_wards_sub:   { ja:'区・市',              en:'wards & cities',        uk:'райони' },
+  card_model_r2:    { ja:'モデル R²',          en:'Model R²',              uk:'Модель R²' },
+  // Overview charts
+  chart_rent_hist:  { ja:'家賃分布（¥千円）',   en:'Rent Distribution (¥k)', uk:'Розподіл оренди (¥тис)' },
+  chart_rpsq_hist:  { ja:'㎡単価分布（円/㎡/月）', en:'¥/m² Distribution',  uk:'Розподіл ¥/м²' },
+  chart_scatter:    { ja:'面積 vs 家賃',        en:'Area vs Rent',          uk:'Площа vs Оренда' },
+  chart_layout:     { ja:'間取り × ソース',     en:'Layout × Source',       uk:'Планування × Джерело' },
+  // Ward section
+  ward_title:       { ja:'区・市別 家賃分析',   en:'Ward Rent Analysis',    uk:'Аналіз оренди по районах' },
+  ward_global_avg:  { ja:'全体平均',            en:'Global Avg',            uk:'Загальне сер.' },
+  ward_chart_title: { ja:'上位20区・市 平均㎡単価', en:'Top 20 Wards Avg ¥/m²', uk:'Топ-20 районів Сер. ¥/м²' },
+  col_ward:         { ja:'区・市',              en:'Ward',                  uk:'Район' },
+  col_count:        { ja:'件数',               en:'Count',                 uk:'Кількість' },
+  col_avg_rent:     { ja:'平均家賃',            en:'Avg Rent',              uk:'Сер. оренда' },
+  col_median:       { ja:'中央値',              en:'Median',                uk:'Медіана' },
+  col_minmax:       { ja:'最小–最大',           en:'Min–Max',               uk:'Мін–Макс' },
+  col_rpsq:         { ja:'㎡単価',             en:'¥/m²',                  uk:'¥/м²' },
+  col_vs_global:    { ja:'全体比',              en:'vs Global',             uk:'vs Загальне' },
+  col_avg_area:     { ja:'平均面積',            en:'Avg Area',              uk:'Сер. площа' },
+  // ML section
+  ml_title:         { ja:'ML価格予測モデル',    en:'ML Price Prediction Model', uk:'ML Модель прогнозу цін' },
+  ml_method:        { ja:'重回帰（勾配降下法）', en:'Linear Regression (grad. descent)', uk:'Лінійна регресія (гр. спуск)' },
+  ml_features_n:    { ja:(n)=>`${n} 特徴量`,   en:(n)=>`${n} features`,    uk:(n)=>`${n} ознак` },
+  ml_trained_n:     { ja:(n)=>`${n} 件で学習`, en:(n)=>`trained on ${n}`,  uk:(n)=>`навчено на ${n}` },
+  ml_r2:            { ja:'R² スコア',          en:'R² Score',              uk:'R² Оцінка' },
+  ml_rmse:          { ja:'RMSE',              en:'RMSE',                  uk:'RMSE' },
+  ml_mape:          { ja:'MAPE',              en:'MAPE',                  uk:'MAPE' },
+  ml_importance:    { ja:'特徴量 重要度（正規化係数）', en:'Feature Importance (norm. weights)', uk:'Важливість ознак (норм. ваги)' },
+  ml_pred_chart:    { ja:'実際 vs 予測（散布図）', en:'Actual vs Predicted', uk:'Факт vs Прогноз' },
+  ml_ideal:         { ja:'理想線',             en:'Ideal',                 uk:'Ідеал' },
+  ml_actual_axis:   { ja:'実際 (千円)',        en:'Actual (¥k)',           uk:'Факт (¥тис)' },
+  ml_pred_axis:     { ja:'予測 (千円)',        en:'Predicted (¥k)',        uk:'Прогноз (¥тис)' },
+  ml_filter_all:    { ja:'すべて',             en:'All',                   uk:'Усі' },
+  ml_filter_ph:     { ja:'物件名・区市で絞込…', en:'Filter by name / ward…', uk:'Фільтр за назвою…' },
+  col_src:          { ja:'元',                en:'Src',                   uk:'Дж.' },
+  col_name:         { ja:'物件名',             en:'Name',                  uk:'Назва' },
+  col_layout:       { ja:'間取',              en:'Layout',                uk:'Планув.' },
+  col_area:         { ja:'面積',              en:'Area',                  uk:'Площа' },
+  col_actual:       { ja:'実際',              en:'Actual',                uk:'Факт' },
+  col_predicted:    { ja:'予測',              en:'Predicted',             uk:'Прогноз' },
+  col_diff:         { ja:'差額',              en:'Diff',                  uk:'Різниця' },
+  col_deviation:    { ja:'乖離率',             en:'Deviation',             uk:'Відхилення' },
+  ml_no_results:    { ja:'該当なし',           en:'No results',            uk:'Немає результатів' },
+  ml_not_ready:     { ja:'モデルが準備できていません', en:'Model not ready', uk:'Модель не готова' },
+};
+
+function t(key, ...args) {
+  const s = STRINGS[key];
+  if (!s) return key;
+  const v = s[_lang] !== undefined ? s[_lang] : s.ja;
+  return typeof v === 'function' ? v(...args) : v;
+}
+
+function applyLang() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const v = t(el.dataset.i18n);
+    if (typeof v === 'string') el.textContent = v;
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    const v = t(el.dataset.i18nTitle);
+    if (typeof v === 'string') el.title = v;
+  });
+  const sel = document.getElementById('lang-select');
+  if (sel) sel.value = _lang;
+  // Re-render current section with new strings
+  if (_listings.length) renderSection(_currentSection);
+}
+
+function setLang(lang) {
+  if (_lang === lang) return;
+  _lang = lang;
+  localStorage.setItem('jkktrackr_lang', _lang);
+  applyLang();
+}
+
+// ── Feature names (language-aware) ───────────────────────────────────────────
+function featureNames() {
+  const ja = ['面積 (m²)','徒歩分','築年数','駐車場','UR物件','同区平均㎡単価',
+    'エアコン','床暖房','追い焚き','浴室乾燥','オートロック','温水洗浄便座','モニター付き','エレベーター',
+    '1K','1DK','1LDK','2DK','2LDK','3DK','3LDK'];
+  const en = ['Area (m²)','Walk (min)','Building Age','Parking','UR Property','Ward Avg ¥/m²',
+    'AC','Floor Heating','Reheat Bath','Bath Dryer','Auto-Lock','Bidet','Video Intercom','Elevator',
+    '1K','1DK','1LDK','2DK','2LDK','3DK','3LDK'];
+  const uk = ['Площа (м²)','Хода (хв)','Вік будинку','Паркінг','UR Нерухомість','Сер. ¥/м² району',
+    'Кондиц.','Тепла підлога','Підігрів ванни','Сушка ванни','Автозамок','Бідет','Відеодомофон','Ліфт',
+    '1K','1DK','1LDK','2DK','2LDK','3DK','3LDK'];
+  return { ja, en, uk }[_lang] || en;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 const API       = 'https://jkk-monitor.duckdns.org/api';
 const TOPO_BASE = 'https://raw.githubusercontent.com/smartnews-smri/japan-topography/main/data/municipality/geojson/s0010/';
 const TOPO_FILES = ['N03-21_13_210101.json','N03-21_14_210101.json','N03-21_11_210101.json','N03-21_12_210101.json'];
@@ -210,9 +334,9 @@ async function _loadChoropleth() {
     _infoWindow.setContent(`
       <div style="font-family:'DM Sans',sans-serif;font-size:12px;padding:2px 0;min-width:140px;">
         <div style="font-weight:600;margin-bottom:4px;">${ward}</div>
-        <div>㎡単価: <b>¥${fmt(s.avgRpsq)}/㎡</b></div>
-        <div>平均家賃: ¥${fmt(s.avgRent)}</div>
-        <div>物件数: ${s.count} 件</div>
+        <div>${t('map_rpsq')}: <b>¥${fmt(s.avgRpsq)}/㎡</b></div>
+        <div>${t('map_avg_rent')}: ¥${fmt(s.avgRent)}</div>
+        <div>${t('map_count')}: ${s.count}</div>
       </div>`);
     _infoWindow.setPosition(ev.latLng);
     _infoWindow.open(_map);
@@ -256,7 +380,7 @@ async function loadData() {
     renderSection(_currentSection);
   } catch {
     document.getElementById('main').innerHTML =
-      `<div class="loading" style="color:var(--danger)">サーバーに接続できません</div>`;
+      `<div class="loading" style="color:var(--danger)">${t('error_server')}</div>`;
   }
 }
 
@@ -282,11 +406,6 @@ function _computeStats() {
 }
 
 // ── ML model ──────────────────────────────────────────────────────────────────
-const FEATURE_NAMES = [
-  '面積 (m²)','徒歩分','築年数','駐車場','UR物件','同区平均㎡単価',
-  'エアコン','床暖房','追い焚き','浴室乾燥','オートロック','温水洗浄便座','モニター付き','エレベーター',
-  '1K','1DK','1LDK','2DK','2LDK','3DK','3LDK',
-];
 const LAYOUTS_OH = ['1K','1DK','1LDK','2DK','2LDK','3DK','3LDK'];
 
 function _featureVec(l) {
@@ -347,11 +466,12 @@ function _trainModel() {
   const rmse    = Math.sqrt(ssRes / n);
   const mape    = mean(y.map((v, i) => Math.abs((v - preds[i]) / v) * 100));
 
-  // Feature importance: |w_j| (weights already in normalized space)
-  const importance = w.map((wi, j) => ({ name: FEATURE_NAMES[j], val: wi, abs: Math.abs(wi) }))
+  // Store raw weights; names resolved at render time via featureNames()
+  const weights = w.slice();
+  const makeImportance = () => featureNames().map((name, j) => ({ name, val: weights[j], abs: Math.abs(weights[j]) }))
     .sort((a, b) => b.abs - a.abs);
 
-  _model = { predict, r2, rmse, mape, importance };
+  _model = { predict, r2, rmse, mape, get importance() { return makeImportance(); } };
 }
 
 // ── Stats helpers ─────────────────────────────────────────────────────────────
@@ -359,7 +479,7 @@ const sum    = a => a.reduce((s, v) => s + v, 0);
 const mean   = a => a.length ? sum(a) / a.length : 0;
 const median = a => { const s = [...a].sort((a,b)=>a-b); const m = s.length>>1; return s.length%2 ? s[m] : (s[m-1]+s[m])/2; };
 const fmt    = n => Math.round(n).toLocaleString('ja-JP');
-const fmtK   = n => n >= 10000 ? (n/10000).toFixed(1)+'万' : fmt(n);
+const fmtK   = n => (_lang === 'ja' && n >= 10000) ? (n/10000).toFixed(1)+'万' : fmt(n);
 const pct    = (v, r) => ((v-r)/r*100).toFixed(1);
 const escH   = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
@@ -387,20 +507,20 @@ function _renderOverview() {
   const ur = _listings.filter(l => l.source==='ur').length;
   document.getElementById('main').innerHTML = `
     <div class="cards">
-      <div class="card"><div class="card-label">物件数</div><div class="card-value">${_listings.length}</div><div class="card-sub">JKK ${_listings.length-ur} · UR ${ur}</div></div>
-      <div class="card"><div class="card-label">平均家賃</div><div class="card-value">¥${fmtK(mean(_listings.map(l=>l.rent)))}</div><div class="card-sub">月額</div></div>
-      <div class="card"><div class="card-label">平均面積</div><div class="card-value">${mean(_listings.map(l=>l.size_m2)).toFixed(1)}<small> m²</small></div><div class="card-sub"></div></div>
-      <div class="card"><div class="card-label">平均㎡単価</div><div class="card-value">¥${fmtK(_globalAvg)}</div><div class="card-sub">円/㎡/月</div></div>
-      <div class="card"><div class="card-label">対象区市数</div><div class="card-value">${Object.keys(_wardStats).length}</div><div class="card-sub">区・市</div></div>
-      ${_model ? `<div class="card"><div class="card-label">モデル R²</div><div class="card-value">${(_model.r2*100).toFixed(1)}<small>%</small></div><div class="card-sub">RMSE ¥${fmtK(_model.rmse)}</div></div>` : ''}
+      <div class="card"><div class="card-label">${t('card_listings')}</div><div class="card-value">${_listings.length}</div><div class="card-sub">JKK ${_listings.length-ur} · UR ${ur}</div></div>
+      <div class="card"><div class="card-label">${t('card_avg_rent')}</div><div class="card-value">¥${fmtK(mean(_listings.map(l=>l.rent)))}</div><div class="card-sub">${t('card_monthly')}</div></div>
+      <div class="card"><div class="card-label">${t('card_avg_area')}</div><div class="card-value">${mean(_listings.map(l=>l.size_m2)).toFixed(1)}<small> m²</small></div><div class="card-sub"></div></div>
+      <div class="card"><div class="card-label">${t('card_rpsq')}</div><div class="card-value">¥${fmtK(_globalAvg)}</div><div class="card-sub">${t('card_rpsq_sub')}</div></div>
+      <div class="card"><div class="card-label">${t('card_wards')}</div><div class="card-value">${Object.keys(_wardStats).length}</div><div class="card-sub">${t('card_wards_sub')}</div></div>
+      ${_model ? `<div class="card"><div class="card-label">${t('card_model_r2')}</div><div class="card-value">${(_model.r2*100).toFixed(1)}<small>%</small></div><div class="card-sub">RMSE ¥${fmtK(_model.rmse)}</div></div>` : ''}
     </div>
     <div class="charts-row">
-      <div class="chart-box"><div class="chart-title">家賃分布（¥千円）</div><canvas id="ch-rent" height="200"></canvas></div>
-      <div class="chart-box"><div class="chart-title">㎡単価分布（円/㎡/月）</div><canvas id="ch-rpsq" height="200"></canvas></div>
+      <div class="chart-box"><div class="chart-title">${t('chart_rent_hist')}</div><canvas id="ch-rent" height="200"></canvas></div>
+      <div class="chart-box"><div class="chart-title">${t('chart_rpsq_hist')}</div><canvas id="ch-rpsq" height="200"></canvas></div>
     </div>
     <div class="charts-row">
-      <div class="chart-box"><div class="chart-title">面積 vs 家賃</div><canvas id="ch-scatter" height="220"></canvas></div>
-      <div class="chart-box"><div class="chart-title">間取り × ソース</div><canvas id="ch-layout" height="220"></canvas></div>
+      <div class="chart-box"><div class="chart-title">${t('chart_scatter')}</div><canvas id="ch-scatter" height="220"></canvas></div>
+      <div class="chart-box"><div class="chart-title">${t('chart_layout')}</div><canvas id="ch-layout" height="220"></canvas></div>
     </div>`;
   _drawHist('ch-rent',  _listings.map(l=>l.rent/1000), 10, v=>`${v}k`, c=>c.accent+'cc');
   _drawHist('ch-rpsq',  _listings.map(l=>l.rent/l.size_m2), 200, v=>`¥${v}`, c=>c.blue+'cc');
@@ -417,10 +537,10 @@ function _renderMap() {
     <div class="map-wrap">
       <div id="stats-map"></div>
       <div class="map-legend-overlay">
-        <div style="font-size:10px;font-weight:600;letter-spacing:.04em;margin-bottom:2px;">㎡単価 (円/㎡/月)</div>
+        <div style="font-size:10px;font-weight:600;letter-spacing:.04em;margin-bottom:2px;">${t('map_rpsq_label')}</div>
         <div class="map-legend-bar"></div>
         <div class="map-legend-labels"><span>¥${fmt(minV)}</span><span>¥${fmt(maxV)}</span></div>
-        <div style="margin-top:5px;font-size:9px;color:rgba(255,255,255,.4);">クリックで詳細 · 灰色=データなし</div>
+        <div style="margin-top:5px;font-size:9px;color:rgba(255,255,255,.4);">${t('map_hint')}</div>
       </div>
     </div>`;
   if (_mapsApiReady) _initMap();
@@ -441,12 +561,12 @@ function _renderWard() {
         <td>${badge}</td><td class="mono">${s.avgSqm.toFixed(1)} m²</td></tr>`;
     }).join('');
 
-  const th = (col, label) => `<th onclick="sortWard('${col}')">${label}${col===_wSort?(_wAsc?' ▲':' ▼'):''}</th>`;
+  const th = (col, key) => `<th onclick="sortWard('${col}')">${t(key)}${col===_wSort?(_wAsc?' ▲':' ▼'):''}</th>`;
   document.getElementById('main').innerHTML = `
-    <div class="section-header"><span class="section-title">区・市別 家賃分析</span><span class="section-sub">全体平均 ¥${fmt(_globalAvg)}/㎡/月</span></div>
-    <div class="chart-box" style="margin-bottom:14px;"><div class="chart-title">上位20区・市 平均㎡単価</div><canvas id="ch-ward" height="130"></canvas></div>
+    <div class="section-header"><span class="section-title">${t('ward_title')}</span><span class="section-sub">${t('ward_global_avg')} ¥${fmt(_globalAvg)} ${t('card_rpsq_sub')}</span></div>
+    <div class="chart-box" style="margin-bottom:14px;"><div class="chart-title">${t('ward_chart_title')}</div><canvas id="ch-ward" height="130"></canvas></div>
     <div class="table-wrap">
-      <table class="data-table"><thead><tr>${th('ward','区・市')}${th('count','件数')}${th('avgRent','平均家賃')}${th('medianRent','中央値')}<th>最小–最大</th>${th('avgRpsq','㎡単価')}<th>全体比</th>${th('avgSqm','平均面積')}</tr></thead><tbody>${rows}</tbody></table>
+      <table class="data-table"><thead><tr>${th('ward','col_ward')}${th('count','col_count')}${th('avgRent','col_avg_rent')}${th('medianRent','col_median')}<th>${t('col_minmax')}</th>${th('avgRpsq','col_rpsq')}<th>${t('col_vs_global')}</th>${th('avgSqm','col_avg_area')}</tr></thead><tbody>${rows}</tbody></table>
     </div>`;
   _drawWardBar();
 }
@@ -456,7 +576,7 @@ function sortWard(col) { _wAsc = _wSort===col ? !_wAsc : false; _wSort = col; _r
 let _mlSrc = 'all', _mlQ = '', _mlSort = 'absDiff', _mlAsc = false;
 
 function _renderML() {
-  if (!_model) { document.getElementById('main').innerHTML = `<div class="loading">モデルが準備できていません</div>`; return; }
+  if (!_model) { document.getElementById('main').innerHTML = `<div class="loading">${t('ml_not_ready')}</div>`; return; }
   const { r2, rmse, mape, importance } = _model;
   const topImp = importance.slice(0, 12);
   const maxImp = topImp[0].abs;
@@ -465,27 +585,32 @@ function _renderML() {
     return `<div class="bar-row"><span class="bar-label">${f.name}</span><div class="bar-track"><div class="bar-fill${f.val<0?' neg':''}" style="width:${w}%"></div></div><span class="bar-val">${f.val>0?'+':''}${f.val.toFixed(2)}</span></div>`;
   }).join('');
 
+  const nFeat = featureNames().length;
   document.getElementById('main').innerHTML = `
-    <div class="section-header"><span class="section-title">ML価格予測モデル</span><span class="section-sub">重回帰（勾配降下法）· ${FEATURE_NAMES.length} 特徴量 · ${_listings.length} 件で学習</span></div>
+    <div class="section-header"><span class="section-title">${t('ml_title')}</span><span class="section-sub">${t('ml_method')} · ${t('ml_features_n', nFeat)} · ${t('ml_trained_n', _listings.length)}</span></div>
     <div class="metrics-row">
-      <div class="metric-card"><div class="metric-val" style="color:var(--accent)">${(r2*100).toFixed(1)}%</div><div class="metric-label">R² スコア</div></div>
-      <div class="metric-card"><div class="metric-val">¥${fmtK(rmse)}</div><div class="metric-label">RMSE</div></div>
-      <div class="metric-card"><div class="metric-val">${mape.toFixed(1)}%</div><div class="metric-label">MAPE</div></div>
+      <div class="metric-card"><div class="metric-val" style="color:var(--accent)">${(r2*100).toFixed(1)}%</div><div class="metric-label">${t('ml_r2')}</div></div>
+      <div class="metric-card"><div class="metric-val">¥${fmtK(rmse)}</div><div class="metric-label">${t('ml_rmse')}</div></div>
+      <div class="metric-card"><div class="metric-val">${mape.toFixed(1)}%</div><div class="metric-label">${t('ml_mape')}</div></div>
     </div>
     <div class="charts-row">
       <div class="chart-box">
-        <div class="chart-title">特徴量 重要度（正規化係数）</div>
+        <div class="chart-title">${t('ml_importance')}</div>
         <div style="padding-top:4px;">${impBars}</div>
       </div>
       <div class="chart-box">
-        <div class="chart-title">実際 vs 予測（散布図）</div>
+        <div class="chart-title">${t('ml_pred_chart')}</div>
         <canvas id="ch-pred" height="260"></canvas>
       </div>
     </div>
     <div class="table-wrap">
       <div class="tbl-ctrl">
-        <select onchange="_mlSrc=this.value;_renderMLTable()"><option value="all">すべて</option><option value="jkk">JKK</option><option value="ur">UR</option></select>
-        <input placeholder="物件名・区市で絞込…" oninput="_mlQ=this.value.toLowerCase();_renderMLTable()">
+        <select onchange="_mlSrc=this.value;_renderMLTable()">
+          <option value="all">${t('ml_filter_all')}</option>
+          <option value="jkk">JKK</option>
+          <option value="ur">UR</option>
+        </select>
+        <input placeholder="${t('ml_filter_ph')}" oninput="_mlQ=this.value.toLowerCase();_renderMLTable()">
       </div>
       <div id="ml-table-body"></div>
     </div>`;
@@ -506,7 +631,7 @@ function _renderMLTable() {
   });
   rows.sort((a, b) => { const [ka,kb]=_mlAsc?[a,b]:[b,a]; return (kb[_mlSort]??0)-(ka[_mlSort]??0); });
 
-  const th = (col, label) => `<th onclick="sortML('${col}')">${label}${col===_mlSort?(_mlAsc?' ▲':' ▼'):''}</th>`;
+  const th = (col, key) => `<th onclick="sortML('${col}')">${t(key)}${col===_mlSort?(_mlAsc?' ▲':' ▼'):''}</th>`;
   const tbody = rows.map(l => {
     const dp = l.diffPct.toFixed(1);
     const badge = l.diffPct > 8 ? `<span class="badge badge-up">+${dp}%</span>` : l.diffPct < -8 ? `<span class="badge badge-down">${dp}%</span>` : `<span class="badge badge-neu">±${Math.abs(dp)}%</span>`;
@@ -526,8 +651,8 @@ function _renderMLTable() {
 
   document.getElementById('ml-table-body').innerHTML = `
     <table class="data-table"><thead><tr>
-      <th>元</th>${th('name','物件名')}${th('ward','区・市')}<th>間取</th>${th('size_m2','面積')}${th('rent','実際')}${th('pred','予測')}${th('diff','差額')}${th('diffPct','乖離率')}
-    </tr></thead><tbody>${tbody||'<tr><td colspan="9" style="text-align:center;padding:16px;color:var(--muted)">該当なし</td></tr>'}</tbody></table>`;
+      <th>${t('col_src')}</th>${th('name','col_name')}${th('ward','col_ward')}<th>${t('col_layout')}</th>${th('size_m2','col_area')}${th('rent','col_actual')}${th('pred','col_predicted')}${th('diff','col_diff')}${th('diffPct','col_deviation')}
+    </tr></thead><tbody>${tbody||`<tr><td colspan="9" style="text-align:center;padding:16px;color:var(--muted)">${t('ml_no_results')}</td></tr>`}</tbody></table>`;
 }
 function sortML(col) { _mlAsc = _mlSort===col ? !_mlAsc : false; _mlSort = col; _renderMLTable(); }
 
@@ -577,11 +702,12 @@ function _drawPredScatter() {
   _charts['pred']=new Chart(document.getElementById('ch-pred'),{type:'scatter',data:{datasets:[
     {label:'JKK',data:pts.filter(p=>p.s!=='ur'),backgroundColor:c.red+'99',pointRadius:3,pointHoverRadius:5},
     {label:'UR', data:pts.filter(p=>p.s==='ur'), backgroundColor:c.blue+'99',pointRadius:3,pointHoverRadius:5},
-    {label:'理想線',data:[{x:0,y:0},{x:maxV,y:maxV}],type:'line',borderColor:c.accent+'88',borderDash:[4,3],borderWidth:1.5,pointRadius:0,fill:false},
-  ]},options:{...baseOpts(c),plugins:{legend:{display:true,labels:{color:c.tick,font:{family:'DM Sans',size:11}}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label==='理想線'?null:`${ctx.raw.n} · 実:¥${ctx.raw.x}k 予:¥${ctx.raw.y}k`}}},scales:{x:{...baseOpts(c).scales.x,title:{display:true,text:'実際 (千円)',color:c.tick}},y:{...baseOpts(c).scales.y,title:{display:true,text:'予測 (千円)',color:c.tick}}}}});
+    {label:t('ml_ideal'),data:[{x:0,y:0},{x:maxV,y:maxV}],type:'line',borderColor:c.accent+'88',borderDash:[4,3],borderWidth:1.5,pointRadius:0,fill:false},
+  ]},options:{...baseOpts(c),plugins:{legend:{display:true,labels:{color:c.tick,font:{family:'DM Sans',size:11}}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label===t('ml_ideal')?null:`${ctx.raw.n} · 実:¥${ctx.raw.x}k 予:¥${ctx.raw.y}k`}}},scales:{x:{...baseOpts(c).scales.x,title:{display:true,text:t('ml_actual_axis'),color:c.tick}},y:{...baseOpts(c).scales.y,title:{display:true,text:t('ml_pred_axis'),color:c.tick}}}}});
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
+applyLang();
 loadData();
 </script>
 </body>
