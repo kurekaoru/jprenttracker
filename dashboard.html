@@ -1473,7 +1473,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 01:02 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 10:05 JST</p>
       </div>
 
 
@@ -4838,11 +4838,21 @@ function switchPropTab(tab) {
   if (tab === 'details')  renderDetailTab(_selectedId);
 }
 
-function renderDetailTab(listingId) {
+async function renderDetailTab(listingId) {
   const el = document.getElementById('prop-details-content');
   if (!el) return;
   const listing = _allListings?.find(l => l.id === listingId);
   if (!listing) { el.innerHTML = ''; return; }
+
+  if (listing.detail_text === undefined) {
+    el.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:12px;">...</div>`;
+    try {
+      const r = await fetch(`${API}/listings/${encodeURIComponent(listingId)}`);
+      if (r.ok) { const d = await r.json(); listing.detail_text = d.detail_text ?? null; }
+      else listing.detail_text = null;
+    } catch (_) { listing.detail_text = null; }
+    if (listingId !== _selectedId) return; // user moved on
+  }
 
   const row = (label, val, isHtml) => {
     if (!val && val !== 0) return '';
@@ -5336,6 +5346,8 @@ function setViewMode(mode) {
   applyMapFilters();
 }
 
+let _markerGenId = 0;
+
 function applyMapFilters() {
   if (!map) return;
   const minRent      = parseInt(document.getElementById('min-rent').value) || 0;
@@ -5357,7 +5369,7 @@ function applyMapFilters() {
   _allListings.forEach(l => {
     if (l.disappeared_at) return;
     if (nameQ) {
-      const haystack = [l.name, l.ward, l.address, l.detail_text, l.appliances, l.features, l.nearby_features]
+      const haystack = [l.name, l.ward, l.address, l.appliances, l.features, l.nearby_features]
         .filter(Boolean).join(' ').toLowerCase();
       if (!haystack.includes(nameQ)) return;
     }
@@ -5381,19 +5393,10 @@ function applyMapFilters() {
         if (!(l.features || '').includes(feat)) return;
       }
     }
-
     _filteredListings.push(l);
-    const marker = new google.maps.Marker({
-      position: { lat: l.lat, lng: l.lng },
-      map,
-      icon: markerIcon(l.source, false, _savedListings.has(l.id)),
-      title: l.name,
-    });
-    marker.addListener('click', () => selectListing(l.id));
-    _markers[l.id] = { marker, source: l.source, listing: l };
   });
-  const shown = _filteredListings.length;
 
+  const shown = _filteredListings.length;
   const summary = document.getElementById('map-summary');
   let txt = t('summary_text', shown, _allListings.length);
   if (_geoPending      > 0) txt += t('geo_pending', _geoPending);
@@ -5401,6 +5404,27 @@ function applyMapFilters() {
   summary.textContent = txt;
   renderAvailableTable();
   updateBoundaryStyles();
+
+  // Add markers in chunks to keep the page responsive
+  const genId = ++_markerGenId;
+  const toPlace = [..._filteredListings];
+  function addChunk(start) {
+    if (genId !== _markerGenId) return;
+    const end = Math.min(start + 50, toPlace.length);
+    for (let i = start; i < end; i++) {
+      const l = toPlace[i];
+      const marker = new google.maps.Marker({
+        position: { lat: l.lat, lng: l.lng },
+        map,
+        icon: markerIcon(l.source, false, _savedListings.has(l.id)),
+        title: l.name,
+      });
+      marker.addListener('click', () => selectListing(l.id));
+      _markers[l.id] = { marker, source: l.source, listing: l };
+    }
+    if (end < toPlace.length) requestAnimationFrame(() => addChunk(end));
+  }
+  requestAnimationFrame(() => addChunk(0));
 }
 
 let _geoPending       = 0;

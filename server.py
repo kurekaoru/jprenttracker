@@ -8,7 +8,7 @@ from flask_jwt_extended import (
     JWTManager, create_access_token, jwt_required, get_jwt_identity
 )
 from werkzeug.security import generate_password_hash, check_password_hash
-import json, logging, math, os, re, secrets, sqlite3, time, threading, requests
+import gzip as _gzip, json, logging, math, os, re, secrets, sqlite3, time, threading, requests
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 from dotenv import load_dotenv
@@ -26,6 +26,17 @@ DB_FILE     = "jkk_monitor.db"
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
+
+@app.after_request
+def _gzip_response(response):
+    if ('gzip' in request.headers.get('Accept-Encoding', '') and
+            response.content_type.startswith('application/json')):
+        data = response.get_data()
+        if len(data) > 1000:
+            response.set_data(_gzip.compress(data, compresslevel=6))
+            response.headers['Content-Encoding'] = 'gzip'
+            response.headers['Vary'] = 'Accept-Encoding'
+    return response
 
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=30)
 jwt = JWTManager(app)
@@ -1674,7 +1685,7 @@ def get_listings():
         f"       disappeared_at, walk_min, walk_m, nearest_station, thumbnail_url,"
         f"       priority, building_type, appliances,"
         f"       has_parking, parking_fee, age_years, available_from, features,"
-        f"       detail_text, nearby_features,"
+        f"       nearby_features,"
         f"       CASE WHEN thumbnail_url IS NOT NULL AND ("
         f"         lower(thumbnail_url) LIKE '%madori%' OR"
         f"         lower(thumbnail_url) LIKE '%floor_plan%' OR"
@@ -1708,6 +1719,22 @@ def get_listings():
         "station_pending": station_pending,
         "max_age_min":     max_age_min,
     })
+
+
+@app.route("/api/listings/<listing_id>")
+def get_listing_detail(listing_id):
+    if not os.path.exists(DB_FILE):
+        return jsonify({}), 404
+    con = db()
+    cur = con.execute(
+        "SELECT id, detail_text, nearby_features FROM listings WHERE id = ?",
+        (listing_id,),
+    )
+    row = cur.fetchone()
+    con.close()
+    if not row:
+        return jsonify({}), 404
+    return jsonify(dict(row))
 
 
 @app.route("/api/disappeared")
