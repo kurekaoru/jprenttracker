@@ -1481,7 +1481,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 12:38 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 12:51 JST</p>
       </div>
 
 
@@ -4666,9 +4666,15 @@ function initMap() {
     }
   };
 
-  // If initMap fires before the browser has laid out the container (zero dimensions),
-  // tiles never load — trigger a resize once the element has real size.
+  // Always trigger resize on next frame — tiles can fail to paint even when
+  // offsetWidth > 0 if the GPU hasn't rasterised the container yet.
   const _mapEl = document.getElementById('map');
+  requestAnimationFrame(() => {
+    google.maps.event.trigger(map, 'resize');
+    map.setCenter({ lat: 35.660, lng: 139.745 });
+  });
+  // Secondary fallback: if the element genuinely had zero size at construction
+  // time, ResizeObserver handles the delayed layout case.
   if (_mapEl.offsetWidth === 0 || _mapEl.offsetHeight === 0) {
     const _ro = new ResizeObserver(() => {
       if (_mapEl.offsetWidth > 0 && _mapEl.offsetHeight > 0) {
@@ -5641,10 +5647,14 @@ function _applyListingData(d) {
   }
 }
 
-function _focusWard(ward) {
+function _focusWard(ward, attempt = 0) {
   if (!map) return;
   const entries = Object.values(_markers).filter(e => e.listing.ward === ward);
-  if (!entries.length) return;
+  // Markers are placed in rAF chunks — retry until they appear (up to 3s)
+  if (!entries.length) {
+    if (attempt < 30) setTimeout(() => _focusWard(ward, attempt + 1), 100);
+    return;
+  }
   if (entries.length === 1) {
     map.panTo(entries[0].marker.getPosition());
     map.setZoom(14);
@@ -5653,9 +5663,7 @@ function _focusWard(ward) {
     entries.forEach(e => bounds.extend(e.marker.getPosition()));
     map.fitBounds(bounds, { top: 60, right: 40, bottom: 40, left: 40 });
   }
-  // Brief pulse highlight on ward markers
   entries.forEach(e => {
-    const orig = e.marker.getIcon();
     e.marker.setAnimation(google.maps.Animation.BOUNCE);
     setTimeout(() => e.marker.setAnimation(null), 1400);
   });
