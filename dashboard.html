@@ -126,13 +126,20 @@
     padding: 3px 8px;
     border-radius: 20px;
     font-weight: 500;
+    transition: background 0.3s, color 0.3s;
+  }
+  .status-pill.offline {
+    background: rgba(226,75,74,0.15);
+    color: #E24B4A;
   }
   .pulse {
     width: 6px; height: 6px;
-    background: var(--accent);
+    background: currentColor;
     border-radius: 50%;
     animation: pulse 2s infinite;
+    flex-shrink: 0;
   }
+  .status-pill.offline .pulse { animation: none; opacity: 1; }
   @keyframes pulse {
     0%,100% { opacity: 1; }
     50% { opacity: 0.3; }
@@ -1093,7 +1100,7 @@
       <span id="map-summary"></span>
       <button class="topbar-refresh-btn" onclick="loadListings()" data-i18n="refresh">更新</button>
     </div>
-    <div class="status-pill"><div class="pulse"></div><span data-i18n="monitoring">監視中</span></div>
+    <div class="status-pill" id="server-status-pill"><div class="pulse"></div><span id="server-status-label" data-i18n="monitoring">監視中</span></div>
     <select id="lang-select" class="lang-select" onchange="setLang(this.value)">
       <option value="ja">🇯🇵 JP</option>
       <option value="en">🇬🇧 EN</option>
@@ -1473,7 +1480,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 10:58 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-29 11:10 JST</p>
       </div>
 
 
@@ -1788,7 +1795,8 @@ let _lang = localStorage.getItem('jkktrackr_lang') || 'ja';
 const STRINGS = {
   // Topbar
   refresh:              { ja:'更新',              en:'Refresh',          uk:'Оновити' },
-  monitoring:           { ja:'監視中',             en:'Monitoring',       uk:'Моніторинг' },
+  monitoring:           { ja:'監視中',             en:'Active',           uk:'Активний'   },
+  offline:              { ja:'オフライン',         en:'Offline',          uk:'Офлайн'     },
   login:                { ja:'ログイン',           en:'Login',            uk:'Увійти' },
   // Rail
   filter:               { ja:'フィルター',          en:'Filter',           uk:'Фільтр' },
@@ -5610,6 +5618,14 @@ function _applyListingData(d) {
   }
 }
 
+function _setServerStatus(online) {
+  const pill  = document.getElementById('server-status-pill');
+  const label = document.getElementById('server-status-label');
+  if (!pill || !label) return;
+  pill.classList.toggle('offline', !online);
+  label.textContent = online ? t('monitoring') : t('offline');
+}
+
 async function loadListings() {
   const summary = document.getElementById('map-summary');
 
@@ -5629,12 +5645,14 @@ async function loadListings() {
 
     try { localStorage.setItem(_CACHE_KEY, JSON.stringify({ ts: Date.now(), data: d })); } catch (_) {}
     _applyListingData(d);
+    _setServerStatus(true);
 
     clearTimeout(_listingsPollTimer);
     if (_pendingCount > 0) {
       _listingsPollTimer = setTimeout(loadListings, 2500);
     }
   } catch (e) {
+    _setServerStatus(false);
     if (!_allListings.length) summary.textContent = t('server_offline');
   }
 }
