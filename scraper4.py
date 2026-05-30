@@ -638,8 +638,15 @@ def run():
                     daemon=True,
                 ).start()
 
-        # Every 4 cycles (~2h), backfill UR listings that still have no images
+        # Every 4 cycles (~2h), backfill UR + SUUMO listings missing detail data
         if _cycle % 4 == 0:
+            suumo_scraper = scraper_by_source.get("suumo")
+            if suumo_scraper:
+                threading.Thread(
+                    target=suumo_scraper.backfill_images,
+                    kwargs={"limit": 30},
+                    daemon=True,
+                ).start()
             ur_scraper = scraper_by_source.get("ur")
             if ur_scraper:
                 threading.Thread(

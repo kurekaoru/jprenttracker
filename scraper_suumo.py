@@ -224,6 +224,123 @@ def _last_page(ward_slug: str) -> int:
         return 1
 
 
+def _scrape_detail_page(url: str) -> dict:
+    """
+    Fetch the room detail page and return enriched data:
+      image_urls, floor_plan_url, features, age_years, available_from,
+      detail_text, nearest_station, walk_min.
+    Returns {} on failure.
+    """
+    r = _get(url)
+    if not r:
+        return {}
+    soup = BeautifulSoup(r.text, "html.parser")
+
+    # Full-size gallery images (lazy-loaded via data-src)
+    image_urls: list[str] = []
+    floor_plan_url: str | None = None
+    for img in soup.select("img.property_view_object-img"):
+        src = img.get("data-src", "")
+        if not src:
+            continue
+        if img.get("alt", "") == "間取り図":
+            floor_plan_url = src
+        else:
+            image_urls.append(src)
+
+    # Detail table: 所在地, 駅徒歩, 築年数, 階建, 入居, 備考 …
+    nearest_station: str | None = None
+    walk_min: int | None = None
+    age_years: float | None = None
+    available_from: str | None = None
+    detail_text: str | None = None
+
+    for tr in soup.select("table tr"):
+        th = tr.select_one("th")
+        td = tr.select_one("td")
+        if not (th and td):
+            continue
+        key = th.get_text(strip=True)
+        val = td.get_text(" ", strip=True)
+
+        if key == "築年数":
+            age_years = _parse_age(val)
+        elif key == "入居":
+            available_from = val
+        elif key == "備考":
+            detail_text = val
+        elif key == "駅徒歩":
+            # May list 2-3 stations; take the first (nearest)
+            m = re.search(r"(.+?)/(.+?駅)\s*歩(\d+)分", val)
+            if m:
+                line, sta, mins = m.group(1), m.group(2), m.group(3)
+                nearest_station = f"{sta}（{line}）"
+                walk_min = int(mins)
+
+    # Features: a single <li> with comma-separated amenities
+    features: str | None = None
+    for li in soup.select("li"):
+        text = li.get_text("、", strip=True)
+        # Heuristic: feature lists are long and contain common keywords
+        if len(text) > 30 and any(k in text for k in ("バストイレ", "エアコン", "フローリング", "オートロック")):
+            features = text
+            break
+
+    return {
+        "image_urls":    image_urls,
+        "floor_plan_url": floor_plan_url,
+        "features":      features,
+        "age_years":     age_years,
+        "available_from": available_from,
+        "detail_text":   detail_text,
+        "nearest_station": nearest_station,
+        "walk_min":      walk_min,
+    }
+
+
+def _apply_detail(con: sqlite3.Connection, lid: str, url: str) -> int:
+    """
+    Scrape the detail page for one listing and persist results.
+    Returns number of images inserted.
+    """
+    d = _scrape_detail_page(url)
+    if not d:
+        return 0
+
+    # Update listing fields where we got something better
+    updates = []
+    params  = []
+    for col in ("features", "age_years", "available_from", "detail_text",
+                "nearest_station", "walk_min"):
+        if d.get(col) is not None:
+            updates.append(f"{col}=?")
+            params.append(d[col])
+    if updates:
+        params.append(lid)
+        con.execute(f"UPDATE listings SET {', '.join(updates)} WHERE id=?", params)
+
+    # Insert photos
+    inserted = 0
+    for img_url in d.get("image_urls", []):
+        cur = con.execute(
+            "INSERT OR IGNORE INTO listing_images (listing_id, url, image_type) VALUES (?,?,?)",
+            (lid, img_url, "photo"),
+        )
+        inserted += cur.rowcount
+
+    # Insert floor plan separately so image_type is set
+    fp = d.get("floor_plan_url")
+    if fp:
+        cur = con.execute(
+            "INSERT OR IGNORE INTO listing_images (listing_id, url, image_type) VALUES (?,?,?)",
+            (lid, fp, "floor_plan"),
+        )
+        inserted += cur.rowcount
+
+    con.commit()
+    return inserted
+
+
 def _listing_id(listing: dict) -> str:
     """Mirror of scraper4.listing_id() — must stay in sync."""
     src = listing.get("source", "suumo")
@@ -276,25 +393,62 @@ class SuumoScraper(BaseScraper):
         return all_listings, ok
 
     def fetch_images_batch(self, new_lids: list[str]) -> int:
-        """Bulk-insert all image URLs collected during fetch_listings."""
+        """Scrape detail pages for newly inserted listings and persist images + metadata."""
         if not new_lids:
             return 0
+        return self._detail_scrape_lids(new_lids)
 
+    def backfill_images(self, listing_ids: list[str] | None = None, limit: int = 50) -> None:
+        """Re-scrape detail pages for existing SUUMO listings that have no detail data yet."""
         con = sqlite3.connect(self.db_file, timeout=60)
         con.execute("PRAGMA journal_mode=WAL")
+        con.row_factory = sqlite3.Row
+        if listing_ids:
+            ph = ",".join("?" * len(listing_ids))
+            rows = con.execute(
+                f"SELECT id, url FROM listings WHERE id IN ({ph}) AND source='suumo' AND url IS NOT NULL",
+                listing_ids,
+            ).fetchall()
+        else:
+            rows = con.execute(
+                "SELECT id, url FROM listings WHERE source='suumo' AND url IS NOT NULL"
+                "  AND detail_text IS NULL"
+                " ORDER BY first_seen DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        con.close()
+        lids = [r["id"] for r in rows]
+        urls = {r["id"]: r["url"] for r in rows}
+        if lids:
+            log.info(f"SUUMO backfill: {len(lids)} listings to detail-scrape")
+            self._detail_scrape_lids(lids, url_map=urls)
+
+    def _detail_scrape_lids(self, lids: list[str], url_map: dict | None = None) -> int:
+        con = sqlite3.connect(self.db_file, timeout=60)
+        con.execute("PRAGMA journal_mode=WAL")
+        con.row_factory = sqlite3.Row
+
+        if url_map is None:
+            ph = ",".join("?" * len(lids))
+            rows = con.execute(
+                f"SELECT id, url FROM listings WHERE id IN ({ph})", lids
+            ).fetchall()
+            url_map = {r["id"]: r["url"] for r in rows}
 
         saved = 0
-        for lid in new_lids:
-            urls = self._pending_images.get(lid, [])
-            if not urls:
+        for i, lid in enumerate(lids):
+            url = url_map.get(lid)
+            if not url:
                 continue
-            for url in urls:
-                con.execute(
-                    "INSERT OR IGNORE INTO listing_images (listing_id, url) VALUES (?,?)",
-                    (lid, url),
-                )
-            saved += 1
+            try:
+                n = _apply_detail(con, lid, url)
+                saved += 1 if n > 0 else 0
+                log.debug(f"SUUMO detail {i+1}/{len(lids)}: {n} images — {url}")
+            except Exception as e:
+                log.warning(f"SUUMO detail scrape failed for {lid}: {e}")
+            if i < len(lids) - 1:
+                time.sleep(random.uniform(1.0, 2.0))
 
-        con.commit()
         con.close()
+        log.info(f"SUUMO detail scrape done: {saved}/{len(lids)} listings enriched")
         return saved
