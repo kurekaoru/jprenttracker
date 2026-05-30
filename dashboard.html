@@ -1512,7 +1512,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-31 02:54 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-31 03:00 JST</p>
       </div>
 
 
@@ -4011,6 +4011,7 @@ let _allListings = [];
 let _pendingCount = 0;
 let _markers = {};
 let _selectedId = null;
+let _spiderfiedSet = null;  // non-null while a spider is open
 let _transitPolylines = [];
 const _routeCache    = new Map(); // key: `${listingId}_${dest}_${mode}` → DirectionsResult
 const _facRouteCache = new Map(); // key: `${listingId}_${lat}_${lng}` → DirectionsResult
@@ -4698,11 +4699,12 @@ function initMap() {
       _oms.addListener('click', (marker) => selectListing(marker._lid));
       _oms.addListener('spiderfy', (spiderfied) => {
         document.getElementById('map-pin-tooltip').style.display = 'none';
-        const inSpider = new Set(spiderfied);
-        Object.values(_markers).forEach(e => { if (!inSpider.has(e.marker)) e.marker.setVisible(false); });
+        _spiderfiedSet = new Set(spiderfied);
+        Object.values(_markers).forEach(e => { if (!_spiderfiedSet.has(e.marker)) e.marker.setVisible(false); });
       });
       _oms.addListener('unspiderfy', () => {
         document.getElementById('map-pin-tooltip').style.display = 'none';
+        _spiderfiedSet = null;
         Object.values(_markers).forEach(e => e.marker.setVisible(true));
       });
       // Re-register any markers placed before OMS finished loading
@@ -5555,7 +5557,7 @@ function applyMapFilters() {
         icon: markerIcon(l.source, l.id === _selectedId, _savedListings.has(l.id)),
       });
       marker.addListener('mouseover', (e) => {
-        if (_oms) {
+        if (_oms && !_spiderfiedSet) {
           const nearby = _oms.markersNearMarker(marker, false);
           if (nearby.length > 0) {
             _showTip(t('n_properties', nearby.length + 1), e.domEvent);
