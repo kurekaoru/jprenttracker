@@ -132,6 +132,10 @@
     background: rgba(226,75,74,0.15);
     color: #E24B4A;
   }
+  .status-pill.checking {
+    background: rgba(140,140,140,0.12);
+    color: #8c8c8c;
+  }
   .pulse {
     width: 6px; height: 6px;
     background: currentColor;
@@ -140,6 +144,7 @@
     flex-shrink: 0;
   }
   .status-pill.offline .pulse { animation: none; opacity: 1; }
+  .status-pill.checking .pulse { animation: none; opacity: 0.45; }
   @keyframes pulse {
     0%,100% { opacity: 1; }
     50% { opacity: 0.3; }
@@ -1102,7 +1107,7 @@
       <span id="map-summary"></span>
       <button class="topbar-refresh-btn" onclick="loadListings()" data-i18n="refresh">更新</button>
     </div>
-    <div class="status-pill" id="server-status-pill"><div class="pulse"></div><span id="server-status-label" data-i18n="monitoring">監視中</span></div>
+    <div class="status-pill checking" id="server-status-pill"><div class="pulse"></div><span id="server-status-label">…</span></div>
     <select id="lang-select" class="lang-select" onchange="setLang(this.value)">
       <option value="ja">🇯🇵 JP</option>
       <option value="en">🇬🇧 EN</option>
@@ -1482,7 +1487,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-31 00:31 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-31 00:43 JST</p>
       </div>
 
 
@@ -5676,6 +5681,7 @@ function _setServerStatus(online) {
   const pill  = document.getElementById('server-status-pill');
   const label = document.getElementById('server-status-label');
   if (!pill || !label) return;
+  pill.classList.remove('checking');
   pill.classList.toggle('offline', !online);
   label.textContent = online ? t('monitoring') : t('offline');
 }
