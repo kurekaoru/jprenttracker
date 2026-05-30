@@ -164,6 +164,15 @@
   .map-src-chip.inactive { opacity: 0.3; }
   .map-src-chip:hover { border-color: rgba(255,255,255,0.3); }
   .map-src-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  #map-pin-tooltip {
+    display: none; position: fixed; z-index: 9999;
+    background: rgba(15,15,15,0.82); color: #fff;
+    font: 600 12px/1.35 'DM Sans', system-ui, sans-serif;
+    padding: 4px 9px; border-radius: 7px;
+    pointer-events: none; white-space: nowrap;
+    transform: translate(-50%, calc(-100% - 14px));
+    box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  }
   @keyframes pulse {
     0%,100% { opacity: 1; }
     50% { opacity: 0.3; }
@@ -1503,7 +1512,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-31 02:41 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-31 02:48 JST</p>
       </div>
 
 
@@ -1516,6 +1525,7 @@
     <div class="map-wrap">
       <div id="map"></div>
       <div id="map-source-chips" class="map-source-overlay"></div>
+      <div id="map-pin-tooltip"></div>
     </div>
   </main>
 
@@ -4684,7 +4694,9 @@ function initMap() {
         nearbyDistance: 20,
         circleSpiralSwitchover: 12,
       });
-      _oms.addListener('click', (marker) => selectListing(marker._lid));
+      _oms.addListener('click',      (marker) => selectListing(marker._lid));
+      _oms.addListener('spiderfy',   ()       => { document.getElementById('map-pin-tooltip').style.display = 'none'; });
+      _oms.addListener('unspiderfy', ()       => { document.getElementById('map-pin-tooltip').style.display = 'none'; });
       // Re-register any markers placed before OMS finished loading
       Object.values(_markers).forEach(e => {
         e.marker._lid = e.listing.id;
@@ -5513,6 +5525,15 @@ function applyMapFilters() {
   // Add markers in chunks to keep the page responsive.
   // OMS (OverlappingMarkerSpiderfier) handles stacked markers: clicking a pile
   // fans them out radially so each is individually clickable.
+  const _tip = document.getElementById('map-pin-tooltip');
+  const _showTip = (name, domEvt) => {
+    _tip.textContent = name;
+    _tip.style.left = domEvt.clientX + 'px';
+    _tip.style.top  = domEvt.clientY + 'px';
+    _tip.style.display = 'block';
+  };
+  const _hideTip = () => { _tip.style.display = 'none'; };
+
   const genId = ++_markerGenId;
   const toPlace = [..._filteredListings];
   function addChunk(start) {
@@ -5524,8 +5545,9 @@ function applyMapFilters() {
         position: { lat: l.lat, lng: l.lng },
         map,
         icon: markerIcon(l.source, l.id === _selectedId, _savedListings.has(l.id)),
-        title: l.name,
       });
+      marker.addListener('mouseover', (e) => _showTip(l.name, e.domEvent));
+      marker.addListener('mouseout',  _hideTip);
       if (_oms) {
         marker._lid = l.id;
         _oms.addMarker(marker);
