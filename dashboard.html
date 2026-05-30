@@ -464,8 +464,9 @@
     display: inline-block; font-size: 10px; padding: 1px 6px;
     border-radius: 10px; color: #fff; margin-left: 4px; vertical-align: middle;
   }
-  .src-tag.jkk { background: #dc2626; }
-  .src-tag.ur  { background: #3a86ff; }
+  .src-tag.jkk   { background: #dc2626; }
+  .src-tag.ur    { background: #3a86ff; }
+  .src-tag.suumo { background: #16a34a; }
   .route-btn {
     font-size: 11px; padding: 3px 8px; border-radius: 6px; border: none; cursor: pointer;
     background: var(--surface2); color: var(--text); transition: background 0.1s;
@@ -1481,7 +1482,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-30 21:43 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-31 00:31 JST</p>
       </div>
 
 
@@ -2321,7 +2322,7 @@ const LAYOUTS = ['1R','1K','1DK','1LDK','2K','2DK','2LDK','3K','3DK','3LDK','4LD
 
 const DEFAULT_WARDS   = new Set([...KU, ...SI]);   // Kanagawa is opt-in
 const DEFAULT_LAYOUTS = new Set(LAYOUTS);
-const DEFAULT_SOURCES = new Set(['jkk', 'ur']);
+const DEFAULT_SOURCES = new Set(['jkk', 'ur', 'suumo']);
 const LOCATION_FILTER_MODE_KEY = 'jkkLocationFilterMode:v1';
 
 let selectedWards    = new Set(DEFAULT_WARDS);
@@ -3821,7 +3822,7 @@ function buildChips() {
 
   LAYOUTS.forEach(l => makeChip(l, selectedLayouts, lc, applyMapFilters, l === '4LDK以上' ? t('layout_4ldkp') : l));
 
-  [['jkk', '🏠 JKK'], ['ur', '🏢 UR']].forEach(([val, lbl]) => {
+  [['jkk', '🏠 JKK'], ['ur', '🏢 UR'], ['suumo', '🔑 SUUMO']].forEach(([val, lbl]) => {
     const c = document.createElement('div');
     c.className = 'chip' + (filterSources.has(val) ? ' active' : '');
     c.textContent = lbl;
@@ -5533,7 +5534,7 @@ function renderFavouritesTable() {
   ).join('');
 
   const tbody = sorted.map(l => {
-    const tag     = l.source === 'ur' ? '<span class="src-tag ur">UR</span>' : '<span class="src-tag jkk">JKK</span>';
+    const tag     = l.source === 'ur' ? '<span class="src-tag ur">UR</span>' : l.source === 'suumo' ? '<span class="src-tag suumo">SUUMO</span>' : '<span class="src-tag jkk">JKK</span>';
     const href    = l.url ? escHtml(l.url) : '#';
     const sel     = l.id === _selectedId ? ' row-selected' : '';
     return `<tr class="${sel}" data-id="${escHtml(l.id)}" onclick="if(event.target.tagName!='A'&&event.target.tagName!='BUTTON')selectListing('${l.id}','${l.url||''}')">
@@ -5595,7 +5596,7 @@ function renderAvailableTable() {
   ).join('');
 
   const tbody = sorted.map(l => {
-    const tag     = l.source === 'ur' ? '<span class="src-tag ur">UR</span>' : '<span class="src-tag jkk">JKK</span>';
+    const tag     = l.source === 'ur' ? '<span class="src-tag ur">UR</span>' : l.source === 'suumo' ? '<span class="src-tag suumo">SUUMO</span>' : '<span class="src-tag jkk">JKK</span>';
     const station = stationStr(l.nearest_station, l.walk_min);
     const href    = l.url ? escHtml(l.url) : '#';
     const sel     = l.id === _selectedId ? ' row-selected' : '';
@@ -5780,7 +5781,7 @@ function renderDisappearedTable() {
   ).join('');
 
   const tbody = sorted.map(l => {
-    const tag      = l.source === 'ur' ? '<span class="src-tag ur">UR</span>' : '<span class="src-tag jkk">JKK</span>';
+    const tag      = l.source === 'ur' ? '<span class="src-tag ur">UR</span>' : l.source === 'suumo' ? '<span class="src-tag suumo">SUUMO</span>' : '<span class="src-tag jkk">JKK</span>';
     const href     = l.url ? escHtml(l.url) : '#';
     return `<tr onclick="if(event.target.tagName!='A'&&'${l.url}')window.open('${l.url}','_blank')">
       <td>${tag} <a href="${href}" target="_blank" rel="noopener">${escHtml(l.name)}</a></td>
@@ -6201,9 +6202,10 @@ function chatExecuteAction(action) {
     if (action.min_size != null) document.getElementById('min-size').value = action.min_size || '';
     if (action.max_size != null) { /* max_size not a DOM input — future */ }
     if (action.max_walk != null) document.getElementById('max-walk').value = action.max_walk || '';
-    if (action.source === 'jkk')  filterSources = new Set(['jkk']);
-    else if (action.source === 'ur')   filterSources = new Set(['ur']);
-    else if (action.source === 'both') filterSources = new Set(['jkk','ur']);
+    if (action.source === 'jkk')        filterSources = new Set(['jkk']);
+    else if (action.source === 'ur')    filterSources = new Set(['ur']);
+    else if (action.source === 'suumo') filterSources = new Set(['suumo']);
+    else if (action.source === 'both')  filterSources = new Set(['jkk','ur','suumo']);
     buildChips();
     applyMapFilters();
   } else if (action.type === 'await_card_pick') {
