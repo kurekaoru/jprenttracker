@@ -1512,7 +1512,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-31 02:53 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-31 02:54 JST</p>
       </div>
 
 
@@ -4695,9 +4695,16 @@ function initMap() {
         nearbyDistance: 20,
         circleSpiralSwitchover: 12,
       });
-      _oms.addListener('click',      (marker) => selectListing(marker._lid));
-      _oms.addListener('spiderfy',   ()       => { document.getElementById('map-pin-tooltip').style.display = 'none'; });
-      _oms.addListener('unspiderfy', ()       => { document.getElementById('map-pin-tooltip').style.display = 'none'; });
+      _oms.addListener('click', (marker) => selectListing(marker._lid));
+      _oms.addListener('spiderfy', (spiderfied) => {
+        document.getElementById('map-pin-tooltip').style.display = 'none';
+        const inSpider = new Set(spiderfied);
+        Object.values(_markers).forEach(e => { if (!inSpider.has(e.marker)) e.marker.setVisible(false); });
+      });
+      _oms.addListener('unspiderfy', () => {
+        document.getElementById('map-pin-tooltip').style.display = 'none';
+        Object.values(_markers).forEach(e => e.marker.setVisible(true));
+      });
       // Re-register any markers placed before OMS finished loading
       Object.values(_markers).forEach(e => {
         e.marker._lid = e.listing.id;
