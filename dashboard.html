@@ -145,6 +145,22 @@
   }
   .status-pill.offline .pulse { animation: none; opacity: 1; }
   .status-pill.checking .pulse { animation: none; opacity: 0.45; }
+  .map-source-overlay {
+    position: absolute; top: 10px; right: 10px; z-index: 5;
+    display: flex; flex-direction: column; gap: 4px; pointer-events: auto;
+  }
+  .map-src-chip {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(22,25,29,0.82);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.12); border-radius: 20px;
+    padding: 4px 10px 4px 8px; font-size: 11px; font-weight: 600;
+    color: rgba(255,255,255,0.85); cursor: pointer; white-space: nowrap;
+    transition: opacity 0.15s, border-color 0.15s; user-select: none;
+  }
+  .map-src-chip.inactive { opacity: 0.3; }
+  .map-src-chip:hover { border-color: rgba(255,255,255,0.3); }
+  .map-src-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
   @keyframes pulse {
     0%,100% { opacity: 1; }
     50% { opacity: 0.3; }
@@ -1101,13 +1117,10 @@
       <button class="view-toggle-btn"         id="vtb-starred"  onclick="setViewMode('starred')"  data-i18n="view_saved"    style="padding:2px 10px;font-size:9px;border-radius:10px;white-space:nowrap;">★ Saved</button>
     </div>
     <div class="topbar-legend">
-      <span class="tl-item"><span class="tl-dot" style="background:#dc2626;"></span>JKK</span>
-      <span class="tl-item"><span class="tl-dot" style="background:#3a86ff;"></span>UR</span>
-      <span class="tl-sep"></span>
       <span id="map-summary"></span>
       <button class="topbar-refresh-btn" onclick="loadListings()" data-i18n="refresh">更新</button>
     </div>
-    <div class="status-pill checking" id="server-status-pill"><div class="pulse"></div><span id="server-status-label">…</span></div>
+    <div class="status-pill checking" id="server-status-pill"><div class="pulse"></div><span id="server-status-label" data-i18n="connecting">…</span></div>
     <select id="lang-select" class="lang-select" onchange="setLang(this.value)">
       <option value="ja">🇯🇵 JP</option>
       <option value="en">🇬🇧 EN</option>
@@ -1487,7 +1500,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-31 00:43 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-31 00:56 JST</p>
       </div>
 
 
@@ -1499,6 +1512,7 @@
   <main class="main">
     <div class="map-wrap">
       <div id="map"></div>
+      <div id="map-source-chips" class="map-source-overlay"></div>
     </div>
   </main>
 
@@ -1802,8 +1816,9 @@ let _lang = localStorage.getItem('jkktrackr_lang') || 'ja';
 const STRINGS = {
   // Topbar
   refresh:              { ja:'更新',              en:'Refresh',          uk:'Оновити' },
-  monitoring:           { ja:'監視中',             en:'Active',           uk:'Активний'   },
-  offline:              { ja:'オフライン',         en:'Offline',          uk:'Офлайн'     },
+  connecting:           { ja:'接続中',             en:'Connecting',       uk:'З\'єднання' },
+  monitoring:           { ja:'オンライン',          en:'Online',           uk:'Онлайн'     },
+  offline:              { ja:'オフライン',          en:'Offline',          uk:'Офлайн'     },
   login:                { ja:'ログイン',           en:'Login',            uk:'Увійти' },
   // Rail
   filter:               { ja:'フィルター',          en:'Filter',           uk:'Фільтр' },
@@ -3827,17 +3842,34 @@ function buildChips() {
 
   LAYOUTS.forEach(l => makeChip(l, selectedLayouts, lc, applyMapFilters, l === '4LDK以上' ? t('layout_4ldkp') : l));
 
-  [['jkk', '🏠 JKK'], ['ur', '🏢 UR'], ['suumo', '🔑 SUUMO']].forEach(([val, lbl]) => {
+  const _SRC_META = [
+    ['jkk',   '🏠 JKK',   '#dc2626'],
+    ['ur',    '🏢 UR',    '#3a86ff'],
+    ['suumo', '🔑 SUUMO', '#16a34a'],
+  ];
+  const _toggleSource = (val) => {
+    filterSources.has(val) ? filterSources.delete(val) : filterSources.add(val);
+    buildChips();
+    applyMapFilters();
+  };
+  _SRC_META.forEach(([val, lbl]) => {
     const c = document.createElement('div');
     c.className = 'chip' + (filterSources.has(val) ? ' active' : '');
     c.textContent = lbl;
-    c.onclick = () => {
-      filterSources.has(val) ? filterSources.delete(val) : filterSources.add(val);
-      c.classList.toggle('active');
-      applyMapFilters();
-    };
+    c.onclick = () => _toggleSource(val);
     sc.appendChild(c);
   });
+  const msc = document.getElementById('map-source-chips');
+  if (msc) {
+    msc.innerHTML = '';
+    _SRC_META.forEach(([val, lbl, color]) => {
+      const c = document.createElement('div');
+      c.className = 'map-src-chip' + (filterSources.has(val) ? '' : ' inactive');
+      c.innerHTML = `<span class="map-src-dot" style="background:${color}"></span>${lbl}`;
+      c.onclick = () => _toggleSource(val);
+      msc.appendChild(c);
+    });
+  }
   updateStationBanner();
 }
 
