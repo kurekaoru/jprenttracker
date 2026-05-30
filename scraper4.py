@@ -15,8 +15,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from scraper_jkk import JKKScraper
-from scraper_ur  import URScraper
+from scraper_jkk   import JKKScraper
+from scraper_ur    import URScraper
+from scraper_suumo import SuumoScraper
 from image_pipeline import download_pending_images, reset_asyncio_loop
 
 logging.basicConfig(
@@ -42,6 +43,7 @@ POLL_INTERVAL     = 1800  # seconds
 SCRAPERS = [
     JKKScraper(DB_FILE),
     URScraper(DB_FILE),
+    SuumoScraper(DB_FILE),
 ]
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
@@ -199,8 +201,9 @@ def upsert_listing(con, lid: str, listing: dict, notified: bool = False) -> bool
 # ── Notifications ─────────────────────────────────────────────────────────────
 
 SOURCE_META = {
-    "jkk": {"emoji": "🏠", "label": "JKK", "footer": "JKK東京"},
-    "ur":  {"emoji": "🏢", "label": "UR",  "footer": "UR都市機構"},
+    "jkk":   {"emoji": "🏠", "label": "JKK",   "footer": "JKK東京"},
+    "ur":    {"emoji": "🏢", "label": "UR",     "footer": "UR都市機構"},
+    "suumo": {"emoji": "🔑", "label": "SUUMO",  "footer": "SUUMO"},
 }
 
 
