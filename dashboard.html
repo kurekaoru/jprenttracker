@@ -11,6 +11,9 @@
   var s=document.createElement('script');s.async=true;
   s.src='https://maps.googleapis.com/maps/api/js?key=AIzaSyBHw3d6FU73jXiJxUJoZ4MlDGu2CmhC4i8&libraries=geometry&language='+l+'&callback=initMap';
   document.head.appendChild(s);
+  var o=document.createElement('script');o.async=true;
+  o.src='https://cdnjs.cloudflare.com/ajax/libs/OverlappingMarkerSpiderfier/1.0.3/oms.min.js';
+  document.head.appendChild(o);
 })();
 </script>
 <style>
@@ -1500,7 +1503,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-31 01:20 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-31 02:41 JST</p>
       </div>
 
 
@@ -3992,7 +3995,7 @@ function fmtDuration(firstSeen, endIso) {
 }
 
 // ── Map ─────────────────────────────────────────────────────────
-let map, directionsService, directionsRenderer;
+let map, directionsService, directionsRenderer, _oms = null;
 let _allListings = [];
 let _pendingCount = 0;
 let _markers = {};
@@ -4672,6 +4675,27 @@ function initMap() {
   window._closeFacPopup = () => { _facPopup.close(); clearDirections(); };
 
   map.addListener('zoom_changed', _applyZoomVisibility);
+
+  const _initOms = () => {
+    if (typeof OverlappingMarkerSpiderfier !== 'undefined') {
+      _oms = new OverlappingMarkerSpiderfier(map, {
+        markersWontMove: true,
+        markersWontHide: true,
+        nearbyDistance: 20,
+        circleSpiralSwitchover: 12,
+      });
+      _oms.addListener('click', (marker) => selectListing(marker._lid));
+      // Re-register any markers placed before OMS finished loading
+      Object.values(_markers).forEach(e => {
+        e.marker._lid = e.listing.id;
+        _oms.addMarker(e.marker);
+      });
+    } else {
+      setTimeout(_initOms, 200);
+    }
+  };
+  _initOms();
+
   restoreTrainLineOverlays();
 
   _RouteChipOverlayClass = class extends google.maps.OverlayView {
@@ -5434,6 +5458,7 @@ function applyMapFilters() {
 
   const prevId = _selectedId;
 
+  if (_oms) Object.values(_markers).forEach(e => _oms.removeMarker(e.marker));
   Object.values(_markers).forEach(e => e.marker.setMap(null));
   _markers = {};
   _filteredListings = [];
@@ -5485,7 +5510,9 @@ function applyMapFilters() {
   renderAvailableTable();
   updateBoundaryStyles();
 
-  // Add markers in chunks to keep the page responsive
+  // Add markers in chunks to keep the page responsive.
+  // OMS (OverlappingMarkerSpiderfier) handles stacked markers: clicking a pile
+  // fans them out radially so each is individually clickable.
   const genId = ++_markerGenId;
   const toPlace = [..._filteredListings];
   function addChunk(start) {
@@ -5499,7 +5526,12 @@ function applyMapFilters() {
         icon: markerIcon(l.source, l.id === _selectedId, _savedListings.has(l.id)),
         title: l.name,
       });
-      marker.addListener('click', () => selectListing(l.id));
+      if (_oms) {
+        marker._lid = l.id;
+        _oms.addMarker(marker);
+      } else {
+        marker.addListener('click', () => selectListing(l.id));
+      }
       _markers[l.id] = { marker, source: l.source, listing: l };
     }
     if (end < toPlace.length) requestAnimationFrame(() => addChunk(end));
