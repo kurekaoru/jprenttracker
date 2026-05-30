@@ -226,6 +226,12 @@ class JKKScraper(BaseScraper):
             "--no-sandbox",
             "--disable-dev-shm-usage",
             "--disable-gpu",
+            "--js-flags=--max-old-space-size=256",
+            "--disable-extensions",
+            "--disable-default-apps",
+            "--disable-sync",
+            "--disable-translate",
+            "--disable-background-networking",
         ]
         try:
             return p.chromium.launch(headless=True, channel="chrome", args=args)

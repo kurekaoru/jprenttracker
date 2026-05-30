@@ -34,6 +34,12 @@ CHROME_ARGS = [
     "--no-sandbox",
     "--disable-dev-shm-usage",
     "--disable-gpu",
+    "--js-flags=--max-old-space-size=256",
+    "--disable-extensions",
+    "--disable-default-apps",
+    "--disable-sync",
+    "--disable-translate",
+    "--disable-background-networking",
 ]
 
 SCRAPER_UA = (
