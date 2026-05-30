@@ -124,6 +124,8 @@ def _init_db():
     """Run all schema migrations once at startup. Never call per-request."""
     con = sqlite3.connect(DB_FILE)
     con.row_factory = sqlite3.Row
+    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("PRAGMA wal_autocheckpoint=100")  # checkpoint every 100 pages (~400KB)
 
     # Listings table migrations (idempotent)
     cols = {row[1] for row in con.execute("PRAGMA table_info(listings)")}
@@ -333,8 +335,6 @@ def _init_db():
         con.commit()
         app.config["JWT_SECRET_KEY"] = secret
 
-    # Checkpoint WAL so it doesn't grow unbounded between restarts
-    con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     con.close()
 
 
