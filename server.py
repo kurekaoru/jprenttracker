@@ -1611,6 +1611,11 @@ def get_log():
 
 # ── Listings ──────────────────────────────────────────────────────────────────
 
+@app.route("/api/ping")
+def ping():
+    return jsonify({"ok": True})
+
+
 @app.route("/api/listings")
 def get_listings():
     if not os.path.exists(DB_FILE):
