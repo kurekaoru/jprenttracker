@@ -1602,11 +1602,12 @@ def meta():
 
 @app.route("/api/log")
 def get_log():
-    lines = []
-    if os.path.exists(LOG_FILE):
-        with open(LOG_FILE) as f:
-            lines = f.readlines()[-50:]
-    return jsonify({"lines": [l.rstrip() for l in lines]})
+    if not os.path.exists(LOG_FILE):
+        return jsonify({"lines": []})
+    import subprocess
+    r = subprocess.run(["tail", "-n", "50", LOG_FILE], capture_output=True, text=True)
+    lines = r.stdout.splitlines() if r.returncode == 0 else []
+    return jsonify({"lines": lines})
 
 
 # ── Listings ──────────────────────────────────────────────────────────────────

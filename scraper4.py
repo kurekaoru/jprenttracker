@@ -28,6 +28,11 @@ logging.basicConfig(
         logging.StreamHandler(),
     ],
 )
+# httpcore/httpx log every request body including base64 image payloads at DEBUG —
+# that fills the log file with hundreds of MB and causes the server to OOM when
+# /api/log reads the whole file. Suppress them to WARNING.
+for _noisy in ("httpcore", "httpx", "hpack", "anthropic._base_client"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 log = logging.getLogger(__name__)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
