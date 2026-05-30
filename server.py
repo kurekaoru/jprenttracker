@@ -120,7 +120,8 @@ _tg_poll_lock = threading.Lock()
 
 # ── DB ────────────────────────────────────────────────────────────────────────
 
-def db():
+def _init_db():
+    """Run all schema migrations once at startup. Never call per-request."""
     con = sqlite3.connect(DB_FILE)
     con.row_factory = sqlite3.Row
 
@@ -332,6 +333,16 @@ def db():
         con.commit()
         app.config["JWT_SECRET_KEY"] = secret
 
+    # Checkpoint WAL so it doesn't grow unbounded between restarts
+    con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    con.close()
+
+
+def db():
+    con = sqlite3.connect(DB_FILE)
+    con.row_factory = sqlite3.Row
+    con.execute("PRAGMA cache_size = -512")   # 512 KB page cache per connection
+    con.execute("PRAGMA temp_store = MEMORY")
     return con
 
 
@@ -3447,8 +3458,8 @@ def serve_mobile():
 
 
 if __name__ == "__main__":
-    con = db()  # init tables + JWT secret on startup
-    # Kick worker if geocoded listings exist with no facilities (e.g. after migration wipe)
+    _init_db()  # run all migrations once; db() is now lightweight
+    con = db()
     needs = con.execute(
         "SELECT COUNT(*) FROM listings WHERE lat IS NOT NULL "
         "AND id NOT IN (SELECT DISTINCT listing_id FROM listing_facilities)"
