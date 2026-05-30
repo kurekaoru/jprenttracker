@@ -420,7 +420,8 @@ def _build_geocode_query(row):
     address = (row["address"]    or "").strip()
     ward    = (row["ward"]       or "").strip()
     pref    = (row["prefecture"] or "").strip()
-    prefix  = pref if pref else ""
+    # Don't prepend prefecture if address already contains it (e.g. SUUMO addresses)
+    prefix  = "" if (not pref or address.startswith(pref)) else pref
     if address and address != ward:
         return f"{prefix}{address}"
     if name:

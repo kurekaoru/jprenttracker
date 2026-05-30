@@ -1500,7 +1500,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-31 01:10 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-05-31 01:20 JST</p>
       </div>
 
 
@@ -5432,6 +5432,8 @@ function applyMapFilters() {
   const nameQ        = (document.getElementById('name-search')?.value || '').trim().toLowerCase();
   updateStationBanner();
 
+  const prevId = _selectedId;
+
   Object.values(_markers).forEach(e => e.marker.setMap(null));
   _markers = {};
   _filteredListings = [];
@@ -5468,6 +5470,12 @@ function applyMapFilters() {
     _filteredListings.push(l);
   });
 
+  // Restore card if the previously open listing still passes filters
+  if (prevId && _filteredListings.some(l => l.id === prevId)) {
+    _selectedId = prevId;
+    document.getElementById('right-panel').classList.add('open');
+  }
+
   const shown = _filteredListings.length;
   const summary = document.getElementById('map-summary');
   let txt = t('summary_text', shown, _allListings.length);
@@ -5488,7 +5496,7 @@ function applyMapFilters() {
       const marker = new google.maps.Marker({
         position: { lat: l.lat, lng: l.lng },
         map,
-        icon: markerIcon(l.source, false, _savedListings.has(l.id)),
+        icon: markerIcon(l.source, l.id === _selectedId, _savedListings.has(l.id)),
         title: l.name,
       });
       marker.addListener('click', () => selectListing(l.id));
