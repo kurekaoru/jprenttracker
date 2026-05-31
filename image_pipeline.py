@@ -320,9 +320,13 @@ def save_images_for_listing(lid: str, images: list[tuple[str, str]],
         con.execute("UPDATE listings SET thumbnail_url=? WHERE id=?", (best_thumb[1], lid))
     con.commit()
 
-    # 3. Floor plan analysis
+    # 3. Floor plan analysis — skip if already done
     if ok > 0:
-        run_floor_plan_analysis(lid, con)
+        already = con.execute(
+            "SELECT floor_plan_data FROM listings WHERE id=?", (lid,)
+        ).fetchone()
+        if not already or not already[0]:
+            run_floor_plan_analysis(lid, con)
 
     return ok
 
