@@ -188,11 +188,15 @@ def autocrop_whitespace(fpath: str) -> None:
 
 
 def download_image(url: str, row_id: int, lid: str, img_type: str,
-                   con: sqlite3.Connection) -> str | None:
+                   con: sqlite3.Connection,
+                   skip_ai_classify: bool = False) -> str | None:
     """
     Download one image, run OCR if it's a floor plan candidate.
     Updates listing_images with local_path + ocr_text.
     Returns local file path on success, None on failure.
+
+    skip_ai_classify: if True, skip the Haiku classification call (floor plan
+    already found for this listing, or img_type == 'floor_plan' from URL heuristic).
     """
     if not url or url.startswith("file://"):
         return None
@@ -210,21 +214,19 @@ def download_image(url: str, row_id: int, lid: str, img_type: str,
         fpath = os.path.join(img_dir, f"{row_id}.{ext}")
         with open(fpath, "wb") as f:
             f.write(r.content)
-        # AI classification overrides the URL heuristic, except:
-        # - 'skip' always wins (junk removal)
-        # - AI 'interior' does NOT override a URL-confident 'floor_plan' signal
-        ai_type = classify_image_ai(fpath)
-        if ai_type == "skip":
-            os.remove(fpath)
-            con.execute("DELETE FROM listing_images WHERE id=?", (row_id,))
-            con.commit()
-            log.debug(f"Skipped junk image {url}")
-            return None
-        if ai_type == "interior" and img_type == "floor_plan":
-            pass  # trust the URL heuristic (e.g. img_madori) over an uncertain AI call
-        elif ai_type != img_type:
-            log.debug(f"Reclassified {url}: {img_type} → {ai_type}")
-            img_type = ai_type
+        # Skip AI when URL heuristic is already confident (floor_plan) or when
+        # a floor plan has already been found for this listing (stop searching).
+        if img_type != "floor_plan" and not skip_ai_classify:
+            ai_type = classify_image_ai(fpath)
+            if ai_type == "skip":
+                os.remove(fpath)
+                con.execute("DELETE FROM listing_images WHERE id=?", (row_id,))
+                con.commit()
+                log.debug(f"Skipped junk image {url}")
+                return None
+            if ai_type != img_type:
+                log.debug(f"Reclassified {url}: {img_type} → {ai_type}")
+                img_type = ai_type
         con.execute("UPDATE listing_images SET image_type=? WHERE id=?", (img_type, row_id))
 
         if img_type != "floor_plan":
@@ -278,6 +280,12 @@ def save_images_for_listing(lid: str, images: list[tuple[str, str]],
     best_thumb: tuple | None = None  # (priority, url)
     ok = 0
 
+    # Stop AI classification once a floor plan is confirmed for this listing.
+    floor_plan_found: bool = con.execute(
+        "SELECT COUNT(*) FROM listing_images WHERE listing_id=? AND image_type='floor_plan'",
+        (lid,),
+    ).fetchone()[0] > 0
+
     for img_url, img_type in images:
         row = con.execute(
             "SELECT id, local_path FROM listing_images WHERE listing_id=? AND url=?",
@@ -294,13 +302,16 @@ def save_images_for_listing(lid: str, images: list[tuple[str, str]],
             ok += 1
             continue
 
-        fpath = download_image(img_url, row_id, lid, img_type, con)
+        fpath = download_image(img_url, row_id, lid, img_type, con,
+                               skip_ai_classify=floor_plan_found)
         if fpath:
             ok += 1
-            # Re-read type — OCR may have reclassified floor_plan → interior/exterior
+            # Re-read type in case AI reclassified or heuristic kept floor_plan
             actual_type = con.execute(
                 "SELECT image_type FROM listing_images WHERE id=?", (row_id,)
             ).fetchone()[0]
+            if actual_type == "floor_plan":
+                floor_plan_found = True
             prio = THUMB_PRIORITY.get(actual_type, 99)
             if best_thumb is None or prio < best_thumb[0]:
                 best_thumb = (prio, img_url)
