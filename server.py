@@ -2230,6 +2230,7 @@ _CHAT_TOOLS = [
                 "required_features": {"type": "array", "items": {"type": "string"}, "description": "Feature tags that must ALL be present, e.g. ['エアコン', 'バス・トイレ別']. Pass [] to clear."},
             },
         },
+        "cache_control": {"type": "ephemeral"},
     },
 ]
 
@@ -2810,10 +2811,25 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
         open_ctx += f"Current alert filter: {', '.join(parts)}\n"
 
     for _ in range(10):
+        # Cache the static system prompt (~4k tokens) and tools (~5k tokens, via
+        # cache_control on the last tool entry). open_ctx is small and changes per
+        # request so it's appended uncached. Together saves ~90% of fixed input cost.
+        system_blocks = [
+            {
+                "type": "text",
+                "text": CHAT_SYSTEM.format(
+                    date=datetime.now().strftime("%Y-%m-%d"),
+                    open_listing_context="",
+                ),
+                "cache_control": {"type": "ephemeral"},
+            },
+        ]
+        if open_ctx:
+            system_blocks.append({"type": "text", "text": open_ctx})
         resp = client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=2048,
-            system=CHAT_SYSTEM.format(date=datetime.now().strftime("%Y-%m-%d"), open_listing_context=open_ctx),
+            system=system_blocks,
             tools=_CHAT_TOOLS,
             messages=messages,
         )
