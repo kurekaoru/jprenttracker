@@ -220,7 +220,7 @@ class FloorPlanAgent:
     Reusable agent for extracting structured room data from Japanese floor plan images.
     """
 
-    def __init__(self, model: str = "claude-sonnet-4-6", api_key: str | None = None):
+    def __init__(self, model: str = "claude-haiku-4-5-20251001", api_key: str | None = None):
         self.model = model
         self._client = None
         self._api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
@@ -257,7 +257,7 @@ class FloorPlanAgent:
         client = self._client_lazy()
         msg = client.messages.create(
             model=self.model,
-            max_tokens=4096,
+            max_tokens=1024,
             system=SYSTEM,
             messages=[{
                 "role": "user",

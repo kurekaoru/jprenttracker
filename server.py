@@ -2553,10 +2553,46 @@ def _chat_batch_commute(params, con):
         dep += timedelta(days=1)
     dep_ts = int(dep.timestamp())
 
+    # Cache commute times in route_cache keyed by (origin_3dp, destination, "transit_matrix").
+    # TTL 7 days — commute times are stable; repeat calls for same destination are free.
+    _MATRIX_MODE = "transit_matrix"
+    _MATRIX_TTL  = "-7 days"
+
+    def _origin_key(r):
+        return f"{round(r['lat'], 3)},{round(r['lng'], 3)}"
+
+    def _cache_lookup(r):
+        hit = con.execute(
+            "SELECT response FROM route_cache WHERE origin=? AND destination=? AND mode=?"
+            " AND cached_at > datetime('now', ?)",
+            (_origin_key(r), destination, _MATRIX_MODE, _MATRIX_TTL),
+        ).fetchone()
+        return json.loads(hit["response"])["minutes"] if hit else None
+
+    def _cache_store(r, minutes):
+        now_iso = datetime.now().isoformat()
+        con.execute(
+            "INSERT OR REPLACE INTO route_cache (origin, destination, mode, response, cached_at)"
+            " VALUES (?,?,?,?,?)",
+            (_origin_key(r), destination, _MATRIX_MODE,
+             json.dumps({"minutes": minutes}), now_iso),
+        )
+
     matching = []
+    uncached = []
+    for r in rows:
+        mins = _cache_lookup(r)
+        if mins is not None:
+            if mins <= max_minutes:
+                matching.append({"id": r["id"], "name": r["name"], "ward": r["ward"],
+                                  "rent": r["rent"], "layout": r["layout"], "source": r["source"],
+                                  "commute_minutes": mins})
+        else:
+            uncached.append(r)
+
     BATCH = 25
-    for i in range(0, len(rows), BATCH):
-        batch = rows[i:i + BATCH]
+    for i in range(0, len(uncached), BATCH):
+        batch = uncached[i:i + BATCH]
         origins = "|".join(f"{r['lat']},{r['lng']}" for r in batch)
         try:
             resp = requests.get(
@@ -2577,13 +2613,15 @@ def _chat_batch_commute(params, con):
             el = (row_data.get("elements") or [{}])[0]
             if el.get("status") == "OK":
                 minutes = round(el["duration"]["value"] / 60)
+                r = batch[j]
+                _cache_store(r, minutes)
                 if minutes <= max_minutes:
-                    r = batch[j]
                     matching.append({
                         "id": r["id"], "name": r["name"], "ward": r["ward"],
                         "rent": r["rent"], "layout": r["layout"], "source": r["source"],
                         "commute_minutes": minutes,
                     })
+    con.commit()
 
     matching.sort(key=lambda x: x["commute_minutes"])
     return {
@@ -2828,7 +2866,7 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
             system_blocks.append({"type": "text", "text": open_ctx})
         resp = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=2048,
+            max_tokens=1536,
             system=system_blocks,
             tools=_CHAT_TOOLS,
             messages=messages,

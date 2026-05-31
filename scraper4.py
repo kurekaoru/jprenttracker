@@ -39,7 +39,7 @@ log = logging.getLogger(__name__)
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
 CONFIG_FILE       = "config.json"
 DB_FILE           = "jkk_monitor.db"
-POLL_INTERVAL     = 1800  # seconds
+POLL_INTERVAL     = 3600  # seconds
 
 # ── Registered scrapers ───────────────────────────────────────────────────────
 # Add new scrapers here — they are picked up automatically by the main loop.
