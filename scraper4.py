@@ -19,18 +19,17 @@ from scraper_jkk   import JKKScraper
 from scraper_ur    import URScraper
 from scraper_suumo import SuumoScraper
 from image_pipeline import download_pending_images, reset_asyncio_loop
+import db_events
 
+# File handler for WARNING+ only (crash dumps); INFO events go to the DB events table.
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.WARNING,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
         logging.FileHandler("jkk_monitor.log"),
         logging.StreamHandler(),
     ],
 )
-# httpcore/httpx log every request body including base64 image payloads at DEBUG —
-# that fills the log file with hundreds of MB and causes the server to OOM when
-# /api/log reads the whole file. Suppress them to WARNING.
 for _noisy in ("httpcore", "httpx", "hpack", "anthropic._base_client"):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
 log = logging.getLogger(__name__)
@@ -151,6 +150,7 @@ def init_db() -> sqlite3.Connection:
         if col not in img_cols:
             con.execute(f"ALTER TABLE listing_images ADD COLUMN {col} {defn}")
 
+    db_events.ensure_table(con)
     con.commit()
     return con
 
@@ -299,7 +299,7 @@ def _send_with_retry(fn, *args, max_retries=3):
                 r.raise_for_status()
             return True
         except Exception as e:
-            log.error(f"Send failed (attempt {attempt+1}): {e}")
+            log.warning(f"Send failed (attempt {attempt+1}): {e}")
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt)
     return False
@@ -311,7 +311,7 @@ def send_slack(listing: dict, webhook: str) -> bool:
         lambda: requests.post(webhook, json=payload, timeout=10)
     )
     if ok:
-        log.info(f"Slack sent ✓  [{label}] {listing['name']}")
+        db_events.log("notif_sent", source="slack", detail=f"[{label}] {listing['name']}")
         time.sleep(1)
     return ok
 
@@ -333,7 +333,7 @@ def send_line(listing: dict, token: str) -> bool:
         )
     )
     if ok:
-        log.info(f"LINE sent ✓  [{label}] {listing['name']}")
+        db_events.log("notif_sent", source="line", detail=f"[{label}] {listing['name']}")
         time.sleep(1)
     return ok
 
@@ -369,17 +369,17 @@ def send_email(listing: dict, to_email: str) -> bool:
             server.starttls()
             server.login(smtp_user, smtp_pass)
             server.send_message(msg)
-        log.info(f"Email sent ✓  [{label}] {listing['name']} → {to_email}")
+        db_events.log("notif_sent", source="email", detail=f"[{label}] {listing['name']} → {to_email}")
         return True
     except Exception as e:
-        log.error(f"Email send failed to {to_email}: {e}")
+        log.warning(f"Email send failed to {to_email}: {e}")
         return False
 
 
 def send_telegram(listing: dict, target: str) -> bool:
     parts = target.split("|", 1)
     if len(parts) != 2:
-        log.error(f"Telegram target malformed: {target}")
+        log.warning(f"Telegram target malformed: {target}")
         return False
     token, chat_id = parts
     meta = SOURCE_META.get(listing.get("source", "jkk"), SOURCE_META["jkk"])
@@ -398,7 +398,7 @@ def send_telegram(listing: dict, target: str) -> bool:
         )
     )
     if ok:
-        log.info(f"Telegram sent ✓  [{label}] {listing['name']}")
+        db_events.log("notif_sent", source="telegram", detail=f"[{label}] {listing['name']}")
     return ok
 
 
@@ -524,7 +524,7 @@ def update_scrape_completeness(con):
     con.commit()
     done  = sum(1 for c, _, _ in updates if c == 1)
     total = len(updates)
-    log.info(f"Completeness: {done}/{total} listings fully scraped.")
+    db_events.log("completeness", n=done, detail=str(total), con=con)
 
 
 def update_listing_completeness(con, lid: str) -> None:
@@ -555,9 +555,9 @@ def update_listing_completeness(con, lid: str) -> None:
 
 
 def run():
-    log.info("JKK + UR Monitor started ✓")
     con = init_db()
-    log.info(f"Database: {DB_FILE}")
+    db_events.configure(DB_FILE)
+    db_events.log("startup", source="system", detail=DB_FILE, con=con)
 
     # Build source → scraper index for image dispatch
     scraper_by_source = {s.source: s for s in SCRAPERS}
@@ -578,10 +578,9 @@ def run():
                 if ok:
                     sources_ok.append(scraper.source)
                 else:
-                    log.warning(f"{scraper.source} fetch did not complete — "
-                                "skipping disappearance detection for this source.")
+                    db_events.log("fetch_incomplete", source=scraper.source, con=con)
             except Exception as e:
-                log.error(f"{scraper.source} fetch failed: {e}")
+                db_events.log("fetch_error", source=scraper.source, detail=str(e), con=con)
 
         # Upsert all listings and track new ones per source
         new_count       = {s.source: 0 for s in SCRAPERS}
@@ -594,9 +593,11 @@ def run():
             notified = False
 
             if not already_notified:
-                src = listing.get("source", "jkk").upper()
-                rent_display = f"¥{listing['rent']:,}" if listing["rent"] else "不明"
-                log.info(f"NEW [{src}] {listing['name']} | {listing['ward']} | {rent_display}")
+                src = listing.get("source", "jkk")
+                db_events.log("new_listing", source=src,
+                              n=listing.get("rent") or None,
+                              detail=f"{listing['name']} | {listing.get('ward','')}",
+                              con=con)
                 notified = send_notifications(con, listing, lid, config)
                 new_count[listing.get("source", "jkk")] = (
                     new_count.get(listing.get("source", "jkk"), 0) + 1
@@ -619,11 +620,12 @@ def run():
             )
             con.commit()
             if cur.rowcount:
-                log.info(f"{cur.rowcount} listing(s) marked as disappeared.")
+                db_events.log("disappeared", n=cur.rowcount, con=con)
 
         total = con.execute("SELECT COUNT(*) FROM listings").fetchone()[0]
-        counts = " | ".join(f"{new_count.get(s.source,0)} new {s.source.upper()}" for s in SCRAPERS)
-        log.info(f"Cycle done — {counts} | {total} total. Next check in {POLL_INTERVAL//60}m.")
+        counts_str = "  ".join(f"+{new_count.get(s.source,0)} {s.source.upper()}" for s in SCRAPERS)
+        db_events.log("cycle_done", n=total, detail=counts_str, con=con)
+        db_events.prune(con)
 
         # Catch-up downloader for any already-known missing images
         download_pending_images(con)

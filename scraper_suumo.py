@@ -12,6 +12,7 @@ import re, time, random, sqlite3, hashlib, logging
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+import db_events
 
 from scraper_base import BaseScraper
 
@@ -386,10 +387,11 @@ class SuumoScraper(BaseScraper):
                         time.sleep(random.uniform(0.8, 1.5))
 
             except Exception as e:
-                log.error(f"SUUMO {ward_name} fetch error: {e}", exc_info=True)
+                log.warning(f"SUUMO {ward_name} fetch error: {e}", exc_info=True)
+                db_events.log("fetch_error", source="suumo", detail=f"{ward_name}: {e}")
                 ok = False
 
-        log.info(f"SUUMO total: {len(all_listings)} room listings")
+        db_events.log("cycle_done", source="suumo", n=len(all_listings))
         return all_listings, ok
 
     def fetch_images_batch(self, new_lids: list[str]) -> int:
@@ -420,7 +422,6 @@ class SuumoScraper(BaseScraper):
         lids = [r["id"] for r in rows]
         urls = {r["id"]: r["url"] for r in rows}
         if lids:
-            log.info(f"SUUMO backfill: {len(lids)} listings to detail-scrape")
             self._detail_scrape_lids(lids, url_map=urls)
 
     def _detail_scrape_lids(self, lids: list[str], url_map: dict | None = None) -> int:
@@ -449,6 +450,6 @@ class SuumoScraper(BaseScraper):
             if i < len(lids) - 1:
                 time.sleep(random.uniform(1.0, 2.0))
 
+        db_events.log("detail_scraped", source="suumo", n=saved, detail=str(len(lids)))
         con.close()
-        log.info(f"SUUMO detail scrape done: {saved}/{len(lids)} listings enriched")
         return saved

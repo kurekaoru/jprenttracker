@@ -1603,11 +1603,18 @@ def meta():
 
 @app.route("/api/log")
 def get_log():
-    if not os.path.exists(LOG_FILE):
-        return jsonify({"lines": []})
-    import subprocess
-    r = subprocess.run(["tail", "-n", "50", LOG_FILE], capture_output=True, text=True)
-    lines = r.stdout.splitlines() if r.returncode == 0 else []
+    try:
+        import db_events
+        con = sqlite3.connect(DB_FILE, timeout=5)
+        con.row_factory = sqlite3.Row
+        rows = con.execute(
+            "SELECT ts, event, source, n, detail FROM events"
+            " ORDER BY ts DESC LIMIT 100"
+        ).fetchall()
+        con.close()
+        lines = [db_events.format_row(r) for r in rows]
+    except Exception:
+        lines = []
     return jsonify({"lines": lines})
 
 
