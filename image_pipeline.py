@@ -360,55 +360,47 @@ def _detect_media_type(image_path: str) -> str:
     return "image/jpeg"
 
 
+_ONNX_CLASSES = ["appliances", "exterior", "facilities", "floor_plan", "interior"]
+_ONNX_MEAN    = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(3, 1, 1)
+_ONNX_STD     = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(3, 1, 1)
+_ONNX_SESS    = None
+_SKIP_THRESH  = 0.50  # below this confidence → treat as skip
+
+
+def _get_onnx_sess():
+    global _ONNX_SESS
+    if _ONNX_SESS is None:
+        try:
+            import onnxruntime as ort
+            model_path = os.path.join(os.path.dirname(__file__), "classifier.onnx")
+            _ONNX_SESS = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+        except Exception as e:
+            log.warning(f"ONNX session init failed: {e}")
+    return _ONNX_SESS
+
+
 def classify_image_ai(image_path: str) -> str:
     """
-    Use Claude Haiku to classify a downloaded image.
+    Classify using local ONNX model — zero API cost, ~15 ms/image on CPU.
 
-    Returns one of:
-      floor_plan  — 間取り図: room layout diagram
-      exterior    — building exterior / aerial / street view
-      interior    — inside the unit (rooms, kitchen, bathroom, hallway)
-      facilities  — shared building facilities (lobby, mail room, parking, pool)
-      appliances  — close-up of equipment/appliances (AC unit, interphone, etc.)
-      skip        — banner, logo, transport map, icon, or site decoration
-
-    Falls back to 'interior' on API failure.
+    Returns one of: floor_plan, exterior, interior, facilities, appliances, skip
+    Falls back to 'interior' on error.
     """
-    import os as _os
+    from PIL import Image as _PILImage
     try:
-        from anthropic import Anthropic
-    except ImportError:
-        return "interior"
-    api_key = _os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        return "interior"
-    try:
-        mime = _detect_media_type(image_path)
-        with open(image_path, "rb") as f:
-            data = base64.standard_b64encode(f.read()).decode()
-        client = Anthropic(api_key=api_key)
-        resp = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=10,
-            messages=[{"role": "user", "content": [
-                {"type": "image", "source": {"type": "base64", "media_type": mime, "data": data}},
-                {"type": "text", "text": (
-                    "Classify this image from a Japanese apartment rental listing. "
-                    "Reply with exactly one word from this list:\n"
-                    "floor_plan — 間取り図: room layout diagram with labels/dimensions\n"
-                    "exterior — building exterior, aerial, or street-view photo\n"
-                    "interior — photo inside the unit (rooms, kitchen, bathroom, hallway)\n"
-                    "facilities — shared building spaces (lobby, corridor, parking, laundry room, pool)\n"
-                    "appliances — close-up of equipment or appliances "
-                    "(air conditioning unit, interphone, video doorbell, stove, bath unit, etc.)\n"
-                    "skip — banner, logo, transport diagram, icon, map, or site decoration"
-                )},
-            ]}],
-        )
-        label = resp.content[0].text.strip().lower().split()[0]
-        return label if label in _VALID_TYPES else "interior"
+        sess = _get_onnx_sess()
+        if sess is None:
+            return "interior"
+        img = _PILImage.open(image_path).convert("RGB").resize((224, 224))
+        arr = np.array(img, dtype=np.float32).transpose(2, 0, 1) / 255.0
+        arr = (arr - _ONNX_MEAN) / _ONNX_STD
+        logits = sess.run(["logits"], {"image": arr[None]})[0][0]
+        probs  = np.exp(logits) / np.exp(logits).sum()
+        if probs.max() < _SKIP_THRESH:
+            return "skip"
+        return _ONNX_CLASSES[probs.argmax()]
     except Exception as e:
-        log.warning(f"AI classify failed for {image_path}: {e}")
+        log.warning(f"Local classify failed for {image_path}: {e}")
         return "interior"
 
 
