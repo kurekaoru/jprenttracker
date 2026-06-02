@@ -1631,6 +1631,7 @@ def get_listings():
         return jsonify({"listings": [], "geocoded_now": 0})
 
     max_age_min = request.args.get("max_age_min", default=0, type=int)
+    dev_mode    = request.args.get("dev", "0") == "1"
 
     # ── Optional server-side filters ──────────────────────────────────────────
     wards_raw     = request.args.get("wards", "")
@@ -1666,9 +1667,12 @@ def get_listings():
             conds.append(f"layout IN ({','.join('?'*len(layouts))})")
             params.extend(layouts)
 
-    if source_filter in ("jkk", "ur"):
+    if source_filter in ("jkk", "ur", "suumo"):
         conds.append("COALESCE(source,'jkk') = ?")
         params.append(source_filter)
+    elif not dev_mode:
+        # Exclude SUUMO from prod dashboard by default
+        conds.append("COALESCE(source,'jkk') != 'suumo'")
 
     if min_rent:
         conds.append("rent >= ?");   params.append(min_rent)
@@ -3523,6 +3527,11 @@ def serve_desktop():
 def serve_mobile():
     import os
     return send_file(os.path.join(os.path.dirname(__file__), "dashboard-mobile.html"))
+
+@app.route("/dev")
+def serve_dev():
+    import os
+    return send_file(os.path.join(os.path.dirname(__file__), "dashboard-dev.html"))
 
 
 if __name__ == "__main__":

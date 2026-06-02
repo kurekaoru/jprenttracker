@@ -17,9 +17,12 @@ load_dotenv()
 
 from scraper_jkk   import JKKScraper
 from scraper_ur    import URScraper
-from scraper_suumo import SuumoScraper
 from image_pipeline import download_pending_images, reset_asyncio_loop
 import db_events
+
+DEV_MODE = os.environ.get("DEV_MODE") == "1"
+if DEV_MODE:
+    from scraper_suumo import SuumoScraper
 
 # File handler for WARNING+ only (crash dumps); INFO events go to the DB events table.
 logging.basicConfig(
@@ -47,7 +50,7 @@ POLL_INTERVAL     = 3600  # seconds
 SCRAPERS = [
     JKKScraper(DB_FILE),
     URScraper(DB_FILE),
-    SuumoScraper(DB_FILE),
+    *([] if not DEV_MODE else [SuumoScraper(DB_FILE)]),
 ]
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
@@ -471,7 +474,7 @@ def send_notifications(con, listing: dict, lid: str, global_config: dict) -> boo
                 notified = True
     else:
         webhook = SLACK_WEBHOOK_URL or global_config.get("slack_webhook", "")
-        if webhook:
+        if webhook and matches_criteria(listing, global_config):
             notified = send_slack(listing, webhook)
 
     return notified
