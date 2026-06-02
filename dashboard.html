@@ -168,12 +168,19 @@
   .map-src-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
   #map-pin-tooltip {
     display: none; position: fixed; z-index: 9999;
-    background: rgba(15,15,15,0.82); color: #fff;
-    font: 600 12px/1.35 'DM Sans', system-ui, sans-serif;
-    padding: 4px 9px; border-radius: 7px;
-    pointer-events: none; white-space: nowrap;
+    background: rgba(20,20,22,0.93); color: #fff;
+    border-radius: 8px; pointer-events: none;
     transform: translate(-50%, calc(-100% - 14px));
-    box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.55);
+    max-width: 180px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  #map-pin-tooltip .tip-img {
+    width: 180px; height: 112px; object-fit: cover; display: block;
+  }
+  #map-pin-tooltip .tip-name {
+    font: 600 11px/1.35 'DM Sans', system-ui, sans-serif;
+    padding: 5px 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   @keyframes pulse {
     0%,100% { opacity: 1; }
@@ -1535,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 08:14 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 08:32 JST</p>
       </div>
 
 
@@ -4039,6 +4046,67 @@ function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// ── Thumbnail hover tooltip ───────────────────────────────────────────────────
+const _tipImgCache = new Map(); // listing_id → url|null
+let _tipCurrentId  = null;
+
+function _trThumb(l) {
+  if (!l || !l.thumbnail_url || l.thumbnail_is_floor_plan) return '';
+  return l.thumbnail_url.startsWith('/')
+    ? API.replace(/\/api\/?$/, '') + l.thumbnail_url
+    : l.thumbnail_url;
+}
+
+async function _fetchThumb(id) {
+  if (_tipImgCache.has(id)) return _tipImgCache.get(id);
+  _tipImgCache.set(id, null);
+  try {
+    const r = await fetch(`${API}/listings/${encodeURIComponent(id)}/images`, {headers: authHeaders()});
+    if (!r.ok) return null;
+    const data = await r.json();
+    const img = (data.images || []).find(i => i.type !== 'floor_plan');
+    if (!img) return null;
+    const url = img.url.startsWith('/') ? API.replace(/\/api\/?$/, '') + img.url : img.url;
+    _tipImgCache.set(id, url);
+    return url;
+  } catch { return null; }
+}
+
+function showThumbTip(name, x, y, thumb, id) {
+  const tip = document.getElementById('map-pin-tooltip');
+  _tipCurrentId = id || null;
+  const imgHtml = thumb ? `<img class="tip-img" src="${escHtml(thumb)}" onerror="this.style.display='none'">` : '';
+  tip.innerHTML = `${imgHtml}<div class="tip-name">${escHtml(name)}</div>`;
+  tip.style.left = x + 'px';
+  tip.style.top  = y + 'px';
+  tip.style.display = 'block';
+  if (!thumb && id && !_tipImgCache.has(id)) {
+    _fetchThumb(id).then(url => {
+      if (_tipCurrentId === id && url && tip.style.display === 'block') {
+        const img = document.createElement('img');
+        img.className = 'tip-img';
+        img.src = url;
+        img.onerror = () => img.remove();
+        tip.insertBefore(img, tip.firstChild);
+      }
+    });
+  }
+}
+
+function hideThumbTip() {
+  hideThumbTip();
+  _tipCurrentId = null;
+}
+
+function attachThumbHover(container) {
+  container.querySelectorAll('tr[data-id]').forEach(tr => {
+    tr.addEventListener('mouseenter', e => {
+      showThumbTip(tr.dataset.name || '', e.clientX, e.clientY, tr.dataset.thumb || null, tr.dataset.id);
+    });
+    tr.addEventListener('mouseleave', hideThumbTip);
+  });
+}
+
 function fmtDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -4758,12 +4826,12 @@ function initMap() {
       });
       _oms.addListener('click', (marker) => selectListing(marker._lid));
       _oms.addListener('spiderfy', (spiderfied) => {
-        document.getElementById('map-pin-tooltip').style.display = 'none';
+        hideThumbTip();
         _spiderfiedSet = new Set(spiderfied);
         Object.values(_markers).forEach(e => { if (!_spiderfiedSet.has(e.marker)) e.marker.setVisible(false); });
       });
       _oms.addListener('unspiderfy', () => {
-        document.getElementById('map-pin-tooltip').style.display = 'none';
+        hideThumbTip();
         _spiderfiedSet = null;
         Object.values(_markers).forEach(e => e.marker.setVisible(true));
       });
@@ -5580,15 +5648,6 @@ function applyMapFilters() {
   // Add markers in chunks to keep the page responsive.
   // OMS (OverlappingMarkerSpiderfier) handles stacked markers: clicking a pile
   // fans them out radially so each is individually clickable.
-  const _tip = document.getElementById('map-pin-tooltip');
-  const _showTip = (name, domEvt) => {
-    _tip.textContent = name;
-    _tip.style.left = domEvt.clientX + 'px';
-    _tip.style.top  = domEvt.clientY + 'px';
-    _tip.style.display = 'block';
-  };
-  const _hideTip = () => { _tip.style.display = 'none'; };
-
   const genId = ++_markerGenId;
   const toPlace = [..._filteredListings];
   function addChunk(start) {
@@ -5605,13 +5664,13 @@ function applyMapFilters() {
         if (_oms && !_spiderfiedSet) {
           const nearby = _oms.markersNearMarker(marker, false);
           if (nearby.length > 0) {
-            _showTip(t('n_properties', nearby.length + 1), e.domEvent);
+            showThumbTip(t('n_properties', nearby.length + 1), e.domEvent.clientX, e.domEvent.clientY, null, null);
             return;
           }
         }
-        _showTip(l.name, e.domEvent);
+        showThumbTip(l.name, e.domEvent.clientX, e.domEvent.clientY, _trThumb(l), l.id);
       });
-      marker.addListener('mouseout',  _hideTip);
+      marker.addListener('mouseout', hideThumbTip);
       if (_oms) {
         marker._lid = l.id;
         _oms.addMarker(marker);
@@ -5700,7 +5759,7 @@ function renderFavouritesTable() {
     const tag     = l.source === 'ur' ? '<span class="src-tag ur">UR</span>' : l.source === 'suumo' ? '<span class="src-tag suumo">SUUMO</span>' : '<span class="src-tag jkk">JKK</span>';
     const href    = l.url ? escHtml(l.url) : '#';
     const sel     = l.id === _selectedId ? ' row-selected' : '';
-    return `<tr class="${sel}" data-id="${escHtml(l.id)}" onclick="if(event.target.tagName!='A'&&event.target.tagName!='BUTTON')selectListing('${l.id}','${l.url||''}')">
+    return `<tr class="${sel}" data-id="${escHtml(l.id)}" data-name="${escHtml(l.name)}" data-thumb="${escHtml(_trThumb(l))}" onclick="if(event.target.tagName!='A'&&event.target.tagName!='BUTTON')selectListing('${l.id}','${l.url||''}')">
       <td><button class="star-btn saved" onclick="event.stopPropagation();toggleSave('${l.id}')">★</button></td>
       <td>${tag} <a href="${href}" target="_blank" rel="noopener">${escHtml(l.name)}</a></td>
       <td>${escHtml(wardLabel(l.ward))}</td>
@@ -5718,6 +5777,7 @@ function renderFavouritesTable() {
     <thead><tr><th style="width:20px;padding:0"></th>${thead}</tr></thead>
     <tbody>${tbody}</tbody>
   </table>`;
+  attachThumbHover(el);
 
   if (countEl) countEl.textContent = t('count_items', sorted.length);
 }
@@ -5777,7 +5837,7 @@ async function loadForYou() {
       const href = l.url ? escHtml(l.url) : '#';
       const sel  = l.id === _selectedId ? ' row-selected' : '';
       const saved = _savedListings.has(l.id);
-      return `<tr class="${sel}" onclick="if(event.target.tagName!='A'&&event.target.tagName!='BUTTON')selectListing('${l.id}','${l.url||''}')">
+      return `<tr class="${sel}" data-id="${escHtml(l.id)}" data-name="${escHtml(l.name)}" data-thumb="${escHtml(_trThumb(l))}" onclick="if(event.target.tagName!='A'&&event.target.tagName!='BUTTON')selectListing('${l.id}','${l.url||''}')">
         <td><button class="star-btn${saved?' saved':''}" onclick="event.stopPropagation();toggleSave('${l.id}')">${saved?'★':'☆'}</button></td>
         <td>${tag} <a href="${href}" target="_blank" rel="noopener">${escHtml(l.name)}</a></td>
         <td>${escHtml(wardLabel(l.ward))}</td>
@@ -5790,6 +5850,7 @@ async function loadForYou() {
       </tr>`;
     }).join('');
     tableEl.innerHTML = `<div style="overflow-x:auto;"><table class="sort-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+    attachThumbHover(tableEl);
   } catch (e) {
     tableEl.innerHTML = `<div style="padding:8px;color:var(--danger);font-size:11px;font-family:var(--mono);">エラー: ${escHtml(e?.message || String(e))}</div>`;
   }
@@ -5837,7 +5898,7 @@ function renderAvailableTable() {
     const href    = l.url ? escHtml(l.url) : '#';
     const sel     = l.id === _selectedId ? ' row-selected' : '';
     const isSaved = _savedListings.has(l.id);
-    return `<tr class="${sel}" data-id="${escHtml(l.id)}" onclick="if(event.target.tagName!='A'&&event.target.tagName!='BUTTON')selectListing('${l.id}','${l.url||''}')">
+    return `<tr class="${sel}" data-id="${escHtml(l.id)}" data-name="${escHtml(l.name)}" data-thumb="${escHtml(_trThumb(l))}" onclick="if(event.target.tagName!='A'&&event.target.tagName!='BUTTON')selectListing('${l.id}','${l.url||''}')">
       <td><button class="star-btn${isSaved?' saved':''}" onclick="event.stopPropagation();toggleSave('${l.id}')">${isSaved?'★':'☆'}</button></td>
       <td>${tag} <a href="${href}" target="_blank" rel="noopener">${escHtml(l.name)}</a></td>
       <td>${escHtml(wardLabel(l.ward))}</td>
@@ -5855,6 +5916,7 @@ function renderAvailableTable() {
     <thead><tr><th style="width:20px;padding:0"></th>${thead}</tr></thead>
     <tbody>${tbody}</tbody>
   </table>`;
+  attachThumbHover(el);
 
   if (countEl) countEl.textContent = t('count_items', sorted.length);
 }
@@ -6020,7 +6082,7 @@ function renderDisappearedTable() {
   const tbody = sorted.map(l => {
     const tag      = l.source === 'ur' ? '<span class="src-tag ur">UR</span>' : l.source === 'suumo' ? '<span class="src-tag suumo">SUUMO</span>' : '<span class="src-tag jkk">JKK</span>';
     const href     = l.url ? escHtml(l.url) : '#';
-    return `<tr onclick="if(event.target.tagName!='A'&&'${l.url}')window.open('${l.url}','_blank')">
+    return `<tr data-id="${escHtml(l.id)}" data-name="${escHtml(l.name)}" data-thumb="${escHtml(_trThumb(l))}" onclick="if(event.target.tagName!='A'&&'${l.url}')window.open('${l.url}','_blank')">
       <td>${tag} <a href="${href}" target="_blank" rel="noopener">${escHtml(l.name)}</a></td>
       <td>${escHtml(wardLabel(l.ward))}</td>
       <td style="font-family:var(--mono);">¥${(l.rent||0).toLocaleString()}</td>
@@ -6038,6 +6100,7 @@ function renderDisappearedTable() {
     <thead><tr>${thead}</tr></thead>
     <tbody>${tbody}</tbody>
   </table>`;
+  attachThumbHover(el);
 
   if (countEl) countEl.textContent = t('count_items', sorted.length);
 }
