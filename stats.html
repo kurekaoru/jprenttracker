@@ -307,6 +307,7 @@ let _charts = {};
 let _map = null, _mapReady = false, _mapsApiReady = false;
 let _choroplethLayer = null, _infoWindow = null;
 let _mapLayer = 'rpsq'; // 'rpsq' | 'count'
+let _topoFeatures = null; // cached after first fetch
 
 window._mapsReady = () => {
   _mapsApiReady = true;
@@ -338,15 +339,17 @@ function _initMap() {
 }
 
 async function _loadChoropleth() {
-  const allFeatures = [];
-  await Promise.all(TOPO_FILES.map(async f => {
-    try {
-      const r = await fetch(TOPO_BASE + f);
-      if (r.ok) allFeatures.push(...(await r.json()).features);
-    } catch (_) {}
-  }));
+  if (!_topoFeatures) {
+    _topoFeatures = [];
+    await Promise.all(TOPO_FILES.map(async f => {
+      try {
+        const r = await fetch(TOPO_BASE + f);
+        if (r.ok) _topoFeatures.push(...(await r.json()).features);
+      } catch (_) {}
+    }));
+  }
   _choroplethLayer = new google.maps.Data({ map: _map });
-  _choroplethLayer.addGeoJson({ type:'FeatureCollection', features: allFeatures });
+  _choroplethLayer.addGeoJson({ type:'FeatureCollection', features: _topoFeatures });
   _choroplethLayer.addListener('click', ev => {
     const n3 = ev.feature.getProperty('N03_003') || '';
     const n4 = ev.feature.getProperty('N03_004') || '';
@@ -558,6 +561,11 @@ function _renderOverview() {
 
 // ── Map ───────────────────────────────────────────────────────────────────────
 function _renderMap() {
+  // Null stale map instance before recreating the DOM node it was bound to.
+  // Without this, _initMap() early-returns and the new #stats-map is never initialized.
+  _map = null;
+  _choroplethLayer = null;
+  _infoWindow = null;
   document.getElementById('main').innerHTML = `
     <div class="map-wrap">
       <div id="stats-map"></div>
