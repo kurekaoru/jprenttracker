@@ -921,16 +921,16 @@
   }
   .demo-select:focus { border-color: var(--accent); }
   .save-listing-btn {
-    background: none; border: none; cursor: pointer; padding: 2px 4px;
+    background: none; border: none; cursor: pointer; padding: 0 4px;
     font-size: 16px; line-height: 1; color: var(--muted); transition: color .15s, transform .1s;
-    flex-shrink: 0;
+    flex-shrink: 0; display: inline-flex; align-items: center; height: 22px;
   }
   .save-listing-btn.saved { color: #f59e0b; }
   .save-listing-btn:hover { transform: scale(1.2); }
   .share-listing-btn {
-    background: none; border: none; cursor: pointer; padding: 2px 4px;
+    background: none; border: none; cursor: pointer; padding: 0 4px;
     font-size: 14px; line-height: 1; color: var(--muted); transition: color .15s, transform .1s;
-    flex-shrink: 0; position: relative;
+    flex-shrink: 0; position: relative; display: inline-flex; align-items: center; height: 22px;
   }
   .share-listing-btn:hover { color: var(--accent); transform: scale(1.2); }
   .share-listing-btn .share-copied {
@@ -1517,7 +1517,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 15:09 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 15:18 JST</p>
       </div>
 
 
