@@ -243,15 +243,6 @@ html,body{height:100%;overflow:hidden;font-family:var(--font);background:var(--b
 .fac-row:hover td{background:var(--surface2);}
 .sort-table{width:100%;border-collapse:collapse;}
 .sort-table thead th{border-bottom:1px solid var(--border);}
-/* fac popup */
-.fac-popup{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 8px;min-width:120px;font-family:var(--font);}
-.fac-popup-type{display:flex;align-items:center;gap:4px;margin-bottom:3px;}
-.fac-popup-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-.fac-popup-type-label{font-size:8px;color:var(--muted);font-weight:500;flex:1;}
-.fac-popup-close{background:none;border:none;cursor:pointer;color:var(--muted);font-size:10px;padding:0;}
-.fac-popup-close:hover{color:var(--text);}
-.fac-popup-name{font-weight:600;font-size:10px;}
-.fac-popup-dist{font-size:8px;color:var(--muted);margin-top:1px;}
 /* layer toggle */
 .tog{position:relative;display:inline-block;width:28px;height:16px;}
 .tog input{opacity:0;width:0;height:0;}
@@ -320,7 +311,6 @@ let _facLoaded = false;
 let _facilityMarkers = [];
 let _facilityMarkerObjs = [];
 let _facilityCircle = null;
-let _facPopup = null;
 let _facTransitLines = [];
 const _facRouteCache = new Map();
 let _facTableSort = {col:'distance_m', asc:true};
@@ -434,7 +424,13 @@ function render() {
         ` : '<div class="no-photo">📷 写真なし</div>'}
       </div>
       <!-- map (shown for 交通 / 施設 tabs) -->
-      <div id="prop-map" style="display:none;width:100%;height:100%;"></div>
+      <div id="prop-map-wrap" style="display:none;width:100%;height:100%;position:relative;">
+        <div id="prop-map" style="width:100%;height:100%;"></div>
+        <div id="fac-chip" style="display:none;position:absolute;top:8px;left:8px;z-index:5;
+          background:rgba(255,255,255,.92);border-radius:6px;padding:4px 9px;
+          font-family:var(--font);font-size:11px;color:#333;line-height:1.4;
+          box-shadow:0 1px 4px rgba(0,0,0,.18);pointer-events:none;max-width:200px;"></div>
+      </div>
     </div>
 
     <!-- ── INFO PANEL ── -->
@@ -643,7 +639,7 @@ function switchTab(btn, id) {
 
   const showMap = MAP_TABS.has(id);
   document.getElementById('gallery-section').style.display = showMap ? 'none' : 'flex';
-  document.getElementById('prop-map').style.display       = showMap ? 'block' : 'none';
+  document.getElementById('prop-map-wrap').style.display  = showMap ? 'block' : 'none';
 
   if (id === 't-floorplan') {
     setFilter('floor_plan');
@@ -771,9 +767,8 @@ function _initMap() {
   _dirService  = new google.maps.DirectionsService();
   _dirRenderer = new google.maps.DirectionsRenderer({suppressMarkers:true});
   _dirRenderer.setMap(_map);
-  _facPopup = new google.maps.InfoWindow({disableAutoPan:true, maxWidth:200});
-  window._closeFacPopup = () => { _facPopup.close(); clearFacTransitLines(); };
   _map.addListener('zoom_changed', _applyFacZoomVisibility);
+  _map.addListener('click', () => { hideFacChip(); clearFacTransitLines(); });
 }
 
 // ── facilities ────────────────────────────────────────────────────────────────
@@ -802,15 +797,20 @@ function facIconHtml(type,size=16) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24"><rect width="24" height="24" rx="5" fill="${def.color}" opacity="0.85"/>${def.icon}</svg>`;
   return `<img src="data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}" width="${size}" height="${size}" style="vertical-align:middle;flex-shrink:0;">`;
 }
-function _facPopupHtml(color,name,typeLabel,distM) {
-  return `<div class="fac-popup"><div class="fac-popup-type"><span class="fac-popup-dot" style="background:${color}"></span><span class="fac-popup-type-label">${typeLabel}</span><button class="fac-popup-close" onclick="window._closeFacPopup()">✕</button></div><div class="fac-popup-name">${esc(name)}</div>${distM!=null?`<div class="fac-popup-dist">${distM}m</div>`:''}</div>`;
+function showFacChip(color, name, typeLabel, distM) {
+  const chip = document.getElementById('fac-chip');
+  if (!chip) return;
+  chip.style.borderLeft = `3px solid ${color}`;
+  chip.innerHTML = `<span style="font-weight:600;">${esc(name)}</span><br><span style="color:#777;font-size:10px;">${typeLabel}${distM!=null?' · '+distM+'m':''}</span>`;
+  chip.style.display = 'block';
 }
+function hideFacChip() { const c=document.getElementById('fac-chip'); if(c) c.style.display='none'; }
 
 function clearFacilities() {
   _facilityMarkers.forEach(m => m.setMap(null));
   _facilityMarkers = []; _facilityMarkerObjs = [];
   if (_facilityCircle) { _facilityCircle.setMap(null); _facilityCircle = null; }
-  if (_facPopup) _facPopup.close();
+  hideFacChip();
 }
 function clearFacTransitLines() {
   _facTransitLines.forEach(p => p.setMap(null)); _facTransitLines = [];
@@ -839,9 +839,8 @@ window._facSort = function(col) {
 };
 window._facRowClick = function(idx) {
   if (idx<0||idx>=_facilityMarkerObjs.length) return;
-  const {marker,facility,color} = _facilityMarkerObjs[idx];
-  _facPopup.setContent(_facPopupHtml(color,facility.name,facTypeName(facility.type),facility.distance_m));
-  _facPopup.open({map:_map,anchor:marker});
+  const {facility,color} = _facilityMarkerObjs[idx];
+  showFacChip(color,facility.name,facTypeName(facility.type),facility.distance_m);
   showFacRoute(facility.lat,facility.lng);
 };
 
@@ -902,8 +901,7 @@ async function loadFacilities() {
         icon:facMarkerIcon(f.type), title:f.name, zIndex:6,
       });
       marker.addListener('click', () => {
-        _facPopup.setContent(_facPopupHtml(color,f.name,facTypeName(f.type),f.distance_m));
-        _facPopup.open({map:_map,anchor:marker});
+        showFacChip(color,f.name,facTypeName(f.type),f.distance_m);
         showFacRoute(f.lat,f.lng);
       });
       _facilityMarkers.push(marker);
