@@ -231,15 +231,35 @@ html,body{height:100%;overflow:hidden;font-family:var(--font);background:var(--b
 }
 .commute-result.on{display:block;}
 .gmaps-link{font-size:11px;color:var(--accent);text-decoration:none;display:inline-block;margin-top:3px;}
-#commute-map{width:100%;height:180px;border-radius:8px;overflow:hidden;display:none;}
-#commute-map.on{display:block;}
-
-/* facilities */
-.fac-item{display:flex;align-items:center;gap:9px;padding:5px 0;
-  border-bottom:1px solid rgba(255,255,255,.04);font-size:12px;}
-.fac-item:last-child{border-bottom:none;}
-.fac-icon{font-size:15px;flex-shrink:0;width:22px;text-align:center;}
-.fac-dist{font-size:10px;font-family:var(--mono);color:var(--muted);margin-left:auto;}
+/* facilities panel */
+.fac-section-hdr{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+.fac-tog-grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:8px;}
+.fac-tog-row{display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid var(--border);min-width:0;}
+.fac-tog-row:nth-last-child(-n+2){border-bottom:none;}
+.fac-tog-row:nth-child(odd){border-right:1px solid var(--border);}
+.fac-table td,.fac-table th{padding:4px 6px 4px 0;font-size:11px;}
+.fac-table th{font-size:10px;font-weight:600;color:var(--muted);cursor:pointer;}
+.fac-table th.sort-active{color:var(--accent);}
+.fac-row:hover td{background:var(--surface2);}
+.sort-table{width:100%;border-collapse:collapse;}
+.sort-table thead th{border-bottom:1px solid var(--border);}
+/* fac popup */
+.fac-popup{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 8px;min-width:120px;font-family:var(--font);}
+.fac-popup-type{display:flex;align-items:center;gap:4px;margin-bottom:3px;}
+.fac-popup-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.fac-popup-type-label{font-size:8px;color:var(--muted);font-weight:500;flex:1;}
+.fac-popup-close{background:none;border:none;cursor:pointer;color:var(--muted);font-size:10px;padding:0;}
+.fac-popup-close:hover{color:var(--text);}
+.fac-popup-name{font-weight:600;font-size:10px;}
+.fac-popup-dist{font-size:8px;color:var(--muted);margin-top:1px;}
+/* layer toggle */
+.tog{position:relative;display:inline-block;width:28px;height:16px;}
+.tog input{opacity:0;width:0;height:0;}
+.tog-slider{position:absolute;cursor:pointer;inset:0;background:rgba(255,255,255,.15);border-radius:8px;transition:.2s;}
+.tog-slider:before{content:'';position:absolute;width:12px;height:12px;left:2px;bottom:2px;background:#fff;border-radius:50%;transition:.2s;}
+.tog input:checked+.tog-slider{background:var(--accent);}
+.tog input:checked+.tog-slider:before{transform:translateX(12px);}
+.layer-label{display:flex;align-items:center;gap:4px;flex:1;min-width:0;}
 
 /* structured detail sections */
 .ds-table{border:1px solid var(--border);border-radius:8px;overflow:hidden;}
@@ -257,7 +277,7 @@ html,body{height:100%;overflow:hidden;font-family:var(--font);background:var(--b
 
 @media print{
   .topbar-btn,.back-btn,.photo-nav,.photo-filter-bar,.photo-strip,.mode-btns,.commute-row,
-  #commute-map,.tab-bar{display:none!important;}
+  .tab-bar{display:none!important;}
   .layout{display:block;}
   .tab-pane{display:flex!important;overflow:visible!important;height:auto!important;}
   body,html{overflow:auto!important;height:auto!important;}
@@ -295,8 +315,30 @@ let _galleryFilter = 'all';
 let _map = null, _mapsReady = false;
 let _dirService = null, _dirRenderer = null;
 let _rentChart = null;
+// facilities
+let _facLoaded = false;
+let _facilityMarkers = [];
+let _facilityMarkerObjs = [];
+let _facilityCircle = null;
+let _facPopup = null;
+let _facTransitLines = [];
+const _facRouteCache = new Map();
+let _facTableSort = {col:'distance_m', asc:true};
+const _facTypeLayers = {
+  konbini:true, supermarket:true, kindergarten:true, school:true,
+  hospital:true, clinic:true, pharmacy:true, park:true, station:true,
+};
+const POI_ZOOM_MIN = 13;
 
-window._mapsReady = () => { _mapsReady = true; }; // map init is lazy — only on map tabs
+window._mapsReady = () => {
+  _mapsReady = true;
+  // If a map tab is already active (user opened the link directly), init now
+  const activePane = document.querySelector('.tab-pane.active');
+  if (activePane && MAP_TABS.has(activePane.id)) {
+    if (!_map) _initMap();
+    if (activePane.id === 't-facilities' && !_facLoaded) loadFacilities();
+  }
+};
 
 // ── boot ──────────────────────────────────────────────────────────────────────
 async function boot() {
@@ -322,12 +364,6 @@ function esc(s) {
 }
 function fmt(n) { return n != null ? Number(n).toLocaleString() : '—'; }
 function fmtAge(a) { return (a == null) ? '—' : a === 0 ? '新築' : `${a}年`; }
-function facDist(m) { return m < 1000 ? `${m}m` : `${(m/1000).toFixed(1)}km`; }
-const FAC_ICON = {konbini:'🏪',supermarket:'🛒',kindergarten:'🏫',clinic:'🏥',
-  hospital:'🏨',pharmacy:'💊',park:'🌳',gym:'💪',library:'📚',bank:'🏦',post:'📮'};
-const FAC_LABEL = {konbini:'コンビニ',supermarket:'スーパー',kindergarten:'保育園',
-  clinic:'クリニック',hospital:'病院',pharmacy:'薬局',park:'公園',
-  gym:'ジム',library:'図書館',bank:'銀行',post:'郵便局'};
 const ROOM_COLORS = {
   LDK:'#1D9E75',LD:'#1D9E75',DK:'#1D9E75',L:'#1D9E75',D:'#1D9E75',K:'#EF9F27',
   洋室:'#3B82F6',和室:'#8B5CF6',バルコニー:'#0EA5E9',
@@ -407,8 +443,8 @@ function render() {
         <button class="tab-btn active" onclick="switchTab(this,'t-overview')">概要</button>
         <button class="tab-btn" onclick="switchTab(this,'t-floorplan')">間取り</button>
         <button class="tab-btn" onclick="switchTab(this,'t-market')">市場</button>
+        <button class="tab-btn" onclick="switchTab(this,'t-facilities')">施設</button>
         <button class="tab-btn" onclick="switchTab(this,'t-commute')">交通</button>
-        ${(l.facilities||[]).length ? `<button class="tab-btn" onclick="switchTab(this,'t-facilities')">施設</button>` : ''}
       </div>
 
       <!-- OVERVIEW -->
@@ -546,16 +582,7 @@ function render() {
 
       <!-- FACILITIES -->
       <div class="tab-pane" id="t-facilities">
-        ${(l.facilities||[]).slice(0,15).map(f =>
-          `<div class="fac-item">
-            <span class="fac-icon">${FAC_ICON[f.type]||'📍'}</span>
-            <div>
-              <div style="font-size:12px;">${esc(f.name)}</div>
-              <div style="font-size:10px;color:var(--muted);">${FAC_LABEL[f.type]||f.type}</div>
-            </div>
-            <span class="fac-dist">${facDist(f.distance_m)}</span>
-          </div>`
-        ).join('') || '<p style="color:var(--muted);font-size:12px;">施設データがありません。</p>'}
+        <div id="fac-section"><p style="color:var(--muted);font-size:12px;">施設タブを開くと読み込みます。</p></div>
       </div>
     </div>
 
@@ -628,7 +655,8 @@ function switchTab(btn, id) {
     setTimeout(() => {
       if (_mapsReady && !_map) _initMap();
       else if (_map) google.maps.event.trigger(_map, 'resize');
-    }, 50);
+      if (id === 't-facilities' && _map && !_facLoaded) loadFacilities();
+    }, 60);
   }
 
   if (id === 't-market' && !_rentChart) drawRentChart();
@@ -695,7 +723,6 @@ function calcCommute(mode) {
     const leg = result.routes[0].legs[0];
     showCommuteResult(`<strong>${leg.duration.text}</strong> · ${leg.distance.text}`);
     _dirRenderer?.setDirections(result);
-    document.getElementById('commute-map').classList.add('on');
   });
 }
 function showCommuteResult(html) {
@@ -704,6 +731,27 @@ function showCommuteResult(html) {
 }
 
 // ── Google Maps ───────────────────────────────────────────────────────────────
+const _MAP_STYLE = [
+  {elementType:'geometry',stylers:[{color:'#ebebeb'}]},
+  {elementType:'labels.icon',stylers:[{visibility:'off'}]},
+  {elementType:'labels.text.fill',stylers:[{color:'#777777'}]},
+  {elementType:'labels.text.stroke',stylers:[{color:'#f5f5f5'}]},
+  {featureType:'administrative',elementType:'geometry',stylers:[{visibility:'off'}]},
+  {featureType:'administrative.locality',elementType:'labels.text.fill',stylers:[{color:'#444444'}]},
+  {featureType:'poi',stylers:[{visibility:'off'}]},
+  {featureType:'road',elementType:'geometry',stylers:[{color:'#ffffff'}]},
+  {featureType:'road.arterial',elementType:'geometry',stylers:[{color:'#e0e0e0'}]},
+  {featureType:'road.highway',elementType:'geometry',stylers:[{color:'#cccccc'}]},
+  {featureType:'road.highway',elementType:'labels',stylers:[{visibility:'off'}]},
+  {featureType:'transit',elementType:'geometry',stylers:[{color:'#d4d4d4'}]},
+  {featureType:'transit.station',elementType:'labels',stylers:[{visibility:'on'}]},
+  {featureType:'transit.station',elementType:'labels.icon',stylers:[{visibility:'on'}]},
+  {featureType:'transit.station',elementType:'labels.text.fill',stylers:[{color:'#555555'}]},
+  {featureType:'water',elementType:'geometry',stylers:[{color:'#b0c4d8'}]},
+  {featureType:'water',elementType:'labels',stylers:[{visibility:'off'}]},
+  {featureType:'poi.park',elementType:'geometry',stylers:[{color:'#d8e8d8'},{visibility:'on'}]},
+];
+
 function _initMap() {
   const l = _listing;
   if (!l?.lat || !l?.lng) return;
@@ -712,20 +760,190 @@ function _initMap() {
   _map = new google.maps.Map(el, {
     center:{lat:l.lat,lng:l.lng}, zoom:15,
     mapTypeControl:false, streetViewControl:false, fullscreenControl:false,
-    styles:[{featureType:'all',elementType:'labels.text.fill',stylers:[{color:'#9ca3af'}]},
-            {featureType:'water',elementType:'geometry',stylers:[{color:'#1e293b'}]},
-            {featureType:'landscape',elementType:'geometry',stylers:[{color:'#1f2937'}]},
-            {featureType:'road',elementType:'geometry',stylers:[{color:'#374151'}]},
-            {featureType:'poi',elementType:'all',stylers:[{visibility:'off'}]}],
+    styles: _MAP_STYLE,
   });
   new google.maps.Marker({
     position:{lat:l.lat,lng:l.lng}, map:_map, title:l.name,
     icon:{path:google.maps.SymbolPath.CIRCLE,scale:9,
           fillColor:'#1D9E75',fillOpacity:1,strokeColor:'#fff',strokeWeight:2},
+    zIndex:10,
   });
   _dirService  = new google.maps.DirectionsService();
-  _dirRenderer = new google.maps.DirectionsRenderer({suppressMarkers:false});
+  _dirRenderer = new google.maps.DirectionsRenderer({suppressMarkers:true});
   _dirRenderer.setMap(_map);
+  _facPopup = new google.maps.InfoWindow({disableAutoPan:true, maxWidth:200});
+  window._closeFacPopup = () => { _facPopup.close(); clearFacTransitLines(); };
+  _map.addListener('zoom_changed', _applyFacZoomVisibility);
+}
+
+// ── facilities ────────────────────────────────────────────────────────────────
+const _facilityIconDefs = {
+  konbini:{color:'#7C3AED',icon:`<polygon points="12,3.5 2.5,10 21.5,10" fill="white"/><rect x="3.5" y="10" width="17" height="10.5" rx="1" fill="white"/><rect x="9.5" y="13.5" width="5" height="7" fill="#7C3AED"/>`},
+  supermarket:{color:'#EA580C',icon:`<path d="M2 4h2.5l3 7.5h8.5l2-5.5H8.5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="9" cy="18.5" r="1.8" fill="white"/><circle cx="16" cy="18.5" r="1.8" fill="white"/>`},
+  kindergarten:{color:'#DB2777',icon:`<circle cx="8" cy="6" r="2.2" fill="white"/><path d="M4 20v-5a4 4 0 0 1 8 0v5" stroke="white" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="16.5" cy="7.5" r="1.6" fill="white"/><path d="M13.5 20v-4a3 3 0 0 1 6 0v4" stroke="white" stroke-width="1.6" stroke-linecap="round" fill="none"/>`},
+  school:{color:'#DB2777',icon:`<polygon points="12,4 1.5,9.5 12,15 22.5,9.5" fill="white"/><path d="M5.5 11.5v5c2 2.5 9 2.5 13 0v-5" stroke="white" stroke-width="1.8" stroke-linecap="round" fill="none"/><line x1="22.5" y1="9.5" x2="22.5" y2="16" stroke="white" stroke-width="1.8" stroke-linecap="round"/>`},
+  hospital:{color:'#0369A1',icon:`<rect x="3" y="3" width="18" height="18" rx="3" fill="none" stroke="white" stroke-width="1.5"/><rect x="10.5" y="7" width="3" height="10" fill="white"/><rect x="7" y="10.5" width="10" height="3" fill="white"/>`},
+  clinic:{color:'#0369A1',icon:`<rect x="3" y="3" width="18" height="18" rx="3" fill="none" stroke="white" stroke-width="1.5"/><rect x="10.5" y="7" width="3" height="10" fill="white"/><rect x="7" y="10.5" width="10" height="3" fill="white"/>`},
+  doctors:{color:'#0369A1',icon:`<rect x="3" y="3" width="18" height="18" rx="3" fill="none" stroke="white" stroke-width="1.5"/><rect x="10.5" y="7" width="3" height="10" fill="white"/><rect x="7" y="10.5" width="10" height="3" fill="white"/>`},
+  pharmacy:{color:'#059669',icon:`<rect x="3" y="3" width="18" height="18" rx="3" fill="none" stroke="white" stroke-width="1.5"/><rect x="10.5" y="7" width="3" height="10" fill="white"/><rect x="7" y="10.5" width="10" height="3" fill="white"/><circle cx="17" cy="17" r="2" fill="#059669" stroke="white" stroke-width="1"/>`},
+  park:{color:'#16A34A',icon:`<polygon points="12,3 4,15 20,15" fill="white"/><rect x="10" y="15" width="4" height="5" fill="white"/>`},
+  station:{color:'#C2410C',icon:`<rect x="4" y="4" width="16" height="13" rx="2.5" fill="none" stroke="white" stroke-width="1.6"/><line x1="4" y1="10.5" x2="20" y2="10.5" stroke="white" stroke-width="1.4"/><circle cx="8.5" cy="15" r="1.6" fill="white"/><circle cx="15.5" cy="15" r="1.6" fill="white"/><line x1="1.5" y1="20.5" x2="22.5" y2="20.5" stroke="white" stroke-width="1.6" stroke-linecap="round"/><line x1="7" y1="17" x2="6" y2="20.5" stroke="white" stroke-width="1.4" stroke-linecap="round"/><line x1="17" y1="17" x2="18" y2="20.5" stroke="white" stroke-width="1.4" stroke-linecap="round"/>`},
+};
+const _facilityTypeNames = {konbini:'コンビニ',supermarket:'スーパー',kindergarten:'保育園',school:'学校',hospital:'病院',clinic:'クリニック',doctors:'診療所',pharmacy:'薬局',park:'公園',station:'駅'};
+function facTypeName(t){ return _facilityTypeNames[t]||t; }
+
+function facMarkerIcon(type) {
+  const def = _facilityIconDefs[type]||{color:'#888888',icon:`<circle cx="12" cy="12" r="6" fill="white"/>`};
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"><rect width="24" height="24" rx="5" fill="${def.color}" opacity="0.6"/>${def.icon}</svg>`;
+  return {url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg),scaledSize:new google.maps.Size(14,14),anchor:new google.maps.Point(7,7)};
+}
+function facIconHtml(type,size=16) {
+  const def = _facilityIconDefs[type]||{color:'#888888',icon:`<circle cx="12" cy="12" r="6" fill="white"/>`};
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24"><rect width="24" height="24" rx="5" fill="${def.color}" opacity="0.85"/>${def.icon}</svg>`;
+  return `<img src="data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}" width="${size}" height="${size}" style="vertical-align:middle;flex-shrink:0;">`;
+}
+function _facPopupHtml(color,name,typeLabel,distM) {
+  return `<div class="fac-popup"><div class="fac-popup-type"><span class="fac-popup-dot" style="background:${color}"></span><span class="fac-popup-type-label">${typeLabel}</span><button class="fac-popup-close" onclick="window._closeFacPopup()">✕</button></div><div class="fac-popup-name">${esc(name)}</div>${distM!=null?`<div class="fac-popup-dist">${distM}m</div>`:''}</div>`;
+}
+
+function clearFacilities() {
+  _facilityMarkers.forEach(m => m.setMap(null));
+  _facilityMarkers = []; _facilityMarkerObjs = [];
+  if (_facilityCircle) { _facilityCircle.setMap(null); _facilityCircle = null; }
+  if (_facPopup) _facPopup.close();
+}
+function clearFacTransitLines() {
+  _facTransitLines.forEach(p => p.setMap(null)); _facTransitLines = [];
+  if (_dirRenderer) _dirRenderer.setDirections({routes:[]});
+}
+function _applyFacZoomVisibility() {
+  if (!_map) return;
+  const ok = _map.getZoom() >= POI_ZOOM_MIN;
+  _facilityMarkerObjs.forEach(({marker,facility}) => marker.setVisible(ok && _facTypeLayers[facility.type]!==false));
+  if (_facilityCircle) _facilityCircle.setVisible(ok);
+}
+function toggleFacType(type,on) {
+  _facTypeLayers[type] = on;
+  const ok = _map && _map.getZoom() >= POI_ZOOM_MIN;
+  _facilityMarkerObjs.forEach(({marker,facility}) => { if(facility.type===type) marker.setVisible(ok&&on); });
+  if (_facilityMarkerObjs.length) _renderFacSection(_facilityMarkerObjs.map(o=>o.facility));
+}
+window._toggleAllFacTypes = function() {
+  const allOn = Object.values(_facTypeLayers).every(v=>v!==false);
+  Object.keys(_facTypeLayers).forEach(k => toggleFacType(k,!allOn));
+};
+window._facSort = function(col) {
+  if (_facTableSort.col===col) _facTableSort.asc=!_facTableSort.asc;
+  else { _facTableSort.col=col; _facTableSort.asc=true; }
+  _renderFacSection(_facilityMarkerObjs.map(o=>o.facility));
+};
+window._facRowClick = function(idx) {
+  if (idx<0||idx>=_facilityMarkerObjs.length) return;
+  const {marker,facility,color} = _facilityMarkerObjs[idx];
+  _facPopup.setContent(_facPopupHtml(color,facility.name,facTypeName(facility.type),facility.distance_m));
+  _facPopup.open({map:_map,anchor:marker});
+  showFacRoute(facility.lat,facility.lng);
+};
+
+function _renderFacSection(facilities) {
+  const wrap = document.getElementById('fac-section');
+  if (!wrap) return;
+  const allTypes = [
+    ['konbini','コンビニ'],['supermarket','スーパー'],['kindergarten','保育園'],['school','学校'],
+    ['hospital','病院'],['clinic','クリニック'],['pharmacy','薬局'],['park','公園'],['station','駅'],
+  ];
+  const toggleGrid = allTypes.map(([k,label])=>`
+    <div class="fac-tog-row" style="cursor:pointer;" onclick="document.getElementById('fac-tog-${k}').click()">
+      <span class="layer-label">${facIconHtml(k,14)}<span style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${label}</span></span>
+      <label class="tog" style="flex-shrink:0;" onclick="event.stopPropagation()">
+        <input type="checkbox" id="fac-tog-${k}" ${_facTypeLayers[k]!==false?'checked':''} onchange="toggleFacType('${k}',this.checked)">
+        <span class="tog-slider"></span>
+      </label>
+    </div>`).join('');
+  const allOnNow = Object.values(_facTypeLayers).every(v=>v!==false);
+  const hdrHtml = `<div class="fac-section-hdr" style="display:flex;align-items:center;justify-content:space-between;">
+    <span>周辺施設</span>
+    <button onclick="window._toggleAllFacTypes()" style="font-size:9px;padding:2px 7px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--muted);cursor:pointer;font-family:var(--font);">${allOnNow?'すべてOFF':'すべてON'}</button>
+  </div>`;
+  if (facilities===null) {
+    wrap.innerHTML = hdrHtml+`<div class="fac-tog-grid">${toggleGrid}</div><div style="font-size:11px;color:var(--muted);padding:6px 0;">読み込み中…</div>`;
+    return;
+  }
+  const visible = facilities.filter(f=>_facTypeLayers[f.type]!==false);
+  const hdr = (col,label)=>{const active=_facTableSort.col===col;const ind=active?(_facTableSort.asc?' ▲':' ▼'):'';return `<th class="${active?'sort-active':''}" onclick="window._facSort('${col}')">${label}${ind}</th>`;};
+  const sorted=[...visible].sort((a,b)=>{const va=a[_facTableSort.col]??'',vb=b[_facTableSort.col]??'';return _facTableSort.asc?(va<vb?-1:va>vb?1:0):(va>vb?-1:va<vb?1:0);});
+  const rows=sorted.map(f=>{
+    const idx=_facilityMarkerObjs.findIndex(o=>o.facility===f||(o.facility.name===f.name&&o.facility.distance_m===f.distance_m));
+    return `<tr class="fac-row" onclick="window._facRowClick(${idx})" style="cursor:pointer;"><td style="white-space:nowrap;">${facIconHtml(f.type,13)}&nbsp;${esc(facTypeName(f.type))}</td><td>${esc(f.name)}</td><td style="font-family:var(--mono);text-align:right;white-space:nowrap;">${f.distance_m}m</td></tr>`;
+  }).join('');
+  const tableHtml=visible.length?`<div style="overflow-x:auto;margin-top:6px;"><table class="sort-table fac-table"><thead><tr>${hdr('type','種別')}${hdr('name','名称')}${hdr('distance_m','距離')}</tr></thead><tbody>${rows}</tbody></table></div>`:'';
+  wrap.innerHTML = hdrHtml+`<div class="fac-tog-grid">${toggleGrid}</div>${tableHtml}`;
+}
+
+async function loadFacilities() {
+  if (!_map) return;
+  _facLoaded = true;
+  const l = _listing;
+  clearFacilities();
+  _facilityCircle = new google.maps.Circle({
+    center:{lat:l.lat,lng:l.lng}, radius:500, map:_map,
+    fillColor:'#4285F4',fillOpacity:0.04,strokeColor:'#4285F4',strokeOpacity:0.25,strokeWeight:1.5,
+    clickable:false,
+  });
+  _renderFacSection(null);
+  try {
+    const r = await fetch(`${API}/listings/${encodeURIComponent(l.id)}/facilities`);
+    if (!r.ok) { _renderFacSection([]); return; }
+    const {facilities} = await r.json();
+    facilities.forEach(f => {
+      const color = (_facilityIconDefs[f.type]||{}).color||'#888888';
+      const marker = new google.maps.Marker({
+        position:{lat:f.lat,lng:f.lng}, map:_map, visible:false,
+        icon:facMarkerIcon(f.type), title:f.name, zIndex:6,
+      });
+      marker.addListener('click', () => {
+        _facPopup.setContent(_facPopupHtml(color,f.name,facTypeName(f.type),f.distance_m));
+        _facPopup.open({map:_map,anchor:marker});
+        showFacRoute(f.lat,f.lng);
+      });
+      _facilityMarkers.push(marker);
+      _facilityMarkerObjs.push({marker,facility:f,color});
+    });
+    _applyFacZoomVisibility();
+    _renderFacSection(facilities);
+  } catch { _renderFacSection([]); }
+}
+
+function _renderWalkRoute(result) {
+  const pts = result.routes[0].legs[0].steps.flatMap(s=>decodePolyline(s.polyline.points));
+  _facTransitLines.push(new google.maps.Polyline({
+    path:pts, strokeWeight:2, strokeOpacity:0,
+    icons:[{icon:{path:google.maps.SymbolPath.CIRCLE,fillColor:'#4285F4',fillOpacity:1,strokeWeight:0,scale:3.5},offset:'0',repeat:'20px'}],
+    map:_map,
+  }));
+}
+
+function decodePolyline(encoded) {
+  const pts=[]; let i=0,lat=0,lng=0;
+  while(i<encoded.length){let b,shift=0,result=0;do{b=encoded.charCodeAt(i++)-63;result|=(b&0x1f)<<shift;shift+=5;}while(b>=0x20);lat+=(result&1)?~(result>>1):(result>>1);shift=result=0;do{b=encoded.charCodeAt(i++)-63;result|=(b&0x1f)<<shift;shift+=5;}while(b>=0x20);lng+=(result&1)?~(result>>1):(result>>1);pts.push({lat:lat/1e5,lng:lng/1e5});}
+  return pts;
+}
+
+function showFacRoute(facLat,facLng) {
+  if (!_map||!_dirService) return;
+  clearFacTransitLines();
+  const key=`${_listing.id}_${facLat.toFixed(4)}_${facLng.toFixed(4)}`;
+  const cached=_facRouteCache.get(key);
+  if (cached) { _renderWalkRoute(cached); return; }
+  _dirService.route({
+    origin:{lat:_listing.lat,lng:_listing.lng},
+    destination:{lat:facLat,lng:facLng},
+    travelMode:google.maps.TravelMode.WALKING,region:'JP',
+  },(result,status)=>{
+    if (status!=='OK') return;
+    _facRouteCache.set(key,result);
+    _renderWalkRoute(result);
+  });
 }
 
 // ── share ─────────────────────────────────────────────────────────────────────
