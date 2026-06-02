@@ -1345,33 +1345,42 @@ def for_you():
                 best = max(best, 0.3)
         return best
 
-    # ── load scoring weights: user → cohort → global → 1.0 ───────────────────
+    # ── load scoring weights: blend(user, cohort, alpha) → global → 1.0 ────────
+    # alpha = how far toward pure-user weights (0 = new user, 1 = 30+ impressions)
+    total_impressions = con.execute(
+        "SELECT COUNT(*) n FROM user_foryou_impressions WHERE user_id=?", (user_id,)
+    ).fetchone()["n"]
+    alpha = min(total_impressions / 30.0, 1.0)
+
+    # user's own learned weights (may be absent for brand-new users)
     uw = con.execute(
         "SELECT ward_w, layout_w, rent_w, size_w, geo_w FROM user_score_weights WHERE user_id=?",
         (user_id,)
     ).fetchone()
-    if not uw:
-        # derive cohort from personal_info and look up cohort weights
-        pinfo_row = con.execute(
-            "SELECT personal_info FROM user_settings WHERE user_id=?", (user_id,)
-        ).fetchone()
-        pinfo = json.loads(pinfo_row["personal_info"] or "{}") if pinfo_row else {}
-        household = pinfo.get("household") or "unknown"
-        age_range = pinfo.get("age_range") or "unknown"
-        cohort_key = f"{household}_{age_range}"
-        uw = con.execute(
-            "SELECT ward_w, layout_w, rent_w, size_w, geo_w FROM cohort_score_weights WHERE cohort=?",
-            (cohort_key,)
-        ).fetchone()
-    if not uw:
-        uw = con.execute(
+
+    # cohort prior from personal_info: household + age_range
+    pinfo_row = con.execute(
+        "SELECT personal_info FROM user_settings WHERE user_id=?", (user_id,)
+    ).fetchone()
+    pinfo = json.loads(pinfo_row["personal_info"] or "{}") if pinfo_row else {}
+    cohort_key = f"{pinfo.get('household') or 'unknown'}_{pinfo.get('age_range') or 'unknown'}"
+    cw = con.execute(
+        "SELECT ward_w, layout_w, rent_w, size_w, geo_w FROM cohort_score_weights WHERE cohort=?",
+        (cohort_key,)
+    ).fetchone()
+    if not cw:
+        cw = con.execute(
             "SELECT ward_w, layout_w, rent_w, size_w, geo_w FROM user_score_weights WHERE user_id=0"
         ).fetchone()
-    ward_w   = (uw["ward_w"]   or 1.0) if uw and uw["ward_w"]   else 1.0
-    layout_w = (uw["layout_w"] or 1.0) if uw and uw["layout_w"] else 1.0
-    rent_w   = (uw["rent_w"]   or 1.0) if uw and uw["rent_w"]   else 1.0
-    size_w   = (uw["size_w"]   or 1.0) if uw and uw["size_w"]   else 1.0
-    geo_w    = (uw["geo_w"]    or 1.0) if uw and uw["geo_w"]    else 1.0
+
+    def _r(row, field): return (row[field] or 1.0) if row and row[field] else 1.0
+    def _blend(u, c): return alpha * _r(uw, u) + (1 - alpha) * _r(cw, c)
+
+    ward_w   = _blend("ward_w",   "ward_w")
+    layout_w = _blend("layout_w", "layout_w")
+    rent_w   = _blend("rent_w",   "rent_w")
+    size_w   = _blend("size_w",   "size_w")
+    geo_w    = _blend("geo_w",    "geo_w")
 
     # ── impression counts for penalty (shown before but never viewed) ─────────
     imp_rows = con.execute("""
