@@ -1005,9 +1005,12 @@ def for_you():
         except Exception:
             return 1.0
 
+    # sequence decay: exp(-i/20) so position 0 (newest) = 1.0, position ~60 ≈ 0.05
+    # combined with real-time decay so both older-in-time and older-in-sequence shrink
     weights: dict[str, float] = {}
-    for r in view_rows:
-        weights[r["listing_id"]] = min(r["view_count"], 5) * _decay(r["last_viewed"])
+    for i, r in enumerate(view_rows):
+        seq_decay = math.exp(-i / 20)
+        weights[r["listing_id"]] = min(r["view_count"], 5) * _decay(r["last_viewed"]) * seq_decay
     for r in saved_rows:
         lid = r["listing_id"]
         weights[lid] = weights.get(lid, 0) + 4
