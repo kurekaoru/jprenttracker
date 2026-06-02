@@ -301,6 +301,16 @@ def _init_db():
             geo_w      REAL DEFAULT 1.0,
             updated_at TEXT DEFAULT (datetime('now'))
         );
+        CREATE TABLE IF NOT EXISTS cohort_score_weights (
+            cohort     TEXT PRIMARY KEY,
+            ward_w     REAL DEFAULT 1.0,
+            layout_w   REAL DEFAULT 1.0,
+            rent_w     REAL DEFAULT 1.0,
+            size_w     REAL DEFAULT 1.0,
+            geo_w      REAL DEFAULT 1.0,
+            sample_n   INTEGER DEFAULT 0,
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
     """)
     con.commit()
 
@@ -1025,8 +1035,53 @@ def _background_weight_update():
                     geo_w=excluded.geo_w,   updated_at=excluded.updated_at
             """, (gw["ward_w"], gw["layout_w"], gw["rent_w"], gw["size_w"], gw["geo_w"]))
 
+        # Cohort weights: group by (household, age_range) from personal_info JSON
+        cohort_rows = con.execute("""
+            SELECT w.user_id,
+                   w.ward_w, w.layout_w, w.rent_w, w.size_w, w.geo_w,
+                   s.n,
+                   us.personal_info
+              FROM user_score_weights w
+              JOIN (SELECT user_id, COUNT(*) n FROM user_saved_listings
+                     GROUP BY user_id HAVING n >= 3) s ON s.user_id = w.user_id
+              JOIN user_settings us ON us.user_id = w.user_id
+             WHERE w.user_id != 0
+        """).fetchall()
+
+        from collections import defaultdict
+        cohort_buckets: dict = defaultdict(list)
+        for row in cohort_rows:
+            try:
+                pinfo = json.loads(row["personal_info"] or "{}")
+            except Exception:
+                pinfo = {}
+            household  = pinfo.get("household")  or "unknown"
+            age_range  = pinfo.get("age_range")  or "unknown"
+            cohort_key = f"{household}_{age_range}"
+            cohort_buckets[cohort_key].append((row, row["n"]))
+
+        for cohort_key, members in cohort_buckets.items():
+            total_n = sum(n for _, n in members)
+            if total_n == 0:
+                continue
+            def _wavg(field):
+                return sum(r[field] * n for r, n in members) / total_n
+            con.execute("""
+                INSERT INTO cohort_score_weights
+                    (cohort, ward_w, layout_w, rent_w, size_w, geo_w, sample_n, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(cohort) DO UPDATE SET
+                    ward_w=excluded.ward_w, layout_w=excluded.layout_w,
+                    rent_w=excluded.rent_w, size_w=excluded.size_w,
+                    geo_w=excluded.geo_w,   sample_n=excluded.sample_n,
+                    updated_at=excluded.updated_at
+            """, (cohort_key,
+                  _wavg("ward_w"), _wavg("layout_w"), _wavg("rent_w"),
+                  _wavg("size_w"), _wavg("geo_w"), total_n))
+
         con.commit()
-        logging.info("[weight_update] batch complete, %d users processed", len(users))
+        logging.info("[weight_update] batch complete — %d users, %d cohorts",
+                     len(users), len(cohort_buckets))
     except Exception as e:
         logging.exception("[weight_update] error: %s", e)
     finally:
@@ -1290,11 +1345,24 @@ def for_you():
                 best = max(best, 0.3)
         return best
 
-    # ── load per-user scoring weights (fall back to global row user_id=0) ──────
+    # ── load scoring weights: user → cohort → global → 1.0 ───────────────────
     uw = con.execute(
         "SELECT ward_w, layout_w, rent_w, size_w, geo_w FROM user_score_weights WHERE user_id=?",
         (user_id,)
     ).fetchone()
+    if not uw:
+        # derive cohort from personal_info and look up cohort weights
+        pinfo_row = con.execute(
+            "SELECT personal_info FROM user_settings WHERE user_id=?", (user_id,)
+        ).fetchone()
+        pinfo = json.loads(pinfo_row["personal_info"] or "{}") if pinfo_row else {}
+        household = pinfo.get("household") or "unknown"
+        age_range = pinfo.get("age_range") or "unknown"
+        cohort_key = f"{household}_{age_range}"
+        uw = con.execute(
+            "SELECT ward_w, layout_w, rent_w, size_w, geo_w FROM cohort_score_weights WHERE cohort=?",
+            (cohort_key,)
+        ).fetchone()
     if not uw:
         uw = con.execute(
             "SELECT ward_w, layout_w, rent_w, size_w, geo_w FROM user_score_weights WHERE user_id=0"

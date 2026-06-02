@@ -1535,7 +1535,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 18:15 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 18:39 JST</p>
       </div>
 
 
@@ -1656,8 +1656,21 @@
         </div>
       </div>
 
-      <!-- Card 3: Budget -->
+      <!-- Card 3: Age group -->
       <div class="onboard-slide" id="ocard-3">
+        <div class="onboard-emoji">🎂</div>
+        <div class="onboard-title" data-i18n="ob_age_title">年代を教えてください</div>
+        <div class="onboard-sub" data-i18n="ob_age_sub">おすすめの精度向上に使います</div>
+        <div class="onboard-choices">
+          <button class="onboard-chip" data-field="age_range" data-val="20s" onclick="onboardPick(this)">20代</button>
+          <button class="onboard-chip" data-field="age_range" data-val="30s" onclick="onboardPick(this)">30代</button>
+          <button class="onboard-chip" data-field="age_range" data-val="40s" onclick="onboardPick(this)">40代</button>
+          <button class="onboard-chip" data-field="age_range" data-val="50s" onclick="onboardPick(this)">50代以上</button>
+        </div>
+      </div>
+
+      <!-- Card 4: Budget -->
+      <div class="onboard-slide" id="ocard-4">
         <div class="onboard-emoji">💰</div>
         <div class="onboard-title" data-i18n="ob_budget_title">家賃の予算は？</div>
         <div class="onboard-sub" data-i18n="ob_budget_sub">おおよそで大丈夫です</div>
@@ -1670,8 +1683,8 @@
         </div>
       </div>
 
-      <!-- Card 4: Move-in timing -->
-      <div class="onboard-slide" id="ocard-4">
+      <!-- Card 5: Move-in timing -->
+      <div class="onboard-slide" id="ocard-5">
         <div class="onboard-emoji">📅</div>
         <div class="onboard-title" data-i18n="ob_movein_title">いつ頃引越し予定ですか？</div>
         <div class="onboard-sub"></div>
@@ -1683,8 +1696,8 @@
         </div>
       </div>
 
-      <!-- Card 5: Preferred wards -->
-      <div class="onboard-slide" id="ocard-5">
+      <!-- Card 6: Preferred wards -->
+      <div class="onboard-slide" id="ocard-6">
         <div class="onboard-emoji">🗺️</div>
         <div class="onboard-title" data-i18n="ob_area_title">希望エリアは？</div>
         <div class="onboard-sub" data-i18n="ob_area_sub">複数選択できます（スキップ可）</div>
@@ -2076,6 +2089,8 @@ const STRINGS = {
   ob_family_for:        { ja:'家族のため',              en:'For my family',     uk:'Для родини' },
   ob_household_title:   { ja:'世帯構成を教えてください', en:'Tell us about your household', uk:'Розкажіть про своє домогосподарство' },
   ob_household_sub:     { ja:'物件の広さの参考にします', en:'Helps us suggest the right size', uk:'Допоможе запропонувати правильний розмір' },
+  ob_age_title:         { ja:'年代を教えてください',     en:'What is your age group?',   uk:'Яка ваша вікова група?' },
+  ob_age_sub:           { ja:'おすすめの精度向上に使います', en:'Helps personalise recommendations', uk:'Допомагає персоналізувати рекомендації' },
   ob_budget_title:      { ja:'家賃の予算は？',          en:'What is your rent budget?', uk:'Який ваш бюджет на оренду?' },
   ob_budget_sub:        { ja:'おおよそで大丈夫です',    en:'A rough estimate is fine', uk:'Приблизна сума — цілком добре' },
   ob_movein_title:      { ja:'いつ頃引越し予定ですか？', en:'When are you planning to move?', uk:'Коли плануєте переїхати?' },
@@ -6621,7 +6636,7 @@ window.addEventListener('message', e => {
 });
 
 // ── Onboarding flash cards ───────────────────────────────────────────────────
-const ONBOARD_CARDS = 6;
+const ONBOARD_CARDS = 7;
 let _onboardStep = 0;
 let _onboardData = {};
 
