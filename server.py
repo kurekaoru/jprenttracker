@@ -3532,26 +3532,34 @@ def search_visual():
     return jsonify({"results": results, "total_indexed": len(emb_rows)})
 
 
-@app.route("/detail-parser.js")
-def serve_detail_parser():
-    import os
-    return send_file(os.path.join(os.path.dirname(__file__), "detail-parser.js"),
-                     mimetype="application/javascript")
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_STATIC_FILES = {
+    "detail-parser.js": "application/javascript",
+    "property.html":    "text/html",
+    "stats.html":       "text/html",
+}
+
+@app.route("/<path:filename>")
+def serve_static(filename):
+    mime = _STATIC_FILES.get(filename)
+    if mime:
+        path = os.path.join(_HERE, filename)
+        if os.path.exists(path):
+            return send_file(path, mimetype=mime)
+    from flask import abort
+    abort(404)
 
 @app.route("/")
 def serve_desktop():
-    import os
-    return send_file(os.path.join(os.path.dirname(__file__), "dashboard.html"))
+    return send_file(os.path.join(_HERE, "dashboard.html"))
 
 @app.route("/m")
 def serve_mobile():
-    import os
-    return send_file(os.path.join(os.path.dirname(__file__), "dashboard-mobile.html"))
+    return send_file(os.path.join(_HERE, "dashboard-mobile.html"))
 
 @app.route("/dev")
 def serve_dev():
-    import os
-    return send_file(os.path.join(os.path.dirname(__file__), "dashboard-dev.html"))
+    return send_file(os.path.join(_HERE, "dashboard-dev.html"))
 
 
 if __name__ == "__main__":
