@@ -241,8 +241,13 @@ html,body{height:100%;overflow:hidden;font-family:var(--font);background:var(--b
 .fac-icon{font-size:15px;flex-shrink:0;width:22px;text-align:center;}
 .fac-dist{font-size:10px;font-family:var(--mono);color:var(--muted);margin-left:auto;}
 
-/* detail text */
-.detail-text{font-size:12px;line-height:1.75;color:var(--muted);white-space:pre-line;}
+/* structured detail sections */
+.ds-table{border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.ds-row{display:grid;grid-template-columns:120px 1fr;border-bottom:1px solid var(--border);font-size:12px;}
+.ds-row:last-child{border-bottom:none;}
+.ds-key{padding:7px 10px;background:var(--surface2);color:var(--muted);font-size:11px;
+  font-weight:600;border-right:1px solid var(--border);line-height:1.4;}
+.ds-val{padding:7px 10px;color:var(--text);line-height:1.5;word-break:break-word;}
 
 /* spinner / error */
 .fullpage-msg{
@@ -440,11 +445,7 @@ function render() {
           }</div>` : ''}
         </div>` : ''}
 
-        ${l.detail_text ? `
-        <div>
-          <div class="s-label">詳細</div>
-          <div class="detail-text">${esc(l.detail_text)}</div>
-        </div>` : ''}
+        ${l.detail_text ? renderDetailSections(l.detail_text) : ''}
 
         ${l.url
           ? `<a href="${esc(l.url)}" target="_blank" rel="noopener" class="apply-btn">申込ページへ →</a>`
@@ -711,6 +712,53 @@ function shareProperty() {
     const t = b.textContent; b.textContent='✓ コピー';
     setTimeout(()=>b.textContent=t, 1500);
   });
+}
+
+// ── detail_text parser ────────────────────────────────────────────────────────
+// Ported from dashboard._parseDetailSections — same alternating label/value format.
+function parseDetailSections(text) {
+  const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
+  // Short line with no list/note chars = section header
+  const isHdr = l => l.length <= 18 && !l.includes('、') && !l.includes('：')
+                  && !l.startsWith('・') && !l.startsWith('※') && !/^\d/.test(l)
+                  && !/^[A-Za-z]\d/.test(l);  // exclude codes like L0862
+  const sections = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (isHdr(line)) {
+      i++;
+      const body = [];
+      if (i < lines.length) {
+        body.push(lines[i++]);
+        while (i < lines.length && !isHdr(lines[i])) body.push(lines[i++]);
+      }
+      // Remove duplicate adjacent lines (JKK repeats values twice)
+      const unique = body.filter((l, idx) => body.indexOf(l) === idx);
+      // Skip noise-only sections (just link text, etc.)
+      const skip = ['より詳しい住宅の情報はこちら', '間取り図'];
+      if (!skip.includes(line) && unique.length) {
+        sections.push({ header: line, body: unique.join('\n') });
+      }
+    } else {
+      i++;
+    }
+  }
+  return sections;
+}
+
+function renderDetailSections(text) {
+  const sections = parseDetailSections(text);
+  if (!sections.length) return '';
+  // Sections to show as traffic/transport block (multi-line value)
+  const MULTILINE = new Set(['交通', '特記事項', 'キャンペーン等', '詳細情報']);
+  const rows = sections.map(s => {
+    const val = MULTILINE.has(s.header)
+      ? `<div class="ds-val" style="white-space:pre-line;">${esc(s.body)}</div>`
+      : `<div class="ds-val">${esc(s.body)}</div>`;
+    return `<div class="ds-row"><div class="ds-key">${esc(s.header)}</div>${val}</div>`;
+  }).join('');
+  return `<div><div class="s-label">詳細情報</div><div class="ds-table">${rows}</div></div>`;
 }
 
 boot();
