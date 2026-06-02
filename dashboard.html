@@ -1096,6 +1096,7 @@
   @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
   .qr-img { border-radius: 10px; border: 4px solid var(--surface2); display: block; }
 </style>
+<script src="/detail-parser.js"></script>
 </head>
 <body>
 
@@ -1517,7 +1518,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 15:18 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 15:41 JST</p>
       </div>
 
 
@@ -5100,35 +5101,7 @@ async function renderDetailTab(listingId) {
   el.innerHTML = html || `<div style="color:var(--muted);padding:12px 0;">${t('no_detail')}</div>`;
 }
 
-function _parseDetailSections(text) {
-  const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
-  const sections = [];
-  // A header candidate: short, no bullet/note chars, not starting with digit
-  const isHdr = (l) => l.length <= 16 && !l.includes('、') && !l.includes('：')
-                    && !l.startsWith('・') && !l.startsWith('※') && !l.match(/^\d/);
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-    if (isHdr(line)) {
-      i++;
-      const bodyLines = [];
-      // Greedy: always take at least one value line (even if it looks header-like)
-      if (i < lines.length) {
-        bodyLines.push(lines[i++]);
-        // Then collect additional non-header continuation lines
-        while (i < lines.length && !isHdr(lines[i])) {
-          bodyLines.push(lines[i++]);
-        }
-      }
-      // Remove duplicate adjacent/repeated lines (JKK sometimes repeats value twice)
-      const unique = bodyLines.filter((l, idx) => bodyLines.indexOf(l) === idx);
-      sections.push({ header: line, body: unique.join('\n') });
-    } else {
-      i++;
-    }
-  }
-  return sections;
-}
+function _parseDetailSections(text) { return parseDetailSections(text); }
 
 async function loadPropPhotos(listingId, gridId, filterTypes) {
   const grid = document.getElementById(gridId);

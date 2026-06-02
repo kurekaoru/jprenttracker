@@ -12,6 +12,7 @@
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/detail-parser.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
 :root {
@@ -954,47 +955,7 @@ function shareProperty() {
   });
 }
 
-// ── detail_text parser ────────────────────────────────────────────────────────
-function parseDetailSections(text) {
-  const SKIP = new Set(['より詳しい住宅の情報はこちら', '特徴ピックアップ']);
-  const sections = [];
-
-  // UR format: blank lines separate each section block (header + body on following lines)
-  if (text.includes('\n\n')) {
-    for (const block of text.split(/\n\n+/)) {
-      const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
-      if (!lines.length) continue;
-      const header = lines[0];
-      if (header === '間取り図') break;
-      if (SKIP.has(header)) continue;
-      const unique = [...new Set(lines.slice(1))];
-      if (unique.length) sections.push({header, body: unique.join('\n')});
-    }
-    return sections;
-  }
-
-  // JKK format: strict alternating label / value lines (no blank lines)
-  const isHdr = l => l.length <= 18 && !l.includes('、') && !l.includes('：')
-                  && !l.startsWith('・') && !l.startsWith('※') && !l.startsWith('(')
-                  && !/^\d/.test(l) && !/^[A-Za-z]\d/.test(l);
-  const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-    if (line === '間取り図') break;
-    if (isHdr(line)) {
-      i++;
-      const body = [];
-      if (i < lines.length) {
-        body.push(lines[i++]);
-        while (i < lines.length && !isHdr(lines[i])) body.push(lines[i++]);
-      }
-      const unique = body.filter((l, idx) => body.indexOf(l) === idx);
-      if (!SKIP.has(line) && unique.length) sections.push({header: line, body: unique.join('\n')});
-    } else { i++; }
-  }
-  return sections;
-}
+// parseDetailSections() loaded from /detail-parser.js
 
 function renderDetailSections(text) {
   const sections = parseDetailSections(text);

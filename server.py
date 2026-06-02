@@ -3532,6 +3532,12 @@ def search_visual():
     return jsonify({"results": results, "total_indexed": len(emb_rows)})
 
 
+@app.route("/detail-parser.js")
+def serve_detail_parser():
+    import os
+    return send_file(os.path.join(os.path.dirname(__file__), "detail-parser.js"),
+                     mimetype="application/javascript")
+
 @app.route("/")
 def serve_desktop():
     import os
