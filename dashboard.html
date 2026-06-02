@@ -1535,7 +1535,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 19:16 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 19:59 JST</p>
       </div>
 
 
@@ -5791,7 +5791,7 @@ async function loadForYou() {
     }).join('');
     tableEl.innerHTML = `<div style="overflow-x:auto;"><table class="sort-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
   } catch (e) {
-    tableEl.innerHTML = `<div style="padding:8px;color:var(--danger);font-size:12px;">読み込みエラー</div>`;
+    tableEl.innerHTML = `<div style="padding:8px;color:var(--danger);font-size:11px;font-family:var(--mono);">エラー: ${escHtml(e?.message || String(e))}</div>`;
   }
 }
 

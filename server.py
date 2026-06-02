@@ -4123,8 +4123,11 @@ def serve_dev():
 
 # Run migrations and start background jobs regardless of how the server is launched
 # (direct `python server.py` OR gunicorn server:app).
-_init_db()
-_start_weight_scheduler()
+try:
+    _init_db()
+    _start_weight_scheduler()
+except Exception as _startup_err:
+    logging.exception("startup init error (non-fatal): %s", _startup_err)
 
 if __name__ == "__main__":
     con = db()
