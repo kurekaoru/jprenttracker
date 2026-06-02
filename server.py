@@ -1200,7 +1200,16 @@ def for_you():
 
     user_id = int(get_jwt_identity())
     con = db()
+    try:
+        return _for_you_inner(user_id, con)
+    except Exception as e:
+        con.close()
+        logging.exception("for_you error user=%s: %s", user_id, e)
+        return jsonify({"listings": [], "profile": None, "message": None,
+                        "_error": str(e)}), 500
 
+
+def _for_you_inner(user_id, con):
     # ── collect signal rows (with lat/lng + last_viewed for centroid) ─────────
     view_rows = con.execute(
         "SELECT v.listing_id, v.view_count, v.last_viewed, "
@@ -4112,9 +4121,12 @@ def serve_dev():
     return send_file(os.path.join(_HERE, "dashboard-dev.html"))
 
 
+# Run migrations and start background jobs regardless of how the server is launched
+# (direct `python server.py` OR gunicorn server:app).
+_init_db()
+_start_weight_scheduler()
+
 if __name__ == "__main__":
-    _init_db()  # run all migrations once; db() is now lightweight
-    _start_weight_scheduler()
     con = db()
     needs = con.execute(
         "SELECT COUNT(*) FROM listings WHERE lat IS NOT NULL "

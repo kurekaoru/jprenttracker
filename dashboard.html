@@ -1535,7 +1535,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 18:39 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 19:16 JST</p>
       </div>
 
 
@@ -5735,6 +5735,7 @@ async function loadForYou() {
     const r = await fetch(`${API}/user/for_you`, { headers: authHeaders() });
     if (r.status === 401) { tableEl.innerHTML = `<div style="padding:8px;color:var(--muted);">ログインが必要です。</div>`; return; }
     const d = await r.json();
+    if (d._error) { tableEl.innerHTML = `<div style="padding:8px;color:var(--danger);font-size:11px;font-family:var(--mono);">エラー: ${escHtml(d._error)}</div>`; return; }
 
     if (d.message) {
       tableEl.innerHTML = `<div style="padding:12px 4px;color:var(--muted);font-size:12px;line-height:1.6;">${escHtml(d.message)}</div>`;
