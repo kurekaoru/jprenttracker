@@ -935,6 +935,120 @@ def _upsert_weights(con, user_id, ward_w, layout_w, rent_w, size_w, geo_w,
     """, (user_id, nw, nl, nr, ns, ng))
 
 
+def _background_weight_update():
+    """
+    Batch recompute per-user scoring weights from actual impression outcomes,
+    then rebuild the global row (user_id=0) as a save-count-weighted average.
+    Idempotent: weight_D = clamp(1.0 + (saves - ignores) * 0.1, 0.3, 3.0).
+    Runs every 3 h from a daemon thread.
+    """
+    import math
+    from datetime import datetime, timedelta
+    con = db()
+    try:
+        cutoff = (datetime.now() - timedelta(days=14)).isoformat()
+        users = con.execute(
+            "SELECT DISTINCT user_id FROM user_foryou_impressions"
+        ).fetchall()
+
+        for u in users:
+            uid = u["user_id"]
+
+            # Positive signal: unique listings where dimension fired AND listing was saved
+            saves = con.execute("""
+                SELECT fi.listing_id,
+                       MAX(fi.ward_hit)   ward_hit,
+                       MAX(fi.layout_hit) layout_hit,
+                       MAX(fi.rent_hit)   rent_hit,
+                       MAX(fi.geo_hit)    geo_hit
+                  FROM user_foryou_impressions fi
+                  JOIN user_saved_listings sl
+                    ON sl.listing_id = fi.listing_id AND sl.user_id = fi.user_id
+                 WHERE fi.user_id = ?
+                 GROUP BY fi.listing_id
+            """, (uid,)).fetchall()
+
+            # Negative signal: shown 3+ times ≥14 days ago, never viewed
+            ignores = con.execute("""
+                SELECT listing_id,
+                       MAX(ward_hit)   ward_hit,
+                       MAX(layout_hit) layout_hit,
+                       MAX(rent_hit)   rent_hit,
+                       MAX(geo_hit)    geo_hit,
+                       COUNT(*)        n
+                  FROM user_foryou_impressions
+                 WHERE user_id = ?
+                   AND shown_at < ?
+                   AND listing_id NOT IN (
+                       SELECT listing_id FROM user_listing_views WHERE user_id = ?
+                   )
+                 GROUP BY listing_id HAVING n >= 3
+            """, (uid, cutoff, uid)).fetchall()
+
+            def _net(dim):
+                pos = sum(1 for r in saves   if r[dim])
+                neg = sum(1 for r in ignores if r[dim])
+                return pos - neg
+
+            def _w(dim): return max(0.3, min(3.0, 1.0 + _net(dim) * 0.1))
+
+            con.execute("""
+                INSERT INTO user_score_weights
+                    (user_id, ward_w, layout_w, rent_w, size_w, geo_w, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(user_id) DO UPDATE SET
+                    ward_w=excluded.ward_w, layout_w=excluded.layout_w,
+                    rent_w=excluded.rent_w, size_w=excluded.size_w,
+                    geo_w=excluded.geo_w,   updated_at=excluded.updated_at
+            """, (uid, _w("ward_hit"), _w("layout_hit"), _w("rent_hit"), 1.0, _w("geo_hit")))
+
+        # Global row (user_id=0): save-count-weighted average of all user rows
+        gw = con.execute("""
+            SELECT SUM(w.ward_w   * s.n) / SUM(s.n) ward_w,
+                   SUM(w.layout_w * s.n) / SUM(s.n) layout_w,
+                   SUM(w.rent_w   * s.n) / SUM(s.n) rent_w,
+                   SUM(w.size_w   * s.n) / SUM(s.n) size_w,
+                   SUM(w.geo_w    * s.n) / SUM(s.n) geo_w
+              FROM user_score_weights w
+              JOIN (SELECT user_id, COUNT(*) n FROM user_saved_listings
+                     GROUP BY user_id HAVING n >= 3) s ON s.user_id = w.user_id
+             WHERE w.user_id != 0
+        """).fetchone()
+        if gw and gw["ward_w"]:
+            con.execute("""
+                INSERT INTO user_score_weights
+                    (user_id, ward_w, layout_w, rent_w, size_w, geo_w, updated_at)
+                VALUES (0, ?, ?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(user_id) DO UPDATE SET
+                    ward_w=excluded.ward_w, layout_w=excluded.layout_w,
+                    rent_w=excluded.rent_w, size_w=excluded.size_w,
+                    geo_w=excluded.geo_w,   updated_at=excluded.updated_at
+            """, (gw["ward_w"], gw["layout_w"], gw["rent_w"], gw["size_w"], gw["geo_w"]))
+
+        con.commit()
+        logging.info("[weight_update] batch complete, %d users processed", len(users))
+    except Exception as e:
+        logging.exception("[weight_update] error: %s", e)
+    finally:
+        con.close()
+
+
+def _start_weight_scheduler():
+    """Start the background weight update thread (daemon, safe to skip in tests)."""
+    import threading
+    interval = 3 * 3600  # every 3 hours
+
+    def _loop():
+        _background_weight_update()  # run immediately on startup
+        while True:
+            threading.Event().wait(interval)
+            _background_weight_update()
+
+    t = threading.Thread(target=_loop, daemon=True, name="weight-scheduler")
+    t.start()
+    logging.info("[weight_update] scheduler started (interval=%dh)", interval // 3600)
+
+
 # ── Saved listings ────────────────────────────────────────────────────────────
 
 @app.route("/api/user/saved", methods=["GET"])
@@ -1176,20 +1290,15 @@ def for_you():
                 best = max(best, 0.3)
         return best
 
-    # ── load per-user scoring weights (fall back to global avg of experienced users) ──
+    # ── load per-user scoring weights (fall back to global row user_id=0) ──────
     uw = con.execute(
         "SELECT ward_w, layout_w, rent_w, size_w, geo_w FROM user_score_weights WHERE user_id=?",
         (user_id,)
     ).fetchone()
     if not uw:
-        uw = con.execute("""
-            SELECT AVG(w.ward_w) ward_w, AVG(w.layout_w) layout_w,
-                   AVG(w.rent_w) rent_w,  AVG(w.size_w)  size_w,
-                   AVG(w.geo_w)  geo_w
-              FROM user_score_weights w
-              JOIN (SELECT user_id FROM user_saved_listings
-                     GROUP BY user_id HAVING COUNT(*) >= 5) q ON q.user_id = w.user_id
-        """).fetchone()
+        uw = con.execute(
+            "SELECT ward_w, layout_w, rent_w, size_w, geo_w FROM user_score_weights WHERE user_id=0"
+        ).fetchone()
     ward_w   = (uw["ward_w"]   or 1.0) if uw and uw["ward_w"]   else 1.0
     layout_w = (uw["layout_w"] or 1.0) if uw and uw["layout_w"] else 1.0
     rent_w   = (uw["rent_w"]   or 1.0) if uw and uw["rent_w"]   else 1.0
@@ -3928,6 +4037,7 @@ def serve_dev():
 
 if __name__ == "__main__":
     _init_db()  # run all migrations once; db() is now lightweight
+    _start_weight_scheduler()
     con = db()
     needs = con.execute(
         "SELECT COUNT(*) FROM listings WHERE lat IS NOT NULL "
