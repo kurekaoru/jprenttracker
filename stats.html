@@ -771,10 +771,12 @@ function _drawHist(id, vals, step, labelFn, colorFn) {
 }
 function _drawScatter() {
   const c=cc();
+  const onClick=(ev,els)=>{ if(els.length){const pt=_charts['sc'].data.datasets[els[0].datasetIndex].data[els[0].index];if(pt.id)window.open(`property.html?id=${pt.id}`,'_blank');} };
   _charts['sc']=new Chart(document.getElementById('ch-scatter'),{type:'scatter',data:{datasets:[
-    {label:'JKK',data:_listings.filter(l=>l.source!=='ur').map(l=>({x:l.size_m2,y:l.rent/1000,n:l.name})),backgroundColor:c.red+'99',pointRadius:4},
-    {label:'UR', data:_listings.filter(l=>l.source==='ur').map(l=>({x:l.size_m2,y:l.rent/1000,n:l.name})),backgroundColor:c.blue+'99',pointRadius:4},
-  ]},options:{...baseOpts(c),plugins:{legend:{display:true,labels:{color:c.tick,font:{family:'DM Sans',size:11}}},tooltip:{callbacks:{label:ctx=>`${ctx.raw.n} · ${ctx.raw.x}㎡ · ¥${ctx.raw.y}k`}}}},});
+    {label:'JKK',data:_listings.filter(l=>l.source!=='ur').map(l=>({x:l.size_m2,y:l.rent/1000,n:l.name,id:l.id})),backgroundColor:c.red+'99',pointRadius:4,pointHoverRadius:6},
+    {label:'UR', data:_listings.filter(l=>l.source==='ur').map(l=>({x:l.size_m2,y:l.rent/1000,n:l.name,id:l.id})),backgroundColor:c.blue+'99',pointRadius:4,pointHoverRadius:6},
+  ]},options:{...baseOpts(c),onClick,plugins:{legend:{display:true,labels:{color:c.tick,font:{family:'DM Sans',size:11}}},tooltip:{callbacks:{label:ctx=>`${ctx.raw.n} · ${ctx.raw.x}㎡ · ¥${ctx.raw.y}k`}}}}});
+  document.getElementById('ch-scatter').style.cursor='pointer';
 }
 function _drawLayout() {
   const c=cc(), lays=[...new Set(_listings.map(l=>l.layout))].sort();
@@ -791,13 +793,15 @@ function _drawWardBar() {
 function _drawPredScatter() {
   const c=cc();
   // x = Predicted, y = Actual (standard residual-analysis convention)
-  const pts=_listings.map(l=>({x:Math.round(_model.predict(l))/1000,y:l.rent/1000,n:l.name,s:l.source}));
+  const pts=_listings.map(l=>({x:Math.round(_model.predict(l))/1000,y:l.rent/1000,n:l.name,s:l.source,id:l.id}));
   const maxV=Math.max(...pts.flatMap(p=>[p.x,p.y]));
+  const onClick=(ev,els)=>{ if(els.length){const ds=_charts['pred'].data.datasets[els[0].datasetIndex];if(ds.label!==t('ml_ideal')){const pt=ds.data[els[0].index];if(pt.id)window.open(`property.html?id=${pt.id}`,'_blank');}} };
   _charts['pred']=new Chart(document.getElementById('ch-pred'),{type:'scatter',data:{datasets:[
     {label:'JKK',data:pts.filter(p=>p.s!=='ur'),backgroundColor:c.red+'99',pointRadius:3,pointHoverRadius:5},
     {label:'UR', data:pts.filter(p=>p.s==='ur'), backgroundColor:c.blue+'99',pointRadius:3,pointHoverRadius:5},
     {label:t('ml_ideal'),data:[{x:0,y:0},{x:maxV,y:maxV}],type:'line',borderColor:c.accent+'88',borderDash:[4,3],borderWidth:1.5,pointRadius:0,fill:false},
-  ]},options:{...baseOpts(c),plugins:{legend:{display:true,labels:{color:c.tick,font:{family:'DM Sans',size:11}}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label===t('ml_ideal')?null:`${ctx.raw.n} · 予:¥${ctx.raw.x}k 実:¥${ctx.raw.y}k`}}},scales:{x:{...baseOpts(c).scales.x,title:{display:true,text:t('ml_pred_axis'),color:c.tick}},y:{...baseOpts(c).scales.y,title:{display:true,text:t('ml_actual_axis'),color:c.tick}}}}});
+  ]},options:{...baseOpts(c),onClick,plugins:{legend:{display:true,labels:{color:c.tick,font:{family:'DM Sans',size:11}}},tooltip:{callbacks:{label:ctx=>ctx.dataset.label===t('ml_ideal')?null:`${ctx.raw.n} · 予:¥${ctx.raw.x}k 実:¥${ctx.raw.y}k`}}},scales:{x:{...baseOpts(c).scales.x,title:{display:true,text:t('ml_pred_axis'),color:c.tick}},y:{...baseOpts(c).scales.y,title:{display:true,text:t('ml_actual_axis'),color:c.tick}}}}});
+  document.getElementById('ch-pred').style.cursor='pointer';
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────

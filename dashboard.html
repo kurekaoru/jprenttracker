@@ -1517,7 +1517,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 13:29 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 13:49 JST</p>
       </div>
 
 
@@ -4923,6 +4923,7 @@ function popupHtml(l) {
         ${l.url ? `<a href="${escHtml(l.url)}" target="_blank" rel="noopener">${t('open_listing')}</a>` : ''}
         ${!l.url && l.source === 'jkk' ? `<span style="font-size:11px;color:var(--muted);">JKK listings must be searched manually on the JKK website</span>` : ''}
         ${l.lat && l.lng ? `<a href="#" onclick="event.preventDefault();openStreetView(${l.lat},${l.lng})" style="color:var(--muted);">🚶 ${t('street_view')}</a>` : ''}
+        <a href="property.html?id=${escHtml(l.id)}" target="_blank" rel="noopener" style="color:var(--accent);font-weight:500;margin-left:auto;">詳細ページ ⤢</a>
       </div>
       <div class="prop-tabs">
         <div class="prop-tab-bar">
