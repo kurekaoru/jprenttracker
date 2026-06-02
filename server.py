@@ -967,35 +967,6 @@ def serve_listing_image(image_id):
     return send_file(row["local_path"])
 
 
-@app.route("/api/listings/<listing_id>")
-def get_listing_detail(listing_id):
-    con = db()
-    row = con.execute("SELECT * FROM listings WHERE id=?", (listing_id,)).fetchone()
-    if not row:
-        con.close()
-        return jsonify({"error": "not found"}), 404
-    facs = con.execute(
-        "SELECT type, name, distance_m FROM listing_facilities WHERE listing_id=? ORDER BY distance_m LIMIT 20",
-        (listing_id,),
-    ).fetchall()
-    imgs = con.execute(
-        "SELECT id, image_type FROM listing_images WHERE listing_id=? AND local_path IS NOT NULL "
-        "ORDER BY CASE image_type WHEN 'floor_plan' THEN 1 WHEN 'exterior' THEN 2 ELSE 3 END, id",
-        (listing_id,),
-    ).fetchall()
-    result = dict(row)
-    if result.get("floor_plan_data"):
-        try:
-            import json as _json
-            result["floor_plan_data"] = _json.loads(result["floor_plan_data"])
-        except Exception:
-            result["floor_plan_data"] = None
-    result["facilities"] = [dict(f) for f in facs]
-    result["images"] = [{"url": f"/api/images/{r['id']}", "type": r["image_type"]} for r in imgs]
-    con.close()
-    return jsonify(result)
-
-
 @app.route("/api/listings/<listing_id>/images")
 def get_listing_images(listing_id):
     con = db()
@@ -1780,17 +1751,31 @@ def get_listings():
 @app.route("/api/listings/<listing_id>")
 def get_listing_detail(listing_id):
     if not os.path.exists(DB_FILE):
-        return jsonify({}), 404
+        return jsonify({"error": "not found"}), 404
     con = db()
-    cur = con.execute(
-        "SELECT id, detail_text, nearby_features FROM listings WHERE id = ?",
-        (listing_id,),
-    )
-    row = cur.fetchone()
-    con.close()
+    row = con.execute("SELECT * FROM listings WHERE id=?", (listing_id,)).fetchone()
     if not row:
-        return jsonify({}), 404
-    return jsonify(dict(row))
+        con.close()
+        return jsonify({"error": "not found"}), 404
+    facs = con.execute(
+        "SELECT type, name, distance_m FROM listing_facilities WHERE listing_id=? ORDER BY distance_m LIMIT 20",
+        (listing_id,),
+    ).fetchall()
+    imgs = con.execute(
+        "SELECT id, image_type FROM listing_images WHERE listing_id=? AND local_path IS NOT NULL "
+        "ORDER BY CASE image_type WHEN 'floor_plan' THEN 1 WHEN 'exterior' THEN 2 ELSE 3 END, id",
+        (listing_id,),
+    ).fetchall()
+    result = dict(row)
+    if result.get("floor_plan_data"):
+        try:
+            result["floor_plan_data"] = json.loads(result["floor_plan_data"])
+        except Exception:
+            result["floor_plan_data"] = None
+    result["facilities"] = [dict(f) for f in facs]
+    result["images"] = [{"url": f"/api/images/{r['id']}", "type": r["image_type"]} for r in imgs]
+    con.close()
+    return jsonify(result)
 
 
 @app.route("/api/disappeared")
