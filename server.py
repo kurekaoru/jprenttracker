@@ -960,70 +960,159 @@ def record_view(listing_id):
 def for_you():
     """
     Return up to 10 unseen listings scored by implicit preference inferred from
-    the user's view + save history.  Also returns a brief profile summary.
+    the user's view + save history.  Also returns a brief profile summary and
+    a moving geographic centroid (PCA-style bimodal if user browses two areas).
     """
+    import math
+    from collections import Counter
+    from datetime import datetime, timedelta
+
     user_id = int(get_jwt_identity())
     con = db()
 
-    # ── collect signal rows ───────────────────────────────────────────────────
+    # ── collect signal rows (with lat/lng + last_viewed for centroid) ─────────
     view_rows = con.execute(
-        "SELECT listing_id, view_count FROM user_listing_views "
-        "WHERE user_id=? ORDER BY last_viewed DESC LIMIT 60",
+        "SELECT v.listing_id, v.view_count, v.last_viewed, "
+        "       l.ward, l.layout, l.rent, l.size_m2, l.lat, l.lng "
+        "  FROM user_listing_views v "
+        "  JOIN listings l ON l.id = v.listing_id "
+        " WHERE v.user_id=? ORDER BY v.last_viewed DESC LIMIT 60",
         (user_id,),
     ).fetchall()
-    saved_ids = {r["listing_id"] for r in con.execute(
-        "SELECT listing_id FROM user_saved_listings WHERE user_id=?", (user_id,)
-    ).fetchall()}
+    saved_rows = con.execute(
+        "SELECT s.listing_id, l.ward, l.layout, l.rent, l.size_m2, l.lat, l.lng "
+        "  FROM user_saved_listings s "
+        "  JOIN listings l ON l.id = s.listing_id "
+        " WHERE s.user_id=?",
+        (user_id,),
+    ).fetchall()
 
     if len(view_rows) < 3:
         con.close()
         return jsonify({"listings": [], "profile": None,
                         "message": "もっと物件を見ると、あなたへのおすすめが表示されます。"})
 
-    seen_ids = {r["listing_id"] for r in view_rows} | saved_ids
+    saved_ids = {r["listing_id"] for r in saved_rows}
+    seen_ids  = {r["listing_id"] for r in view_rows} | saved_ids
 
-    # weight: saved=4, viewed weight = view_count (capped at 5)
+    # ── time-decay weights ────────────────────────────────────────────────────
+    now = datetime.now()
+    def _decay(last_viewed_str):
+        try:
+            lv = datetime.fromisoformat(last_viewed_str)
+            days = max((now - lv).total_seconds() / 86400, 0)
+            return math.exp(-days / 45)
+        except Exception:
+            return 1.0
+
     weights: dict[str, float] = {}
     for r in view_rows:
-        weights[r["listing_id"]] = min(r["view_count"], 5)
-    for lid in saved_ids:
+        weights[r["listing_id"]] = min(r["view_count"], 5) * _decay(r["last_viewed"])
+    for r in saved_rows:
+        lid = r["listing_id"]
         weights[lid] = weights.get(lid, 0) + 4
 
-    # ── load signal listing details ──────────────────────────────────────────
-    placeholders = ",".join("?" * len(weights))
-    sig_rows = con.execute(
-        f"SELECT id, ward, layout, rent, size_m2 FROM listings WHERE id IN ({placeholders})",
-        list(weights.keys()),
-    ).fetchall()
-
-    # weighted frequency maps
-    from collections import Counter
+    # ── weighted frequency maps ───────────────────────────────────────────────
     ward_ctr: Counter = Counter()
     layout_ctr: Counter = Counter()
-    rents, sizes = [], []
-    for r in sig_rows:
-        w = weights.get(r["id"], 1)
-        if r["ward"]:   ward_ctr[r["ward"]]     += w
-        if r["layout"]: layout_ctr[r["layout"]] += w
-        if r["rent"]:   rents.extend([r["rent"]] * int(w))
-        if r["size_m2"]: sizes.extend([r["size_m2"]] * int(w))
+    rents: list[float] = []
+    sizes: list[float] = []
+
+    # merge view_rows + saved_rows for profile building
+    all_sig: dict[str, dict] = {}
+    for r in view_rows:
+        all_sig[r["listing_id"]] = dict(r)
+    for r in saved_rows:
+        if r["listing_id"] not in all_sig:
+            all_sig[r["listing_id"]] = dict(r)
+
+    geo_points: list[tuple[float, float, float]] = []  # (lat, lng, weight)
+
+    for lid, r in all_sig.items():
+        w = weights.get(lid, 1.0)
+        if r.get("ward"):   ward_ctr[r["ward"]]     += w
+        if r.get("layout"): layout_ctr[r["layout"]] += w
+        if r.get("rent"):   rents.extend([r["rent"]] * max(1, int(w)))
+        if r.get("size_m2"): sizes.extend([r["size_m2"]] * max(1, int(w)))
+        if r.get("lat") and r.get("lng"):
+            geo_points.append((float(r["lat"]), float(r["lng"]), w))
 
     top_wards   = [w for w, _ in ward_ctr.most_common(3)]
     top_layouts = [l for l, _ in layout_ctr.most_common(3)]
-    ward_score  = {w: 3 - i for i, w in enumerate(top_wards)}
-    layout_score= {l: 3 - i for i, l in enumerate(top_layouts)}
+    ward_score   = {w: 3 - i for i, w in enumerate(top_wards)}
+    layout_score = {l: 3 - i for i, l in enumerate(top_layouts)}
 
     rents.sort(); sizes.sort()
-    def _pct(lst, lo, hi):
-        if not lst: return 0, float("inf")
-        return lst[int(len(lst)*lo)], lst[int(len(lst)*hi) - 1]
-    rent_lo, rent_hi   = _pct(rents, 0.2, 0.8)
-    size_lo, size_hi   = _pct(sizes, 0.2, 0.8)
-    rent_mid = (rent_lo + rent_hi) / 2 if rents else 0
+
+    def _pct(lst: list, lo: float, hi: float):
+        if not lst:
+            return None, None
+        return lst[int(len(lst) * lo)], lst[max(0, int(len(lst) * hi) - 1)]
+
+    rent_lo, rent_hi = _pct(rents, 0.2, 0.8)
+    size_lo, size_hi = _pct(sizes, 0.2, 0.8)
+    rent_mid = (rent_lo + rent_hi) / 2 if rent_lo is not None and rent_hi is not None else None
+
+    # ── geographic centroid(s) ────────────────────────────────────────────────
+    def _haversine_km(lat1, lng1, lat2, lng2):
+        R = 6371.0
+        dlat = math.radians(lat2 - lat1)
+        dlng = math.radians(lng2 - lng1)
+        a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng/2)**2
+        return R * 2 * math.asin(math.sqrt(a))
+
+    def _weighted_centroid(pts):
+        """pts: list of (lat, lng, w). Returns (lat, lng) or None."""
+        tw = sum(p[2] for p in pts)
+        if tw == 0:
+            return None
+        clat = sum(p[0] * p[2] for p in pts) / tw
+        clng = sum(p[1] * p[2] for p in pts) / tw
+        return clat, clng
+
+    centroids = []  # list of {"lat", "lng", "spread_km"}
+
+    if geo_points:
+        c = _weighted_centroid(geo_points)
+        if c:
+            clat, clng = c
+            dists = sorted(_haversine_km(clat, clng, p[0], p[1]) for p in geo_points)
+            spread_km = dists[int(len(dists) * 0.75)]
+
+            # Bimodal detection: if spread > 8 km and enough points, try 2-cluster split
+            if spread_km > 8 and len(geo_points) >= 6:
+                far_half  = [p for p in geo_points if _haversine_km(clat, clng, p[0], p[1]) > spread_km * 0.5]
+                near_half = [p for p in geo_points if _haversine_km(clat, clng, p[0], p[1]) <= spread_km * 0.5]
+                c1 = _weighted_centroid(near_half) if near_half else None
+                c2 = _weighted_centroid(far_half)  if far_half  else None
+                if c1 and c2:
+                    sep = _haversine_km(c1[0], c1[1], c2[0], c2[1])
+                    if sep > 5:
+                        for pts_sub, cx in [(near_half, c1), (far_half, c2)]:
+                            dists_sub = sorted(_haversine_km(cx[0], cx[1], p[0], p[1]) for p in pts_sub)
+                            sp = dists_sub[int(len(dists_sub) * 0.75)] if dists_sub else 4.0
+                            centroids.append({"lat": cx[0], "lng": cx[1], "spread_km": round(sp, 2)})
+
+            if not centroids:
+                centroids.append({"lat": clat, "lng": clng, "spread_km": round(spread_km, 2)})
+
+    def _proximity_score(lat, lng):
+        if not lat or not lng or not centroids:
+            return 0.0
+        best = 0.0
+        for c in centroids:
+            d = _haversine_km(float(lat), float(lng), c["lat"], c["lng"])
+            sp = c["spread_km"] or 4.0
+            if d <= sp:
+                best = max(best, 2.0)
+            elif d <= sp * 2:
+                best = max(best, 1.0)
+            elif d <= sp * 3:
+                best = max(best, 0.3)
+        return best
 
     # ── score candidate listings ─────────────────────────────────────────────
-    from datetime import datetime, timedelta
-    new_cutoff = (datetime.now() - timedelta(days=7)).isoformat()
+    new_cutoff = (now - timedelta(days=7)).isoformat()
 
     candidate_rows = con.execute(
         "SELECT id, name, ward, layout, rent, size_m2, lat, lng, "
@@ -1041,16 +1130,19 @@ def for_you():
         score = 0.0
         score += ward_score.get(r["ward"] or "", 0)
         score += layout_score.get(r["layout"] or "", 0)
-        if r["rent"] and rent_lo <= r["rent"] <= rent_hi:
-            score += 2
-        elif r["rent"] and abs(r["rent"] - rent_mid) <= rent_mid * 0.3:
-            score += 1
-        if r["size_m2"] and size_lo <= r["size_m2"] <= size_hi:
-            score += 1
+        if r["rent"] is not None and rent_lo is not None and rent_hi is not None:
+            if rent_lo <= r["rent"] <= rent_hi:
+                score += 2
+            elif rent_mid is not None and abs(r["rent"] - rent_mid) <= rent_mid * 0.3:
+                score += 1
+        if r["size_m2"] is not None and size_lo is not None and size_hi is not None:
+            if size_lo <= r["size_m2"] <= size_hi:
+                score += 1
         if (r["ward"] or "") in ward_score and (r["layout"] or "") in layout_score:
-            score += 1  # combo bonus
+            score += 1  # ward+layout combo bonus
         if r["first_seen"] and r["first_seen"] >= new_cutoff:
             score += 0.5  # freshness bonus
+        score += _proximity_score(r["lat"], r["lng"])
         if score < 1:
             continue
         results.append((score, dict(r)))
@@ -1058,10 +1150,15 @@ def for_you():
     results.sort(key=lambda x: -x[0])
     listings = [row for _, row in results[:10]]
 
+    rent_range = None
+    if rent_lo is not None and rent_hi is not None:
+        rent_range = [int(rent_lo), int(rent_hi)]
+
     profile = {
         "top_wards":   top_wards[:3],
         "top_layouts": top_layouts[:3],
-        "rent_range":  [int(rent_lo), int(rent_hi)],
+        "rent_range":  rent_range,
+        "centroids":   centroids,
         "view_count":  len(view_rows),
         "save_count":  len(saved_ids),
     }
