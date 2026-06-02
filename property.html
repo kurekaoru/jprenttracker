@@ -6,6 +6,8 @@
 <title>物件詳細</title>
 <script>
 (function(){
+  // Placeholder so Maps API can fire the callback even if it loads before the main script.
+  window._mapsReady = function(){ window._mapsReadyPending = true; };
   var s=document.createElement('script');s.async=true;
   s.src='https://maps.googleapis.com/maps/api/js?key=AIzaSyBHw3d6FU73jXiJxUJoZ4MlDGu2CmhC4i8&callback=_mapsReady';
   document.head.appendChild(s);
@@ -330,6 +332,8 @@ window._mapsReady = () => {
     if (activePane.id === 't-facilities' && !_facLoaded) loadFacilities();
   }
 };
+// Flush in case Maps API fired the placeholder before this script ran
+if (window._mapsReadyPending) { window._mapsReadyPending = false; window._mapsReady(); }
 
 // ── boot ──────────────────────────────────────────────────────────────────────
 async function boot() {

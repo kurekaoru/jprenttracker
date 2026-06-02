@@ -8,6 +8,8 @@
 (function(){
   var l=localStorage.getItem('jkktrackr_lang')||'ja';
   document.documentElement.lang=l;
+  // Placeholder so Maps API can fire even if it loads (from cache) before the main script.
+  window.initMap = function(){ window._initMapPending = true; };
   var s=document.createElement('script');s.async=true;
   s.src='https://maps.googleapis.com/maps/api/js?key=AIzaSyBHw3d6FU73jXiJxUJoZ4MlDGu2CmhC4i8&libraries=geometry&language='+l+'&callback=initMap';
   document.head.appendChild(s);
@@ -1518,7 +1520,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 16:16 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 17:05 JST</p>
       </div>
 
 
@@ -4807,6 +4809,8 @@ function initMap() {
     if (!document.hidden && map) google.maps.event.trigger(map, 'resize');
   });
 }
+// Flush: if Maps API fired the placeholder before this script ran, call the real initMap now.
+if (window._initMapPending) { window._initMapPending = false; initMap(); }
 
 const _boundaryLayers = []; // { restyleLayer: fn }
 
