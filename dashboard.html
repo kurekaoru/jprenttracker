@@ -1512,7 +1512,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 11:10 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 11:14 JST</p>
       </div>
 
 
@@ -2360,10 +2360,21 @@ const DEFAULT_WARDS   = new Set([...KU, ...SI]);   // Kanagawa is opt-in
 const DEFAULT_LAYOUTS = new Set(LAYOUTS);
 const DEFAULT_SOURCES = new Set(['jkk', 'ur', 'suumo']);
 const LOCATION_FILTER_MODE_KEY = 'jkkLocationFilterMode:v1';
+const FILTER_SOURCES_KEY       = 'jkkFilterSources:v1';
+
+const _loadSavedSources = () => {
+  try {
+    const s = JSON.parse(localStorage.getItem(FILTER_SOURCES_KEY));
+    if (Array.isArray(s) && s.length) return new Set(s);
+  } catch(_) {}
+  return new Set(DEFAULT_SOURCES);
+};
+const _saveFilterSources = () =>
+  localStorage.setItem(FILTER_SOURCES_KEY, JSON.stringify([...filterSources]));
 
 let selectedWards    = new Set(DEFAULT_WARDS);
 let selectedLayouts  = new Set(DEFAULT_LAYOUTS);
-let filterSources    = new Set(DEFAULT_SOURCES);
+let filterSources    = _loadSavedSources();
 let selectedFeatures = new Set();
 let selectedStations = new Set();
 let activeLocationFilter = 'area'; // 'area' | 'line'
@@ -3865,6 +3876,7 @@ function buildChips() {
   ];
   const _toggleSource = (val) => {
     filterSources.has(val) ? filterSources.delete(val) : filterSources.add(val);
+    _saveFilterSources();
     buildChips();
     applyMapFilters();
   };
@@ -3906,7 +3918,7 @@ function loadConfig() {
   activeLocationFilter = 'area'; // always start in area mode on page load; station selections preserved
   selectedLayouts  = d.layouts?.length ? new Set(d.layouts) : new Set(DEFAULT_LAYOUTS);
   selectedFeatures = new Set(d.required_features || []);
-  filterSources    = new Set(DEFAULT_SOURCES);
+  filterSources    = _loadSavedSources();
   buildChips();
   buildLineAccordion();
   updateLocationModeUi();
@@ -6840,7 +6852,7 @@ async function loadUserSettings() {
     activeLocationFilter = 'area'; // always start in area mode on page load; station selections preserved
     selectedLayouts  = d.layouts?.length ? new Set(d.layouts) : new Set(DEFAULT_LAYOUTS);
     selectedFeatures = new Set(d.required_features || []);
-    filterSources    = new Set(DEFAULT_SOURCES);
+    filterSources    = _loadSavedSources();
     buildChips();
     buildLineAccordion();
     updateLocationModeUi();
