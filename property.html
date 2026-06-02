@@ -6,8 +6,8 @@
 <title>物件詳細</title>
 <script>
 (function(){
-  var s = document.createElement('script'); s.async = true;
-  s.src = 'https://maps.googleapis.com/maps/api/js?key=AIzaSyBHw3d6FU73jXiJxUJoZ4MlDGu2CmhC4i8&callback=_mapsReady&libraries=places';
+  var s=document.createElement('script');s.async=true;
+  s.src='https://maps.googleapis.com/maps/api/js?key=AIzaSyBHw3d6FU73jXiJxUJoZ4MlDGu2CmhC4i8&callback=_mapsReady';
   document.head.appendChild(s);
 })();
 </script>
@@ -15,689 +15,702 @@
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
 :root {
-  --bg:#f8f7f4; --surface:#fff; --surface2:#f0ede6;
-  --border:rgba(0,0,0,.09); --text:#1a1a18; --muted:#6b6b66;
-  --accent:#1D9E75; --accent-light:#E8F8F2; --warn:#EF9F27;
-  --radius:12px; --font:'DM Sans',system-ui,sans-serif; --mono:'DM Mono',monospace;
-  --jkk:#e24b4a; --ur:#3b82f6;
+  --bg:#18181a; --surface:#242426; --surface2:#2e2e30;
+  --rail-bg:#27272b;
+  --border:rgba(255,255,255,.08); --text:rgba(255,255,255,.87); --muted:rgba(255,255,255,.42);
+  --accent:#5DCAA5; --accent-light:rgba(93,202,165,.12); --accent-dark:#1D9E75;
+  --danger:#E24B4A; --warn:#EF9F27;
+  --radius:10px; --font:'DM Sans',system-ui,sans-serif; --mono:'DM Mono',monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;}
+html,body{height:100%;overflow:hidden;font-family:var(--font);background:var(--bg);color:var(--text);}
 
-/* topbar */
-.topbar{height:44px;background:rgba(255,255,255,.88);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);
-  display:flex;align-items:center;gap:10px;padding:0 20px;position:sticky;top:0;z-index:20;}
-.topbar-back{display:flex;align-items:center;gap:6px;text-decoration:none;color:var(--muted);font-size:12px;
-  border:1px solid var(--border);border-radius:8px;padding:4px 10px;transition:all .12s;}
-.topbar-back:hover{color:var(--accent);border-color:var(--accent);}
-.topbar-title{font-size:13px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.topbar-actions{display:flex;gap:6px;flex-shrink:0;}
-.topbar-btn{display:flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid var(--border);
-  border-radius:8px;font-size:11px;font-family:var(--font);cursor:pointer;background:none;
-  color:var(--muted);transition:all .12s;}
+/* ── topbar ── */
+.topbar{
+  display:grid;grid-template-columns:38px 1fr;
+  height:38px;max-height:38px;overflow:hidden;
+  position:sticky;top:0;z-index:20;
+}
+.topbar-rail{
+  background:var(--rail-bg);display:flex;align-items:center;justify-content:center;
+  border-bottom:1px solid rgba(255,255,255,.07);
+}
+.topbar-main{
+  background:var(--rail-bg);border-bottom:1px solid rgba(255,255,255,.07);
+  display:flex;align-items:center;gap:10px;padding:0 14px;
+}
+.dot{width:22px;height:22px;background:var(--accent-dark);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:700;flex-shrink:0;}
+.topbar-title{font-size:13px;font-weight:600;letter-spacing:-.02em;
+  color:rgba(255,255,255,.85);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.topbar-sep{width:1px;height:16px;background:rgba(255,255,255,.1);flex-shrink:0;}
+.src-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;letter-spacing:.05em;flex-shrink:0;}
+.src-badge.jkk{background:rgba(226,75,74,.18);color:#E24B4A;}
+.src-badge.ur{background:rgba(59,130,246,.18);color:#60A5FA;}
+.topbar-btn{
+  background:none;border:1px solid rgba(255,255,255,.15);border-radius:10px;
+  padding:2px 9px;font-size:10px;color:rgba(255,255,255,.45);cursor:pointer;
+  font-family:var(--font);text-decoration:none;transition:all .15s;white-space:nowrap;
+  display:flex;align-items:center;
+}
 .topbar-btn:hover{border-color:var(--accent);color:var(--accent);}
-.src-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;letter-spacing:.05em;}
-.src-badge.jkk{background:rgba(226,75,74,.1);color:var(--jkk);}
-.src-badge.ur{background:rgba(59,130,246,.1);color:var(--ur);}
+.back-btn{
+  background:none;border:none;color:rgba(255,255,255,.5);cursor:pointer;
+  font-size:18px;line-height:1;padding:0;transition:color .15s;
+}
+.back-btn:hover{color:var(--accent);}
 
-/* layout */
-.page{max-width:1200px;margin:0 auto;padding:20px 20px 60px;}
+/* ── layout ── */
+.layout{
+  display:grid;grid-template-columns:1fr 400px;
+  height:calc(100vh - 38px);overflow:hidden;
+}
 
-/* photo section */
-.photo-section{position:relative;border-radius:var(--radius);overflow:hidden;background:#000;margin-bottom:16px;}
-.photo-main{width:100%;height:480px;object-fit:contain;display:block;cursor:pointer;}
-.photo-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.5);
-  border:none;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;
-  justify-content:center;cursor:pointer;color:#fff;font-size:16px;transition:background .12s;z-index:2;}
-.photo-nav:hover{background:rgba(0,0,0,.75);}
-.photo-nav.prev{left:10px;} .photo-nav.next{right:10px;}
-.photo-counter{position:absolute;bottom:10px;right:12px;background:rgba(0,0,0,.55);
-  color:#fff;font-size:11px;font-family:var(--mono);padding:2px 8px;border-radius:6px;}
-.photo-type-badge{position:absolute;bottom:10px;left:12px;background:var(--accent);
-  color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;letter-spacing:.05em;}
-.photo-strip{display:flex;gap:6px;margin-bottom:20px;overflow-x:auto;padding-bottom:4px;}
-.photo-strip::-webkit-scrollbar{height:4px;} .photo-strip::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
-.photo-thumb{width:72px;height:54px;object-fit:cover;border-radius:8px;cursor:pointer;flex-shrink:0;
-  border:2px solid transparent;transition:border-color .1s;opacity:.7;}
+/* ── photo panel (left) ── */
+.photo-panel{
+  position:relative;background:#000;
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.photo-main-wrap{
+  flex:1;position:relative;overflow:hidden;min-height:0;
+}
+.photo-main{
+  width:100%;height:100%;object-fit:contain;display:block;
+}
+.photo-nav{
+  position:absolute;top:50%;transform:translateY(-50%);
+  background:rgba(0,0,0,.55);backdrop-filter:blur(4px);
+  border:none;border-radius:50%;width:38px;height:38px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:#fff;font-size:18px;transition:background .12s;z-index:2;
+}
+.photo-nav:hover{background:rgba(0,0,0,.8);}
+.photo-nav.prev{left:12px;}.photo-nav.next{right:12px;}
+.photo-badge{
+  position:absolute;bottom:10px;left:12px;
+  background:var(--accent-dark);color:#fff;
+  font-size:9px;font-weight:700;padding:2px 8px;border-radius:5px;letter-spacing:.06em;
+}
+.photo-counter{
+  position:absolute;bottom:10px;right:12px;
+  background:rgba(0,0,0,.6);color:rgba(255,255,255,.7);
+  font-size:10px;font-family:var(--mono);padding:2px 8px;border-radius:5px;
+}
+/* filter chips */
+.photo-filter-bar{
+  background:rgba(0,0,0,.7);backdrop-filter:blur(8px);
+  display:flex;gap:6px;padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.06);
+  flex-shrink:0;
+}
+.pf-chip{
+  padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600;
+  border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.5);
+  cursor:pointer;background:none;font-family:var(--font);transition:all .12s;
+}
+.pf-chip.active{background:var(--accent-dark);border-color:var(--accent-dark);color:#fff;}
+/* thumbnail strip */
+.photo-strip{
+  flex-shrink:0;background:rgba(0,0,0,.8);
+  display:flex;gap:4px;padding:6px 8px;overflow-x:auto;height:66px;align-items:center;
+}
+.photo-strip::-webkit-scrollbar{height:3px;}
+.photo-strip::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:2px;}
+.photo-thumb{
+  width:80px;height:54px;flex-shrink:0;object-fit:cover;border-radius:6px;
+  cursor:pointer;border:2px solid transparent;opacity:.5;transition:all .12s;
+}
 .photo-thumb.active{border-color:var(--accent);opacity:1;}
-.photo-thumb.fp-thumb{border-color:rgba(93,202,165,.5);opacity:.9;}
-.no-photo{display:flex;align-items:center;justify-content:center;height:480px;background:var(--surface2);
-  color:var(--muted);font-size:14px;border-radius:var(--radius);margin-bottom:16px;}
+.photo-thumb.fp{border-color:rgba(93,202,165,.4);opacity:.75;}
+.no-photo{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  color:rgba(255,255,255,.2);font-size:13px;
+}
 
-/* filter chips for gallery */
-.gallery-filters{display:flex;gap:6px;margin-bottom:12px;}
-.gf-btn{padding:4px 12px;border-radius:20px;font-size:11px;font-family:var(--font);cursor:pointer;
-  border:1px solid var(--border);background:none;color:var(--muted);transition:all .12s;}
-.gf-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+/* ── info panel (right) ── */
+.info-panel{
+  background:var(--surface);border-left:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+}
 
-/* two-column grid */
-.grid{display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start;}
-@media(max-width:800px){.grid{grid-template-columns:1fr;}}
+/* tab bar */
+.tab-bar{
+  display:flex;border-bottom:1px solid var(--border);flex-shrink:0;
+  background:var(--surface);overflow-x:auto;
+}
+.tab-bar::-webkit-scrollbar{display:none;}
+.tab-btn{
+  padding:0 14px;height:38px;font-size:11px;font-weight:600;
+  border:none;background:none;color:var(--muted);cursor:pointer;
+  border-bottom:2px solid transparent;white-space:nowrap;font-family:var(--font);
+  transition:all .12s;flex-shrink:0;
+}
+.tab-btn:hover{color:var(--text);}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
 
-/* left column */
-.section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  padding:20px;margin-bottom:16px;}
-.section-title{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;
-  letter-spacing:.06em;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
-.section-title::after{content:'';flex:1;height:1px;background:var(--border);}
+/* tab pane */
+.tab-pane{display:none;flex:1;overflow-y:auto;padding:16px;}
+.tab-pane.active{display:flex;flex-direction:column;gap:12px;}
+.tab-pane::-webkit-scrollbar{width:4px;}
+.tab-pane::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:2px;}
 
-/* key facts */
-.fact-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
-.fact{background:var(--surface2);border-radius:10px;padding:12px 14px;}
-.fact-label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;}
-.fact-value{font-size:16px;font-weight:600;color:var(--text);}
-.fact-sub{font-size:11px;color:var(--muted);margin-top:1px;}
-.fact.accent-card{background:var(--accent-light);border:1px solid rgba(29,158,117,.15);}
-.fact.accent-card .fact-value{color:var(--accent);}
+/* section label */
+.s-label{
+  font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;
+  color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:8px;
+}
+.s-label::after{content:'';flex:1;height:1px;background:var(--border);}
 
-/* market section */
-.market-pills{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
-.mpill{background:var(--surface2);border-radius:10px;padding:10px 12px;text-align:center;}
-.mpill-label{font-size:10px;color:var(--muted);font-weight:500;margin-bottom:2px;}
-.mpill-value{font-size:14px;font-weight:600;color:var(--text);}
-.mpill-value.good{color:var(--accent);}
-.mpill-value.warn{color:var(--warn);}
-.chart-wrap{height:120px;position:relative;}
+/* fact grid */
+.fact-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.fact{background:var(--surface2);border-radius:8px;padding:10px 12px;}
+.fact.wide{grid-column:1/-1;}
+.fact.accent{background:var(--accent-light);border:1px solid rgba(93,202,165,.15);}
+.f-label{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:3px;}
+.f-value{font-size:15px;font-weight:600;color:var(--text);}
+.f-value.accent{color:var(--accent);}
+.f-sub{font-size:11px;color:var(--muted);margin-top:1px;}
 
-/* sticky right column */
-.sticky-col{position:sticky;top:60px;}
+/* info rows */
+.info-row{display:flex;justify-content:space-between;align-items:center;
+  padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px;}
+.info-row:last-child{border-bottom:none;}
+.ir-label{color:var(--muted);font-size:11px;}
+.ir-value{font-weight:500;text-align:right;font-size:12px;max-width:55%;}
 
-/* fact card (right) */
-.fact-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  padding:20px;margin-bottom:16px;}
-.fact-card .rent{font-size:28px;font-weight:700;color:var(--accent);margin-bottom:2px;}
-.fact-card .rent-sub{font-size:12px;color:var(--muted);margin-bottom:14px;}
-.fact-row{display:flex;justify-content:space-between;align-items:center;
-  padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;}
-.fact-row:last-child{border-bottom:none;}
-.fact-row-label{color:var(--muted);font-size:12px;}
-.fact-row-value{font-weight:500;}
-.apply-btn{display:block;width:100%;margin-top:16px;padding:11px;background:var(--accent);color:#fff;
-  border:none;border-radius:10px;font-family:var(--font);font-size:13px;font-weight:600;
-  cursor:pointer;text-align:center;text-decoration:none;transition:opacity .12s;}
-.apply-btn:hover{opacity:.88;}
-.apply-btn:disabled{opacity:.45;cursor:default;}
+/* tags */
+.tag-wrap{display:flex;flex-wrap:wrap;gap:5px;}
+.tag{padding:3px 8px;background:var(--surface2);border-radius:5px;font-size:11px;color:var(--text);border:1px solid var(--border);}
 
-/* commute calculator */
-.commute-input-row{display:flex;gap:8px;margin-bottom:10px;}
-.commute-input{flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;
-  font-family:var(--font);font-size:13px;color:var(--text);background:var(--surface2);outline:none;}
-.commute-input:focus{border-color:var(--accent);}
-.commute-modes{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
-.mode-btn{padding:5px 10px;border:1px solid var(--border);border-radius:8px;font-size:11px;
-  font-family:var(--font);cursor:pointer;background:none;color:var(--muted);transition:all .12s;}
-.mode-btn:hover{border-color:var(--accent);color:var(--accent);}
-.mode-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
-.commute-result{background:var(--surface2);border-radius:8px;padding:10px 12px;font-size:12px;
-  color:var(--text);line-height:1.6;display:none;}
-.commute-result.visible{display:block;}
-.commute-open-maps{font-size:11px;color:var(--accent);text-decoration:none;margin-top:4px;display:inline-block;}
-#commute-map{width:100%;height:220px;border-radius:10px;overflow:hidden;margin-top:10px;display:none;}
-#commute-map.visible{display:block;}
+/* apply btn */
+.apply-btn{
+  display:block;width:100%;padding:10px;background:var(--accent-dark);color:#fff;
+  border:none;border-radius:8px;font-family:var(--font);font-size:13px;font-weight:600;
+  cursor:pointer;text-align:center;text-decoration:none;transition:opacity .12s;
+}
+.apply-btn:hover{opacity:.85;}
+.apply-btn:disabled{opacity:.35;cursor:default;}
 
 /* floor plan rooms table */
 .rooms-table{width:100%;border-collapse:collapse;font-size:12px;}
-.rooms-table th{text-align:left;padding:5px 8px;font-size:10px;font-weight:600;color:var(--muted);
-  text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);}
-.rooms-table td{padding:6px 8px;border-bottom:1px solid rgba(0,0,0,.05);vertical-align:middle;}
+.rooms-table th{text-align:left;padding:5px 6px;font-size:9px;font-weight:600;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);}
+.rooms-table td{padding:5px 6px;border-bottom:1px solid rgba(255,255,255,.03);}
 .rooms-table tr:last-child td{border-bottom:none;}
-.rooms-table tr:hover td{background:var(--surface2);}
-.room-badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600;
-  background:var(--accent-light);color:var(--accent);}
-.room-badge.outdoor{background:rgba(59,130,246,.1);color:var(--ur);}
-.window-dot{color:var(--warn);}
+.rooms-table tr:hover td{background:rgba(255,255,255,.03);}
+.r-badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;}
+.num{font-family:var(--mono);font-size:11px;}
+
+/* market pills */
+.market-pills{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.mpill{background:var(--surface2);border-radius:8px;padding:10px;text-align:center;}
+.mp-label{font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;}
+.mp-value{font-size:14px;font-weight:700;}
+.mp-value.good{color:var(--accent);}
+.mp-value.warn{color:var(--warn);}
+.chart-wrap{height:110px;position:relative;}
+
+/* commute */
+.commute-row{display:flex;gap:6px;}
+.commute-input{
+  flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:8px;
+  font-family:var(--font);font-size:12px;color:var(--text);background:var(--surface2);outline:none;
+}
+.commute-input:focus{border-color:var(--accent);}
+.commute-input::placeholder{color:var(--muted);}
+.mode-btns{display:flex;gap:5px;flex-wrap:wrap;}
+.mode-btn{
+  padding:4px 9px;border:1px solid var(--border);border-radius:6px;
+  font-size:11px;font-family:var(--font);cursor:pointer;background:none;
+  color:var(--muted);transition:all .12s;
+}
+.mode-btn:hover{border-color:var(--accent);color:var(--accent);}
+.mode-btn.active{background:var(--accent-dark);border-color:var(--accent-dark);color:#fff;}
+.commute-result{
+  background:var(--surface2);border-radius:8px;padding:9px 12px;font-size:12px;
+  color:var(--text);line-height:1.6;display:none;
+}
+.commute-result.on{display:block;}
+.gmaps-link{font-size:11px;color:var(--accent);text-decoration:none;display:inline-block;margin-top:3px;}
+#commute-map{width:100%;height:180px;border-radius:8px;overflow:hidden;display:none;}
+#commute-map.on{display:block;}
 
 /* facilities */
-.fac-list{display:flex;flex-direction:column;gap:6px;}
-.fac-item{display:flex;align-items:center;gap:10px;font-size:12px;}
-.fac-dist{font-size:11px;color:var(--muted);font-family:var(--mono);margin-left:auto;white-space:nowrap;}
-.fac-icon{width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;
-  font-size:13px;flex-shrink:0;}
-
-/* features */
-.tag-wrap{display:flex;flex-wrap:wrap;gap:5px;}
-.tag{padding:3px 9px;background:var(--surface2);border-radius:5px;font-size:11px;color:var(--text);}
+.fac-item{display:flex;align-items:center;gap:9px;padding:5px 0;
+  border-bottom:1px solid rgba(255,255,255,.04);font-size:12px;}
+.fac-item:last-child{border-bottom:none;}
+.fac-icon{font-size:15px;flex-shrink:0;width:22px;text-align:center;}
+.fac-dist{font-size:10px;font-family:var(--mono);color:var(--muted);margin-left:auto;}
 
 /* detail text */
 .detail-text{font-size:12px;line-height:1.75;color:var(--muted);white-space:pre-line;}
 
-/* spinner */
-.spinner{display:flex;align-items:center;justify-content:center;height:200px;color:var(--muted);font-size:13px;}
+/* spinner / error */
+.fullpage-msg{
+  height:calc(100vh - 38px);display:flex;align-items:center;justify-content:center;
+  color:var(--muted);font-size:13px;
+}
 
-@media print {
-  .topbar,.topbar-actions,.apply-btn,.commute-modes,.commute-input-row,#commute-map{display:none!important;}
-  .sticky-col{position:static;}
-  .grid{display:block;}
-  body{background:#fff;}
+@media print{
+  .topbar-btn,.back-btn,.photo-nav,.photo-filter-bar,.photo-strip,.mode-btns,.commute-row,
+  #commute-map,.tab-bar{display:none!important;}
+  .layout{display:block;}
+  .tab-pane{display:flex!important;overflow:visible!important;height:auto!important;}
+  body,html{overflow:auto!important;height:auto!important;}
 }
 </style>
 </head>
 <body>
 
+<!-- topbar -->
 <div class="topbar">
-  <a class="topbar-back" href="javascript:history.back()">← 戻る</a>
-  <div class="topbar-title" id="topbar-title">読み込み中…</div>
-  <div class="topbar-actions">
-    <button class="topbar-btn" onclick="window.print()">🖨 印刷</button>
+  <div class="topbar-rail">
+    <button class="back-btn" onclick="history.back()" title="戻る">‹</button>
+  </div>
+  <div class="topbar-main">
+    <div class="dot">J</div>
+    <div class="topbar-title" id="tb-title">読み込み中…</div>
+    <div class="topbar-sep"></div>
+    <span class="src-badge" id="tb-badge" style="display:none"></span>
+    <button class="topbar-btn" onclick="window.print()">🖨</button>
     <button class="topbar-btn" id="share-btn" onclick="shareProperty()">⤴ 共有</button>
   </div>
 </div>
 
-<div class="page">
-  <div id="root"><div class="spinner">読み込み中…</div></div>
-</div>
+<div id="root"><div class="fullpage-msg">読み込み中…</div></div>
 
 <script>
-const API      = 'https://jkk-monitor.duckdns.org/api';
-const MAPS_KEY = 'AIzaSyBHw3d6FU73jXiJxUJoZ4MlDGu2CmhC4i8';
-const params   = new URLSearchParams(location.search);
-const LISTING_ID = params.get('id') || '';
+const API = 'https://jkk-monitor.duckdns.org/api';
+const LISTING_ID = new URLSearchParams(location.search).get('id') || '';
 
-let _listing   = null;
+let _listing = null;
 let _allListings = [];
-let _map       = null;
-let _mapsApiReady = false;
-let _dirService = null;
-let _dirRenderer = null;
-let _galleryImgs = []; // all images
-let _galleryIdx  = 0;
-let _galleryFilter = 'all'; // 'all' | 'floor_plan' | 'photos'
-let _rentChart   = null;
+let _galleryImgs = [];
+let _galleryIdx = 0;
+let _galleryFilter = 'all';
+let _map = null, _mapsReady = false;
+let _dirService = null, _dirRenderer = null;
+let _rentChart = null;
+
+window._mapsReady = () => { _mapsReady = true; if (_listing) _initMap(); };
 
 // ── boot ──────────────────────────────────────────────────────────────────────
-window._mapsReady = () => {
-  _mapsApiReady = true;
-  if (_listing) initMap();
-};
-
 async function boot() {
-  if (!LISTING_ID) {
-    document.getElementById('root').innerHTML = '<div class="spinner">物件IDが指定されていません。</div>';
-    return;
-  }
-  const [listingRes, allRes] = await Promise.all([
-    fetch(`${API}/listings/${LISTING_ID}`).then(r => r.json()),
-    fetch(`${API}/listings`).then(r => r.json()),
+  if (!LISTING_ID) { showError('物件IDが指定されていません。'); return; }
+  const [lr, ar] = await Promise.all([
+    fetch(`${API}/listings/${LISTING_ID}`).then(r => r.json()).catch(() => ({error:'fetch failed'})),
+    fetch(`${API}/listings`).then(r => r.json()).catch(() => ({listings:[]})),
   ]);
-  if (listingRes.error) {
-    document.getElementById('root').innerHTML = `<div class="spinner">物件が見つかりません (${LISTING_ID})</div>`;
-    return;
-  }
-  _listing = listingRes;
-  _allListings = (allRes.listings || []).filter(l => !l.disappeared_at && l.rent > 0 && l.size_m2 > 0);
+  if (lr.error) { showError(`物件が見つかりません (${LISTING_ID})`); return; }
+  _listing = lr;
+  _allListings = (ar.listings || []).filter(l => !l.disappeared_at && l.rent > 0 && l.size_m2 > 0);
   render();
-  if (_mapsApiReady) initMap();
+  if (_mapsReady) _initMap();
 }
 
-// ── render ────────────────────────────────────────────────────────────────────
+function showError(msg) {
+  document.getElementById('root').innerHTML = `<div class="fullpage-msg">${esc(msg)}</div>`;
+}
+
+// ── utilities ─────────────────────────────────────────────────────────────────
 function esc(s) {
   if (s == null) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function fmt(n) { return n != null ? Number(n).toLocaleString() : '—'; }
-function fmtAge(age) {
-  if (!age && age !== 0) return '—';
-  return age === 0 ? '新築' : `${age}年`;
-}
+function fmtAge(a) { return (a == null) ? '—' : a === 0 ? '新築' : `${a}年`; }
+function facDist(m) { return m < 1000 ? `${m}m` : `${(m/1000).toFixed(1)}km`; }
+const FAC_ICON = {konbini:'🏪',supermarket:'🛒',kindergarten:'🏫',clinic:'🏥',
+  hospital:'🏨',pharmacy:'💊',park:'🌳',gym:'💪',library:'📚',bank:'🏦',post:'📮'};
+const FAC_LABEL = {konbini:'コンビニ',supermarket:'スーパー',kindergarten:'保育園',
+  clinic:'クリニック',hospital:'病院',pharmacy:'薬局',park:'公園',
+  gym:'ジム',library:'図書館',bank:'銀行',post:'郵便局'};
+const ROOM_COLORS = {
+  LDK:'#1D9E75',LD:'#1D9E75',DK:'#1D9E75',L:'#1D9E75',D:'#1D9E75',K:'#EF9F27',
+  洋室:'#3B82F6',和室:'#8B5CF6',バルコニー:'#0EA5E9',
+  トイレ:'#6B7280',浴室:'#6B7280',洗面所:'#6B7280',玄関:'#A78BFA',
+  廊下:'#4B5563',WIC:'#F59E0B',クローゼット:'#F59E0B',収納:'#6B7280',
+};
 
+// ── render ────────────────────────────────────────────────────────────────────
 function render() {
   const l = _listing;
   document.title = l.name || '物件詳細';
-  document.getElementById('topbar-title').textContent = l.name || '';
+  document.getElementById('tb-title').textContent = l.name || '';
+  const badge = document.getElementById('tb-badge');
+  badge.textContent = l.source === 'ur' ? 'UR' : 'JKK';
+  badge.className = `src-badge ${l.source || 'jkk'}`;
+  badge.style.display = '';
 
-  // Build gallery image list: floor plans first, then exterior, then interior
-  _galleryImgs = (l.images || []);
-  const fpImgs   = _galleryImgs.filter(i => i.type === 'floor_plan');
+  _galleryImgs = l.images || [];
+  const fpImgs    = _galleryImgs.filter(i => i.type === 'floor_plan');
   const photoImgs = _galleryImgs.filter(i => i.type !== 'floor_plan');
 
-  const tag    = l.source === 'ur' ? 'UR' : 'JKK';
-  const rpsq   = l.size_m2 ? Math.round(l.rent / l.size_m2) : null;
-
-  // Market stats
-  const wardPeers = _allListings.filter(x => x.ward === l.ward);
+  // market stats
+  const rpsq = l.size_m2 ? Math.round(l.rent / l.size_m2) : null;
+  const wardPeers   = _allListings.filter(x => x.ward === l.ward);
   const layoutPeers = _allListings.filter(x => x.layout === l.layout);
-  const rentRank = _allListings.filter(x => x.rent < l.rent).length;
-  const rentPct  = Math.round((rentRank / Math.max(_allListings.length - 1, 1)) * 100);
-  const wardAvgRpsq = wardPeers.length ? Math.round(wardPeers.reduce((s, x) => s + x.rent / x.size_m2, 0) / wardPeers.length) : null;
-  const layoutAvg = layoutPeers.length ? Math.round(layoutPeers.reduce((s, x) => s + x.rent, 0) / layoutPeers.length) : null;
+  const rentRank    = _allListings.filter(x => x.rent < l.rent).length;
+  const rentPct     = Math.round((rentRank / Math.max(_allListings.length - 1, 1)) * 100);
+  const wardAvgRpsq = wardPeers.length ? wardPeers.reduce((s,x) => s + x.rent/x.size_m2, 0) / wardPeers.length : null;
+  const layoutAvg   = layoutPeers.length ? Math.round(layoutPeers.reduce((s,x) => s + x.rent, 0) / layoutPeers.length) : null;
+  const rpsqVsWard  = wardAvgRpsq && rpsq ? Math.round(((rpsq - wardAvgRpsq) / wardAvgRpsq) * 100) : null;
+  const rentVsLay   = layoutAvg ? Math.round(((l.rent - layoutAvg) / layoutAvg) * 100) : null;
 
-  const rpsqVsWard = wardAvgRpsq && rpsq ? Math.round(((rpsq - wardAvgRpsq) / wardAvgRpsq) * 100) : null;
-  const rentVsLayout = layoutAvg ? Math.round(((l.rent - layoutAvg) / layoutAvg) * 100) : null;
-
-  // Floor plan rooms
-  const fp = l.floor_plan_data;
-  const rooms = fp ? (fp.rooms || []) : [];
-
-  // Facilities
-  const FACS = {
-    'konbini':{'icon':'🏪','label':'コンビニ'},
-    'supermarket':{'icon':'🛒','label':'スーパー'},
-    'kindergarten':{'icon':'🏫','label':'保育園'},
-    'clinic':{'icon':'🏥','label':'クリニック'},
-    'hospital':{'icon':'🏨','label':'病院'},
-    'pharmacy':{'icon':'💊','label':'薬局'},
-    'park':{'icon':'🌳','label':'公園'},
-    'gym':{'icon':'💪','label':'ジム'},
-    'library':{'icon':'📚','label':'図書館'},
-    'bank':{'icon':'🏦','label':'銀行'},
-    'post':{'icon':'📮','label':'郵便局'},
-  };
-
-  function facIcon(type) { return (FACS[type] || {}).icon || '📍'; }
-  function facLabel(type) { return (FACS[type] || {}).label || type; }
-  function facDist(m) { return m < 1000 ? `${m}m` : `${(m/1000).toFixed(1)}km`; }
-
-  const facHtml = (l.facilities || []).slice(0, 12).map(f =>
-    `<div class="fac-item">
-      <div class="fac-icon">${facIcon(f.type)}</div>
-      <div>${esc(f.name)}<div style="font-size:10px;color:var(--muted);">${facLabel(f.type)}</div></div>
-      <div class="fac-dist">${facDist(f.distance_m)}</div>
-    </div>`
-  ).join('');
-
-  // Features
-  function tagList(csv) {
-    if (!csv) return '';
-    return csv.split(',').map(t => t.trim()).filter(Boolean).map(t => `<span class="tag">${esc(t)}</span>`).join('');
-  }
-
-  // Room type colors
-  const ROOM_COLORS = {
-    'LDK':'#1D9E75','LD':'#1D9E75','DK':'#1D9E75','L':'#1D9E75','D':'#1D9E75',
-    'K':'#ef9f27','洋室':'#3b82f6','和室':'#8b5cf6',
-    'バルコニー':'#0ea5e9','トイレ':'#6b7280','浴室':'#6b7280','洗面所':'#6b7280',
-    '玄関':'#a78bfa','廊下':'#d1d5db','WIC':'#f59e0b','クローゼット':'#f59e0b',
-    '収納':'#9ca3af','MB':'#9ca3af','PS':'#9ca3af',
-  };
-  function roomColor(rt) { return ROOM_COLORS[rt] || '#6b7280'; }
-
-  const roomsHtml = rooms.length ? `
-    <table class="rooms-table">
-      <thead><tr>
-        <th>部屋</th><th>タイプ</th><th style="text-align:right">面積</th><th>窓</th>
-      </tr></thead>
-      <tbody>
-        ${rooms.map(r => {
-          const area = r.best_area_m2 ?? r.area_m2 ?? r.inferred_area_m2;
-          const isInferred = r.area_m2 == null && area != null;
-          const rt = r.room_type || r.label || '';
-          const col = roomColor(rt);
-          return `<tr>
-            <td>${esc(r.label)}</td>
-            <td><span class="room-badge ${r.is_outdoor ? 'outdoor' : ''}" style="background:${col}22;color:${col};">${esc(rt)}</span></td>
-            <td style="text-align:right;font-family:var(--mono);font-size:12px;">${area != null ? `${area.toFixed(1)} m²${isInferred ? '*' : ''}` : '—'}</td>
-            <td style="text-align:center;">${r.has_window ? '<span class="window-dot">☀</span>' : ''}</td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>
-    ${rooms.some(r => r.area_m2 == null && (r.best_area_m2 ?? r.inferred_area_m2) != null) ? '<p style="font-size:10px;color:var(--muted);margin-top:6px;">* ピクセル比率から推定</p>' : ''}
-    ${fp.living_area_m2 ? `<p style="font-size:11px;margin-top:8px;color:var(--muted);">リビング面積 <strong style="color:var(--text)">${fp.living_area_m2} m²</strong>${fp.kitchen_open ? ' · オープンキッチン' : ''} · トイレ ${fp.toilet_count || '—'} · 浴室 ${fp.bathroom_count || '—'}</p>` : ''}
-  ` : '<p style="color:var(--muted);font-size:12px;">間取りデータがありません。</p>';
-
-  // Gallery HTML
-  const galleryHtml = _galleryImgs.length ? `
-    <div class="photo-section" id="photo-section">
-      <img class="photo-main" id="photo-main" src="${esc(_galleryImgs[0].url.startsWith('/') ? API.replace('/api','') + _galleryImgs[0].url : _galleryImgs[0].url)}" onerror="this.src=''">
-      <button class="photo-nav prev" onclick="navPhoto(-1)">‹</button>
-      <button class="photo-nav next" onclick="navPhoto(1)">›</button>
-      <div class="photo-counter" id="photo-counter">1 / ${_galleryImgs.length}</div>
-      <div class="photo-type-badge" id="photo-type-badge" style="display:none;"></div>
-    </div>
-    <div class="gallery-filters">
-      <button class="gf-btn active" onclick="setGalleryFilter('all')">すべて (${_galleryImgs.length})</button>
-      ${fpImgs.length ? `<button class="gf-btn" onclick="setGalleryFilter('floor_plan')">間取り (${fpImgs.length})</button>` : ''}
-      ${photoImgs.length ? `<button class="gf-btn" onclick="setGalleryFilter('photos')">写真 (${photoImgs.length})</button>` : ''}
-    </div>
-    <div class="photo-strip" id="photo-strip">
-      ${_galleryImgs.map((img, i) => {
-        const src = img.url.startsWith('/') ? API.replace('/api','') + img.url : img.url;
-        return `<img class="photo-thumb${i === 0 ? ' active' : ''}${img.type === 'floor_plan' ? ' fp-thumb' : ''}"
-          src="${esc(src)}" onclick="jumpPhoto(${i})" onerror="this.style.display='none'" loading="lazy">`;
-      }).join('')}
-    </div>
-  ` : `<div class="no-photo">📷 写真なし</div>`;
+  // floor plan
+  const fp    = l.floor_plan_data || {};
+  const rooms = fp.rooms || [];
 
   document.getElementById('root').innerHTML = `
-    ${galleryHtml}
+  <div class="layout">
 
-    <div class="grid">
-      <!-- LEFT COLUMN -->
-      <div>
-        <!-- Key facts -->
-        <div class="section">
-          <div class="section-title">基本情報</div>
-          <div class="fact-grid">
-            <div class="fact accent-card">
-              <div class="fact-label">月額家賃</div>
-              <div class="fact-value">¥${fmt(l.rent)}</div>
-              ${rpsq ? `<div class="fact-sub">¥${fmt(rpsq)}/㎡</div>` : ''}
-            </div>
-            <div class="fact">
-              <div class="fact-label">専有面積</div>
-              <div class="fact-value">${l.size_m2 || '—'} m²</div>
-              <div class="fact-sub">${l.layout || '—'}</div>
-            </div>
-            <div class="fact">
-              <div class="fact-label">最寄り駅</div>
-              <div class="fact-value" style="font-size:13px;">${esc(l.nearest_station || '—')}</div>
-              ${l.walk_min != null ? `<div class="fact-sub">徒歩 ${l.walk_min} 分</div>` : ''}
-            </div>
-            <div class="fact">
-              <div class="fact-label">築年数</div>
-              <div class="fact-value">${fmtAge(l.building_age)}</div>
-              ${l.floor_num != null ? `<div class="fact-sub">${l.floor_num}階 / ${l.total_floors || '?'}階建</div>` : ''}
-            </div>
+    <!-- ── PHOTO PANEL ── -->
+    <div class="photo-panel">
+      ${_galleryImgs.length ? `
+        <div class="photo-filter-bar">
+          <button class="pf-chip active" onclick="setFilter('all')">すべて ${_galleryImgs.length}</button>
+          ${fpImgs.length ? `<button class="pf-chip" onclick="setFilter('floor_plan')">間取り ${fpImgs.length}</button>` : ''}
+          ${photoImgs.length ? `<button class="pf-chip" onclick="setFilter('photos')">写真 ${photoImgs.length}</button>` : ''}
+        </div>
+        <div class="photo-main-wrap">
+          <img class="photo-main" id="ph-main" src="" onerror="this.style.opacity='.2'">
+          <button class="photo-nav prev" onclick="navPh(-1)">‹</button>
+          <button class="photo-nav next" onclick="navPh(1)">›</button>
+          <div class="photo-badge" id="ph-badge" style="display:none">FLOOR PLAN</div>
+          <div class="photo-counter" id="ph-ctr"></div>
+        </div>
+        <div class="photo-strip" id="ph-strip">
+          ${_galleryImgs.map((img,i) => {
+            const src = imgSrc(img.url);
+            return `<img class="photo-thumb${img.type==='floor_plan'?' fp':''}" src="${esc(src)}"
+              onclick="jumpPh(${i})" onerror="this.style.display='none'" loading="lazy">`;
+          }).join('')}
+        </div>
+      ` : '<div class="no-photo">📷 写真なし</div>'}
+    </div>
+
+    <!-- ── INFO PANEL ── -->
+    <div class="info-panel">
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab(this,'t-overview')">概要</button>
+        <button class="tab-btn" onclick="switchTab(this,'t-floorplan')">間取り</button>
+        <button class="tab-btn" onclick="switchTab(this,'t-market')">市場</button>
+        <button class="tab-btn" onclick="switchTab(this,'t-commute')">交通</button>
+        ${(l.facilities||[]).length ? `<button class="tab-btn" onclick="switchTab(this,'t-facilities')">施設</button>` : ''}
+      </div>
+
+      <!-- OVERVIEW -->
+      <div class="tab-pane active" id="t-overview">
+        <div class="fact-grid">
+          <div class="fact accent wide">
+            <div class="f-label">月額家賃</div>
+            <div class="f-value accent">¥${fmt(l.rent)}<span style="font-size:13px;font-weight:400;color:var(--muted);">/月</span></div>
+            ${rpsq ? `<div class="f-sub">¥${fmt(rpsq)}/㎡ · ${l.size_m2} m² · ${l.layout || '—'}</div>` : ''}
+          </div>
+          <div class="fact">
+            <div class="f-label">最寄り駅</div>
+            <div class="f-value" style="font-size:13px;">${esc(l.nearest_station || '—')}</div>
+            ${l.walk_min != null ? `<div class="f-sub">徒歩 ${l.walk_min} 分</div>` : ''}
+          </div>
+          <div class="fact">
+            <div class="f-label">築年数 / 階数</div>
+            <div class="f-value" style="font-size:13px;">${fmtAge(l.building_age)}</div>
+            ${l.floor_num != null ? `<div class="f-sub">${l.floor_num}F / ${l.total_floors || '?'}F建</div>` : ''}
           </div>
         </div>
 
-        <!-- Floor plan rooms -->
-        <div class="section">
-          <div class="section-title">間取り詳細</div>
-          ${roomsHtml}
+        <div>
+          ${[
+            l.address      ? ['住所', l.address] : null,
+            l.ward         ? ['区市', l.ward] : null,
+            l.building_type? ['建物種別', l.building_type] : null,
+            l.priority     ? ['備考', l.priority] : null,
+          ].filter(Boolean).map(([k,v]) =>
+            `<div class="info-row"><span class="ir-label">${esc(k)}</span><span class="ir-value">${esc(v)}</span></div>`
+          ).join('')}
         </div>
 
-        <!-- Market context -->
-        <div class="section">
-          <div class="section-title">市場比較</div>
-          <div class="market-pills">
-            <div class="mpill">
-              <div class="mpill-label">家賃順位</div>
-              <div class="mpill-value ${rentPct <= 40 ? 'good' : rentPct >= 70 ? 'warn' : ''}">
-                下から ${rentPct}%
-              </div>
-            </div>
-            ${rpsqVsWard != null ? `
-            <div class="mpill">
-              <div class="mpill-label">${esc(l.ward || '')} 区比</div>
-              <div class="mpill-value ${rpsqVsWard <= 0 ? 'good' : rpsqVsWard >= 10 ? 'warn' : ''}">
-                ${rpsqVsWard > 0 ? '+' : ''}${rpsqVsWard}%
-              </div>
-            </div>` : ''}
-            ${rentVsLayout != null ? `
-            <div class="mpill">
-              <div class="mpill-label">${esc(l.layout || '')} 相場比</div>
-              <div class="mpill-value ${rentVsLayout <= 0 ? 'good' : rentVsLayout >= 10 ? 'warn' : ''}">
-                ${rentVsLayout > 0 ? '+' : ''}${rentVsLayout}%
-              </div>
-            </div>` : ''}
-          </div>
-          <div class="chart-wrap">
-            <canvas id="ch-rent" height="120"></canvas>
-          </div>
-          <p style="font-size:10px;color:var(--muted);margin-top:6px;text-align:center;">
-            全 ${_allListings.length} 件の家賃分布 · 赤線 = この物件
-          </p>
-        </div>
+        ${l.features || l.appliances ? `
+        <div>
+          <div class="s-label">設備</div>
+          ${l.features ? `<div class="tag-wrap" style="margin-bottom:6px;">${
+            l.features.split(',').map(t=>t.trim()).filter(Boolean).map(t=>`<span class="tag">${esc(t)}</span>`).join('')
+          }</div>` : ''}
+          ${l.appliances ? `<div class="tag-wrap"><span style="font-size:10px;color:var(--muted);margin-right:3px;">家電:</span>${
+            l.appliances.split(',').map(t=>t.trim()).filter(Boolean).map(t=>`<span class="tag">${esc(t)}</span>`).join('')
+          }</div>` : ''}
+        </div>` : ''}
 
-        <!-- Features / Description -->
-        ${(l.features || l.appliances || l.detail_text) ? `
-        <div class="section">
-          <div class="section-title">設備・特徴</div>
-          ${l.features ? `<div class="tag-wrap" style="margin-bottom:10px;">${tagList(l.features)}</div>` : ''}
-          ${l.appliances ? `<div class="tag-wrap" style="margin-bottom:10px;"><span style="font-size:10px;color:var(--muted);margin-right:4px;">家電:</span>${tagList(l.appliances)}</div>` : ''}
-          ${l.detail_text ? `<div class="detail-text">${esc(l.detail_text)}</div>` : ''}
+        ${l.detail_text ? `
+        <div>
+          <div class="s-label">詳細</div>
+          <div class="detail-text">${esc(l.detail_text)}</div>
+        </div>` : ''}
+
+        ${l.url
+          ? `<a href="${esc(l.url)}" target="_blank" rel="noopener" class="apply-btn">申込ページへ →</a>`
+          : `<button class="apply-btn" disabled>申込ページなし</button>`}
+      </div>
+
+      <!-- FLOOR PLAN -->
+      <div class="tab-pane" id="t-floorplan">
+        ${rooms.length ? `
+        <div>
+          <div class="s-label">部屋構成</div>
+          <table class="rooms-table">
+            <thead><tr>
+              <th>ラベル</th><th>タイプ</th><th style="text-align:right">面積</th><th>窓</th>
+            </tr></thead>
+            <tbody>
+              ${rooms.map(r => {
+                const area = r.best_area_m2 ?? r.area_m2 ?? r.inferred_area_m2;
+                const inf  = r.area_m2 == null && area != null;
+                const rt   = r.room_type || r.label || '';
+                const col  = ROOM_COLORS[rt] || '#6B7280';
+                return `<tr>
+                  <td>${esc(r.label)}</td>
+                  <td><span class="r-badge" style="background:${col}22;color:${col};">${esc(rt)}</span></td>
+                  <td style="text-align:right" class="num">${area != null ? `${area.toFixed(1)} m²${inf?'*':''}` : '—'}</td>
+                  <td style="text-align:center;color:var(--warn);">${r.has_window ? '☀' : ''}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+          ${rooms.some(r=>r.area_m2==null&&(r.best_area_m2??r.inferred_area_m2)!=null)
+            ? '<p style="font-size:10px;color:var(--muted);margin-top:6px;">* ピクセル比率から推定</p>' : ''}
+          ${fp.living_area_m2 ? `<p style="font-size:11px;color:var(--muted);margin-top:8px;">
+            リビング <strong style="color:var(--text)">${fp.living_area_m2} m²</strong>
+            ${fp.kitchen_open ? ' · オープンキッチン' : ''}
+            · トイレ ${fp.toilet_count||'—'} · 浴室 ${fp.bathroom_count||'—'}
+          </p>` : ''}
+        </div>` : '<p style="color:var(--muted);font-size:12px;">間取りデータがありません。</p>'}
+      </div>
+
+      <!-- MARKET -->
+      <div class="tab-pane" id="t-market">
+        <div class="market-pills">
+          <div class="mpill">
+            <div class="mp-label">家賃順位</div>
+            <div class="mp-value ${rentPct<=40?'good':rentPct>=70?'warn':''}">下から ${rentPct}%</div>
+          </div>
+          ${rpsqVsWard!=null ? `<div class="mpill">
+            <div class="mp-label">${esc(l.ward||'')} 区比</div>
+            <div class="mp-value ${rpsqVsWard<=0?'good':rpsqVsWard>=10?'warn':''}">${rpsqVsWard>0?'+':''}${rpsqVsWard}%</div>
+          </div>` : ''}
+          ${rentVsLay!=null ? `<div class="mpill">
+            <div class="mp-label">${esc(l.layout||'')} 相場比</div>
+            <div class="mp-value ${rentVsLay<=0?'good':rentVsLay>=10?'warn':''}">${rentVsLay>0?'+':''}${rentVsLay}%</div>
+          </div>` : ''}
+        </div>
+        <div>
+          <div class="s-label">家賃分布 — ${_allListings.length} 件</div>
+          <div class="chart-wrap"><canvas id="ch-rent"></canvas></div>
+          <p style="font-size:10px;color:var(--muted);margin-top:5px;text-align:center;">緑 = この物件</p>
+        </div>
+        ${layoutAvg ? `<div class="info-row">
+          <span class="ir-label">${esc(l.layout)} 平均家賃</span>
+          <span class="ir-value">¥${fmt(layoutAvg)}</span>
+        </div>` : ''}
+        ${wardAvgRpsq ? `<div class="info-row">
+          <span class="ir-label">${esc(l.ward)} 平均㎡単価</span>
+          <span class="ir-value">¥${Math.round(wardAvgRpsq).toLocaleString()}/㎡</span>
         </div>` : ''}
       </div>
 
-      <!-- RIGHT COLUMN -->
-      <div class="sticky-col">
-        <!-- Fact card -->
-        <div class="fact-card">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-            <span class="src-badge ${l.source || 'jkk'}">${tag}</span>
-            ${l.priority ? `<span style="font-size:11px;color:var(--accent);font-weight:600;">${esc(l.priority)}</span>` : ''}
-          </div>
-          <div class="rent">¥${fmt(l.rent)}<span style="font-size:14px;font-weight:400;color:var(--muted);">/月</span></div>
-          <div class="rent-sub">${l.size_m2 || '—'} m² · ${l.layout || '—'}</div>
-          ${[
-            l.address ? ['住所', l.address] : null,
-            l.ward ? ['区市', l.ward] : null,
-            l.nearest_station && l.walk_min != null ? ['最寄り駅', `${l.nearest_station} 徒歩${l.walk_min}分`] : null,
-            l.building_age != null ? ['築年数', fmtAge(l.building_age)] : null,
-            (l.floor_num != null && l.total_floors != null) ? ['階数', `${l.floor_num}/${l.total_floors}F`] : null,
-            l.building_type ? ['建物種別', l.building_type] : null,
-          ].filter(Boolean).map(([lbl, val]) =>
-            `<div class="fact-row"><span class="fact-row-label">${esc(lbl)}</span><span class="fact-row-value">${esc(val)}</span></div>`
-          ).join('')}
-          ${l.url
-            ? `<a href="${esc(l.url)}" target="_blank" rel="noopener" class="apply-btn">申込ページへ →</a>`
-            : `<button class="apply-btn" disabled>申込ページなし</button>`}
-        </div>
-
-        <!-- Commute calculator -->
-        <div class="section">
-          <div class="section-title">通勤計算</div>
-          <div class="commute-input-row">
-            <input class="commute-input" id="commute-dest" placeholder="目的地 (例: 新宿駅)"
+      <!-- COMMUTE -->
+      <div class="tab-pane" id="t-commute">
+        <div>
+          <div class="s-label">目的地</div>
+          <div class="commute-row">
+            <input class="commute-input" id="c-dest" placeholder="例: 新宿駅、渋谷駅"
               onkeydown="if(event.key==='Enter')calcCommute('TRANSIT')">
           </div>
-          <div class="commute-modes">
-            <button class="mode-btn" onclick="calcCommute('TRANSIT')">🚃 電車</button>
-            <button class="mode-btn" onclick="calcCommute('DRIVING')">🚗 車</button>
-            <button class="mode-btn" onclick="calcCommute('WALKING')">🚶 徒歩</button>
-            <button class="mode-btn" onclick="calcCommute('BICYCLING')">🚲 自転車</button>
-          </div>
-          <div class="commute-result" id="commute-result"></div>
-          <a class="commute-open-maps" id="commute-gmaps" href="#" target="_blank" rel="noopener" style="display:none;">
-            Google Mapsで開く →
-          </a>
-          <div id="commute-map"></div>
         </div>
+        <div class="mode-btns">
+          <button class="mode-btn" onclick="calcCommute('TRANSIT')">🚃 電車</button>
+          <button class="mode-btn" onclick="calcCommute('DRIVING')">🚗 車</button>
+          <button class="mode-btn" onclick="calcCommute('WALKING')">🚶 徒歩</button>
+          <button class="mode-btn" onclick="calcCommute('BICYCLING')">🚲 自転車</button>
+        </div>
+        <div class="commute-result" id="c-result"></div>
+        <a class="gmaps-link" id="c-gmaps" href="#" target="_blank" style="display:none">Google Mapsで開く →</a>
+        <div id="commute-map"></div>
+      </div>
 
-        <!-- Nearby facilities -->
-        ${facHtml ? `
-        <div class="section">
-          <div class="section-title">周辺施設</div>
-          <div class="fac-list">${facHtml}</div>
-        </div>` : ''}
+      <!-- FACILITIES -->
+      <div class="tab-pane" id="t-facilities">
+        ${(l.facilities||[]).slice(0,15).map(f =>
+          `<div class="fac-item">
+            <span class="fac-icon">${FAC_ICON[f.type]||'📍'}</span>
+            <div>
+              <div style="font-size:12px;">${esc(f.name)}</div>
+              <div style="font-size:10px;color:var(--muted);">${FAC_LABEL[f.type]||f.type}</div>
+            </div>
+            <span class="fac-dist">${facDist(f.distance_m)}</span>
+          </div>`
+        ).join('') || '<p style="color:var(--muted);font-size:12px;">施設データがありません。</p>'}
       </div>
     </div>
-  `;
 
-  drawRentChart();
+  </div>`;
+
   updateGallery();
+  drawRentChart();
 }
 
 // ── gallery ───────────────────────────────────────────────────────────────────
+function imgSrc(url) {
+  return url.startsWith('/') ? API.replace('/api','') + url : url;
+}
 function filteredImgs() {
-  if (_galleryFilter === 'all') return _galleryImgs;
   if (_galleryFilter === 'floor_plan') return _galleryImgs.filter(i => i.type === 'floor_plan');
-  return _galleryImgs.filter(i => i.type !== 'floor_plan');
+  if (_galleryFilter === 'photos')    return _galleryImgs.filter(i => i.type !== 'floor_plan');
+  return _galleryImgs;
 }
-
-function setGalleryFilter(f) {
-  _galleryFilter = f;
-  _galleryIdx = 0;
-  document.querySelectorAll('.gf-btn').forEach(b =>
-    b.classList.toggle('active', b.textContent.startsWith(f === 'all' ? 'すべて' : f === 'floor_plan' ? '間取り' : '写真')));
+function setFilter(f) {
+  _galleryFilter = f; _galleryIdx = 0;
+  document.querySelectorAll('.pf-chip').forEach(b => {
+    b.classList.toggle('active',
+      (f==='all' && b.textContent.startsWith('すべて')) ||
+      (f==='floor_plan' && b.textContent.startsWith('間取り')) ||
+      (f==='photos' && b.textContent.startsWith('写真'))
+    );
+  });
   updateGallery();
 }
-
-function navPhoto(dir) {
-  const imgs = filteredImgs();
-  _galleryIdx = (_galleryIdx + dir + imgs.length) % imgs.length;
-  updateGallery();
-}
-
-function jumpPhoto(idx) {
-  // idx is absolute index into _galleryImgs; find position in current filter
-  const img = _galleryImgs[idx];
+function navPh(d) { const fi=filteredImgs(); _galleryIdx=(_galleryIdx+d+fi.length)%fi.length; updateGallery(); }
+function jumpPh(absIdx) {
+  const img = _galleryImgs[absIdx];
   const fi = filteredImgs();
   const pos = fi.indexOf(img);
-  if (pos >= 0) { _galleryIdx = pos; updateGallery(); }
-  else { _galleryFilter = 'all'; _galleryIdx = idx; updateGallery(); }
+  if (pos >= 0) { _galleryIdx = pos; }
+  else { _galleryFilter='all'; _galleryIdx=absIdx; }
+  updateGallery();
 }
-
 function updateGallery() {
-  const imgs = filteredImgs();
-  if (!imgs.length) return;
-  const img = imgs[_galleryIdx];
-  const src = img.url.startsWith('/') ? API.replace('/api','') + img.url : img.url;
-  const mainEl = document.getElementById('photo-main');
-  if (mainEl) mainEl.src = src;
-  const counter = document.getElementById('photo-counter');
-  if (counter) counter.textContent = `${_galleryIdx + 1} / ${imgs.length}`;
-  const badge = document.getElementById('photo-type-badge');
-  if (badge) {
-    if (img.type === 'floor_plan') { badge.textContent = 'FLOOR PLAN'; badge.style.display = ''; }
-    else badge.style.display = 'none';
-  }
-  // Update strip highlights
+  const fi = filteredImgs();
+  if (!fi.length) return;
+  const img = fi[_galleryIdx];
+  const mainEl = document.getElementById('ph-main');
+  if (mainEl) { mainEl.src = imgSrc(img.url); mainEl.style.opacity='1'; }
+  const ctr = document.getElementById('ph-ctr');
+  if (ctr) ctr.textContent = `${_galleryIdx+1} / ${fi.length}`;
+  const badge = document.getElementById('ph-badge');
+  if (badge) badge.style.display = img.type==='floor_plan' ? '' : 'none';
   document.querySelectorAll('.photo-thumb').forEach((el, i) =>
     el.classList.toggle('active', _galleryImgs[i] === img));
 }
 
-// ── rent histogram chart ───────────────────────────────────────────────────────
+// ── tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(btn, id) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b===btn));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id===id));
+  if (id === 't-market' && !_rentChart) drawRentChart();
+  if (id === 't-commute') { setTimeout(() => { if (_mapsReady && !_map) _initMap(); }, 100); }
+}
+
+// ── rent histogram ────────────────────────────────────────────────────────────
 function drawRentChart() {
   const canvas = document.getElementById('ch-rent');
   if (!canvas || !_allListings.length) return;
   const step = 10000;
   const rents = _allListings.map(x => x.rent);
-  const lo = Math.floor(Math.min(...rents) / step) * step;
-  const hi = Math.ceil(Math.max(...rents) / step) * step;
+  const lo = Math.floor(Math.min(...rents)/step)*step;
+  const hi = Math.ceil(Math.max(...rents)/step)*step;
   const bins = [];
-  for (let v = lo; v < hi; v += step) bins.push({ l: v, n: rents.filter(r => r >= v && r < v + step).length });
-  const myBin = Math.floor(_listing.rent / step) * step;
-  const colors = bins.map(b => b.l === myBin ? '#1D9E75' : 'rgba(0,0,0,.12)');
+  for (let v=lo; v<hi; v+=step) bins.push({l:v, n:rents.filter(r=>r>=v&&r<v+step).length});
+  const myBin = Math.floor(_listing.rent/step)*step;
   if (_rentChart) _rentChart.destroy();
   _rentChart = new Chart(canvas, {
-    type: 'bar',
-    data: {
-      labels: bins.map(b => `¥${(b.l/1000).toFixed(0)}k`),
-      datasets: [{ data: bins.map(b => b.n), backgroundColor: colors, borderRadius: 3, borderSkipped: false }],
+    type:'bar',
+    data:{
+      labels: bins.map(b=>`¥${(b.l/1000).toFixed(0)}k`),
+      datasets:[{
+        data: bins.map(b=>b.n),
+        backgroundColor: bins.map(b => b.l===myBin ? '#1D9E75' : 'rgba(255,255,255,.1)'),
+        borderRadius:3, borderSkipped:false,
+      }],
     },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { callbacks: {
-        title: ctx => `¥${((bins[ctx[0].dataIndex].l)/1000).toFixed(0)}k〜`,
-        label: ctx => `${ctx.raw} 件`,
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{
+        title:ctx=>`¥${(bins[ctx[0].dataIndex].l/1000).toFixed(0)}k〜`,
+        label:ctx=>`${ctx.raw} 件`,
       }}},
-      scales: {
-        x: { grid: { display: false }, ticks: { color: '#9a9a94', font: { family: 'DM Mono', size: 9 }, maxRotation: 45 } },
-        y: { grid: { color: 'rgba(0,0,0,.05)' }, ticks: { color: '#9a9a94', font: { family: 'DM Mono', size: 9 } } },
+      scales:{
+        x:{grid:{display:false},ticks:{color:'rgba(255,255,255,.3)',font:{family:'DM Mono',size:9},maxRotation:45}},
+        y:{grid:{color:'rgba(255,255,255,.05)'},ticks:{color:'rgba(255,255,255,.3)',font:{family:'DM Mono',size:9}}},
       },
     },
   });
 }
 
-// ── commute calculator ────────────────────────────────────────────────────────
+// ── commute ───────────────────────────────────────────────────────────────────
 function calcCommute(mode) {
-  const dest = document.getElementById('commute-dest')?.value.trim();
-  if (!dest) { document.getElementById('commute-dest')?.focus(); return; }
-  const l = _listing;
-  if (!l.lat || !l.lng) {
-    showCommuteResult('この物件の位置情報がありません。');
-    return;
-  }
-
+  const dest = document.getElementById('c-dest')?.value.trim();
+  if (!dest) { document.getElementById('c-dest')?.focus(); return; }
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-  event.target?.classList.add('active');
+  event?.target?.classList.add('active');
+  const l = _listing;
+  const gmUrl = `https://www.google.com/maps/dir/?api=1&origin=${l.lat},${l.lng}&destination=${encodeURIComponent(dest)}&travelmode=${mode.toLowerCase()}`;
+  document.getElementById('c-gmaps').href = gmUrl;
+  document.getElementById('c-gmaps').style.display = '';
 
   if (mode === 'TRANSIT') {
-    // Open Google Maps for transit (Japan transit not available via JS API)
-    const gmUrl = `https://www.google.com/maps/dir/?api=1&origin=${l.lat},${l.lng}&destination=${encodeURIComponent(dest)}&travelmode=transit`;
-    document.getElementById('commute-gmaps').href = gmUrl;
-    document.getElementById('commute-gmaps').style.display = '';
-    showCommuteResult('電車の経路はGoogle Mapsで確認できます。下のリンクをご利用ください。');
-    showCommuteMap(l.lat, l.lng, dest, mode);
+    showCommuteResult('電車の経路はGoogle Mapsで確認できます ↓');
     return;
   }
-
-  if (!_mapsApiReady || !_dirService) {
-    showCommuteResult('地図の読み込み中です。しばらくお待ちください。');
-    return;
-  }
-
+  if (!_mapsReady || !_dirService) { showCommuteResult('地図読み込み中…'); return; }
   showCommuteResult('計算中…');
   _dirService.route({
-    origin: { lat: l.lat, lng: l.lng },
-    destination: dest,
-    travelMode: google.maps.TravelMode[mode],
+    origin:{lat:l.lat,lng:l.lng}, destination:dest,
+    travelMode:google.maps.TravelMode[mode],
   }, (result, status) => {
-    if (status !== 'OK') {
-      showCommuteResult(`経路が見つかりませんでした (${status})`);
-      return;
-    }
+    if (status !== 'OK') { showCommuteResult(`経路なし (${status})`); return; }
     const leg = result.routes[0].legs[0];
-    showCommuteResult(`${modeLabel(mode)}: <strong>${leg.duration.text}</strong> · ${leg.distance.text}`);
-    const gmUrl = `https://www.google.com/maps/dir/?api=1&origin=${l.lat},${l.lng}&destination=${encodeURIComponent(dest)}&travelmode=${mode.toLowerCase()}`;
-    document.getElementById('commute-gmaps').href = gmUrl;
-    document.getElementById('commute-gmaps').style.display = '';
-    if (_dirRenderer) _dirRenderer.setDirections(result);
-    const mapEl = document.getElementById('commute-map');
-    if (mapEl) { mapEl.classList.add('visible'); }
+    showCommuteResult(`<strong>${leg.duration.text}</strong> · ${leg.distance.text}`);
+    _dirRenderer?.setDirections(result);
+    document.getElementById('commute-map').classList.add('on');
   });
 }
-
-function modeLabel(m) {
-  return { TRANSIT:'電車', DRIVING:'車', WALKING:'徒歩', BICYCLING:'自転車' }[m] || m;
-}
-
 function showCommuteResult(html) {
-  const el = document.getElementById('commute-result');
-  if (el) { el.innerHTML = html; el.classList.add('visible'); }
+  const el = document.getElementById('c-result');
+  if (el) { el.innerHTML = html; el.classList.add('on'); }
 }
 
-function showCommuteMap(lat, lng, dest, mode) {
-  const mapEl = document.getElementById('commute-map');
-  if (!mapEl) return;
-  mapEl.classList.add('visible');
-  if (_map && _dirRenderer) {
-    _map.setCenter({ lat, lng });
-    _map.setZoom(14);
-  }
-}
-
-// ── Google Maps init ──────────────────────────────────────────────────────────
-function initMap() {
+// ── Google Maps ───────────────────────────────────────────────────────────────
+function _initMap() {
   const l = _listing;
-  if (!l || !l.lat || !l.lng) return;
-  const mapEl = document.getElementById('commute-map');
-  if (!mapEl) return;
-  mapEl.classList.add('visible');
-  _map = new google.maps.Map(mapEl, {
-    center: { lat: l.lat, lng: l.lng },
-    zoom: 15,
-    mapTypeControl: false,
-    streetViewControl: false,
-    fullscreenControl: false,
-    styles: [
-      { featureType:'poi', elementType:'all', stylers:[{ visibility:'off' }] },
-      { featureType:'transit', elementType:'all', stylers:[{ visibility:'simplified' }] },
-    ],
+  if (!l?.lat || !l?.lng) return;
+  const el = document.getElementById('commute-map');
+  if (!el) return;
+  el.classList.add('on');
+  _map = new google.maps.Map(el, {
+    center:{lat:l.lat,lng:l.lng}, zoom:15,
+    mapTypeControl:false, streetViewControl:false, fullscreenControl:false,
+    styles:[{featureType:'all',elementType:'labels.text.fill',stylers:[{color:'#9ca3af'}]},
+            {featureType:'water',elementType:'geometry',stylers:[{color:'#1e293b'}]},
+            {featureType:'landscape',elementType:'geometry',stylers:[{color:'#1f2937'}]},
+            {featureType:'road',elementType:'geometry',stylers:[{color:'#374151'}]},
+            {featureType:'poi',elementType:'all',stylers:[{visibility:'off'}]}],
   });
   new google.maps.Marker({
-    position: { lat: l.lat, lng: l.lng },
-    map: _map,
-    title: l.name,
-    icon: {
-      path: google.maps.SymbolPath.CIRCLE,
-      scale: 9,
-      fillColor: '#1D9E75',
-      fillOpacity: 1,
-      strokeColor: '#fff',
-      strokeWeight: 2,
-    },
+    position:{lat:l.lat,lng:l.lng}, map:_map, title:l.name,
+    icon:{path:google.maps.SymbolPath.CIRCLE,scale:9,
+          fillColor:'#1D9E75',fillOpacity:1,strokeColor:'#fff',strokeWeight:2},
   });
   _dirService  = new google.maps.DirectionsService();
-  _dirRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: false });
+  _dirRenderer = new google.maps.DirectionsRenderer({suppressMarkers:false});
   _dirRenderer.setMap(_map);
 }
 
 // ── share ─────────────────────────────────────────────────────────────────────
 function shareProperty() {
-  const url = location.href;
-  if (navigator.share) {
-    navigator.share({ title: _listing?.name || '物件詳細', url });
-  } else {
-    navigator.clipboard?.writeText(url).then(() => {
-      const btn = document.getElementById('share-btn');
-      const orig = btn.textContent;
-      btn.textContent = '✓ コピー済み';
-      setTimeout(() => btn.textContent = orig, 1500);
-    });
-  }
+  if (navigator.share) { navigator.share({title:_listing?.name||'物件詳細',url:location.href}); return; }
+  navigator.clipboard?.writeText(location.href).then(() => {
+    const b = document.getElementById('share-btn');
+    const t = b.textContent; b.textContent='✓ コピー';
+    setTimeout(()=>b.textContent=t, 1500);
+  });
 }
 
 boot();
