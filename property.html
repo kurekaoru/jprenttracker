@@ -14,7 +14,7 @@
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="/detail-parser.js?v=2"></script>
+<script src="detail-parser.js?v=2"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
 :root {
@@ -806,7 +806,8 @@ function showFacChip(color, name, typeLabel, distM) {
   const chip = document.getElementById('fac-chip');
   if (!chip) return;
   chip.style.borderLeft = `3px solid ${color}`;
-  chip.innerHTML = `<span style="font-weight:600;">${esc(name)}</span><br><span style="color:#777;font-size:10px;">${typeLabel}${distM!=null?' · '+distM+'m':''}</span>`;
+  chip.innerHTML = `<span style="font-weight:600;">${esc(name)}</span><br>`
+    + `<span class="fac-chip-sub" style="color:#777;font-size:10px;">${typeLabel}${distM!=null?' · '+distM+'m':''}</span>`;
   chip.style.display = 'block';
 }
 function hideFacChip() { const c=document.getElementById('fac-chip'); if(c) c.style.display='none'; }
@@ -918,12 +919,19 @@ async function loadFacilities() {
 }
 
 function _renderWalkRoute(result) {
-  const pts = result.routes[0].legs[0].steps.flatMap(s=>decodePolyline(s.polyline.points));
+  const leg = result.routes[0].legs[0];
+  const pts = leg.steps.flatMap(s=>decodePolyline(s.polyline.points));
   _facTransitLines.push(new google.maps.Polyline({
     path:pts, strokeWeight:2, strokeOpacity:0,
     icons:[{icon:{path:google.maps.SymbolPath.CIRCLE,fillColor:'#4285F4',fillOpacity:1,strokeWeight:0,scale:3.5},offset:'0',repeat:'20px'}],
     map:_map,
   }));
+  // Update chip: append walking duration so user sees "Type · 350m · 徒歩5分"
+  const chip = document.getElementById('fac-chip');
+  const sub = chip?.querySelector('.fac-chip-sub');
+  if (sub && leg.duration?.text) {
+    sub.textContent += ' · 徒歩' + leg.duration.text;
+  }
 }
 
 function decodePolyline(encoded) {
