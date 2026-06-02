@@ -1513,7 +1513,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 11:17 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 11:23 JST</p>
       </div>
 
 
@@ -1791,18 +1791,18 @@
       </div>
     </div>
 
-    <!-- Email area -->
+    <!-- Slack / Email manual area -->
     <div id="notif-manual-area" style="display:none;" class="notif-input-area">
-      <label data-i18n="email_address">メールアドレス</label>
+      <label id="notif-target-label">URL</label>
       <input type="text" id="notif-target" class="notif-target-input"
-             placeholder="you@example.com"
+             placeholder=""
              onkeydown="if(event.key==='Enter')submitAddNotif()">
       <label data-i18n="label_optional">ラベル（任意）</label>
       <input type="text" id="notif-label"
              style="width:100%;padding:8px 10px;margin-bottom:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:13px;font-family:var(--font);"
              data-i18n-ph="label_ph" placeholder="例: 自分のメール"
              onkeydown="if(event.key==='Enter')submitAddNotif()">
-      <div id="notif-hint" style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5;" data-i18n="smtp_hint">サーバーの .env に SMTP 設定が必要です。</div>
+      <div id="notif-hint" style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5;"></div>
       <button class="modal-submit" onclick="submitAddNotif()" data-i18n="add_btn">追加する</button>
     </div>
   </div>
@@ -6898,11 +6898,22 @@ function selectNotifType(type) {
   );
   const oauthArea  = document.getElementById('notif-oauth-area');
   const manualArea = document.getElementById('notif-manual-area');
+  const labelEl    = document.getElementById('notif-target-label');
+  const inputEl    = document.getElementById('notif-target');
+  const hintEl     = document.getElementById('notif-hint');
 
-  oauthArea.style.display    = 'none';
-  manualArea.style.display   = 'none';
+  oauthArea.style.display  = 'none';
+  manualArea.style.display = 'none';
 
-  if (type === 'email') {
+  if (type === 'slack') {
+    labelEl.textContent    = 'Webhook URL';
+    inputEl.placeholder    = 'https://hooks.slack.com/services/…';
+    hintEl.textContent     = 'Slack の「Incoming Webhooks」アプリから URL を取得してください。';
+    manualArea.style.display = 'block';
+  } else if (type === 'email') {
+    labelEl.textContent    = t('email_address');
+    inputEl.placeholder    = 'you@example.com';
+    hintEl.textContent     = t('smtp_hint');
     manualArea.style.display = 'block';
   } else {
     oauthArea.style.display = 'block';
