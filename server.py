@@ -280,6 +280,30 @@ def _init_db():
     """)
     con.commit()
 
+    con.executescript("""
+        CREATE TABLE IF NOT EXISTS user_foryou_impressions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     INTEGER NOT NULL,
+            listing_id  TEXT    NOT NULL,
+            shown_at    TEXT    DEFAULT (datetime('now')),
+            ward_hit    INTEGER DEFAULT 0,
+            layout_hit  INTEGER DEFAULT 0,
+            rent_hit    INTEGER DEFAULT 0,
+            geo_hit     INTEGER DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_fyi_user ON user_foryou_impressions(user_id, listing_id);
+        CREATE TABLE IF NOT EXISTS user_score_weights (
+            user_id    INTEGER PRIMARY KEY,
+            ward_w     REAL DEFAULT 1.0,
+            layout_w   REAL DEFAULT 1.0,
+            rent_w     REAL DEFAULT 1.0,
+            size_w     REAL DEFAULT 1.0,
+            geo_w      REAL DEFAULT 1.0,
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
+    """)
+    con.commit()
+
     # listings floor_plan_data column
     try:
         con.execute("ALTER TABLE listings ADD COLUMN floor_plan_data TEXT")
@@ -894,6 +918,23 @@ def set_user_profile():
     return jsonify({"status": "ok"})
 
 
+# ── For-You weight helpers ────────────────────────────────────────────────────
+
+def _upsert_weights(con, user_id, ward_w, layout_w, rent_w, size_w, geo_w,
+                    dw=0.0, dlay=0.0, dren=0.0, dsz=0.0, dge=0.0):
+    """Apply deltas to a user's scoring dimension weights, clamped to [0.3, 3.0]."""
+    def _c(v): return max(0.3, min(3.0, v))
+    nw, nl, nr, ns, ng = _c(ward_w+dw), _c(layout_w+dlay), _c(rent_w+dren), _c(size_w+dsz), _c(geo_w+dge)
+    con.execute("""
+        INSERT INTO user_score_weights (user_id, ward_w, layout_w, rent_w, size_w, geo_w, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(user_id) DO UPDATE SET
+            ward_w=excluded.ward_w, layout_w=excluded.layout_w,
+            rent_w=excluded.rent_w, size_w=excluded.size_w,
+            geo_w=excluded.geo_w,   updated_at=excluded.updated_at
+    """, (user_id, nw, nl, nr, ns, ng))
+
+
 # ── Saved listings ────────────────────────────────────────────────────────────
 
 @app.route("/api/user/saved", methods=["GET"])
@@ -918,6 +959,27 @@ def save_listing(listing_id):
         "INSERT OR IGNORE INTO user_saved_listings (user_id, listing_id) VALUES (?,?)",
         (user_id, listing_id)
     )
+    # positive weight update: boost dimensions that fired when this listing was shown in for_you
+    imp = con.execute(
+        "SELECT ward_hit, layout_hit, rent_hit, geo_hit FROM user_foryou_impressions "
+        "WHERE user_id=? AND listing_id=? ORDER BY shown_at DESC LIMIT 1",
+        (user_id, listing_id)
+    ).fetchone()
+    if imp:
+        uw = con.execute(
+            "SELECT ward_w, layout_w, rent_w, size_w, geo_w FROM user_score_weights WHERE user_id=?",
+            (user_id,)
+        ).fetchone()
+        ww = uw["ward_w"]   if uw else 1.0
+        lw = uw["layout_w"] if uw else 1.0
+        rw = uw["rent_w"]   if uw else 1.0
+        sw = uw["size_w"]   if uw else 1.0
+        gw = uw["geo_w"]    if uw else 1.0
+        _upsert_weights(con, user_id, ww, lw, rw, sw, gw,
+                        dw   = 0.05 if imp["ward_hit"]   else 0,
+                        dlay = 0.05 if imp["layout_hit"] else 0,
+                        dren = 0.05 if imp["rent_hit"]   else 0,
+                        dge  = 0.05 if imp["geo_hit"]    else 0)
     con.commit()
     con.close()
     return jsonify({"status": "ok"})
@@ -1114,6 +1176,38 @@ def for_you():
                 best = max(best, 0.3)
         return best
 
+    # ── load per-user scoring weights (fall back to global avg of experienced users) ──
+    uw = con.execute(
+        "SELECT ward_w, layout_w, rent_w, size_w, geo_w FROM user_score_weights WHERE user_id=?",
+        (user_id,)
+    ).fetchone()
+    if not uw:
+        uw = con.execute("""
+            SELECT AVG(w.ward_w) ward_w, AVG(w.layout_w) layout_w,
+                   AVG(w.rent_w) rent_w,  AVG(w.size_w)  size_w,
+                   AVG(w.geo_w)  geo_w
+              FROM user_score_weights w
+              JOIN (SELECT user_id FROM user_saved_listings
+                     GROUP BY user_id HAVING COUNT(*) >= 5) q ON q.user_id = w.user_id
+        """).fetchone()
+    ward_w   = (uw["ward_w"]   or 1.0) if uw and uw["ward_w"]   else 1.0
+    layout_w = (uw["layout_w"] or 1.0) if uw and uw["layout_w"] else 1.0
+    rent_w   = (uw["rent_w"]   or 1.0) if uw and uw["rent_w"]   else 1.0
+    size_w   = (uw["size_w"]   or 1.0) if uw and uw["size_w"]   else 1.0
+    geo_w    = (uw["geo_w"]    or 1.0) if uw and uw["geo_w"]    else 1.0
+
+    # ── impression counts for penalty (shown before but never viewed) ─────────
+    imp_rows = con.execute("""
+        SELECT fi.listing_id, COUNT(*) imp_count
+          FROM user_foryou_impressions fi
+         WHERE fi.user_id = ?
+           AND fi.listing_id NOT IN (
+               SELECT listing_id FROM user_listing_views WHERE user_id = ?
+           )
+         GROUP BY fi.listing_id
+    """, (user_id, user_id)).fetchall()
+    imp_counts = {r["listing_id"]: r["imp_count"] for r in imp_rows}
+
     # ── score candidate listings ─────────────────────────────────────────────
     new_cutoff = (now - timedelta(days=7)).isoformat()
 
@@ -1124,46 +1218,103 @@ def for_you():
         " WHERE disappeared_at IS NULL AND rent > 0 "
         " ORDER BY last_seen DESC LIMIT 800",
     ).fetchall()
-    con.close()
 
     results = []
     for r in candidate_rows:
         if r["id"] in seen_ids:
             continue
+        ward_hit = layout_hit = rent_hit = geo_hit = 0
         score = 0.0
-        score += ward_score.get(r["ward"] or "", 0)
-        score += layout_score.get(r["layout"] or "", 0)
+
+        ws = ward_score.get(r["ward"] or "", 0)
+        if ws:
+            score += ws * ward_w
+            ward_hit = 1
+
+        ls = layout_score.get(r["layout"] or "", 0)
+        if ls:
+            score += ls * layout_w
+            layout_hit = 1
+
         if r["rent"] is not None and rent_lo is not None and rent_hi is not None:
             if rent_lo <= r["rent"] <= rent_hi:
-                score += 2
+                score += 2 * rent_w
+                rent_hit = 1
             elif rent_mid is not None and abs(r["rent"] - rent_mid) <= rent_mid * 0.3:
-                score += 1
+                score += 1 * rent_w
+                rent_hit = 1
+
         if r["size_m2"] is not None and size_lo is not None and size_hi is not None:
             if size_lo <= r["size_m2"] <= size_hi:
-                score += 1
-        if (r["ward"] or "") in ward_score and (r["layout"] or "") in layout_score:
-            score += 1  # ward+layout combo bonus
+                score += 1 * size_w
+
+        if ward_hit and layout_hit:
+            score += 1  # combo bonus (intentionally unweighted)
+
         if r["first_seen"] and r["first_seen"] >= new_cutoff:
-            score += 0.5  # freshness bonus
-        score += _proximity_score(r["lat"], r["lng"])
+            score += 0.5  # freshness (unweighted)
+
+        gp = _proximity_score(r["lat"], r["lng"])
+        if gp:
+            score += gp * geo_w
+            geo_hit = 1
+
+        # impression penalty: -0.4 per prior ignored showing, capped at -2.0
+        score -= min(imp_counts.get(r["id"], 0) * 0.4, 2.0)
+
         if score < 1:
             continue
-        results.append((score, dict(r)))
+        results.append((score, dict(r), ward_hit, layout_hit, rent_hit, geo_hit))
 
     results.sort(key=lambda x: -x[0])
-    listings = [row for _, row in results[:10]]
+    top10 = results[:10]
+    listings = [row for _, row, *_ in top10]
+
+    # ── log impressions ───────────────────────────────────────────────────────
+    shown_at = now.isoformat()
+    con.executemany(
+        "INSERT INTO user_foryou_impressions "
+        "(user_id, listing_id, shown_at, ward_hit, layout_hit, rent_hit, geo_hit) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [(user_id, row["id"], shown_at, wh, lh, rh, gh) for _, row, wh, lh, rh, gh in top10],
+    )
+
+    # ── negative weight nudge: listings shown 3+ times ≥14 days ago, still unseen ──
+    ignored = con.execute("""
+        SELECT listing_id, ward_hit, layout_hit, rent_hit, geo_hit, COUNT(*) n
+          FROM user_foryou_impressions
+         WHERE user_id = ?
+           AND shown_at < ?
+           AND listing_id NOT IN (SELECT listing_id FROM user_listing_views WHERE user_id = ?)
+         GROUP BY listing_id HAVING n >= 3
+    """, (user_id, (now - timedelta(days=14)).isoformat(), user_id)).fetchall()
+
+    if ignored:
+        dw = dlay = dren = dsz = dge = 0.0
+        for row in ignored:
+            if row["ward_hit"]:   dw   -= 0.02
+            if row["layout_hit"]: dlay -= 0.02
+            if row["rent_hit"]:   dren -= 0.02
+            if row["geo_hit"]:    dge  -= 0.02
+        _upsert_weights(con, user_id, ward_w, layout_w, rent_w, size_w, geo_w,
+                        dw, dlay, dren, dsz, dge)
+
+    con.commit()
+    con.close()
 
     rent_range = None
     if rent_lo is not None and rent_hi is not None:
         rent_range = [int(rent_lo), int(rent_hi)]
 
     profile = {
-        "top_wards":   top_wards[:3],
-        "top_layouts": top_layouts[:3],
-        "rent_range":  rent_range,
-        "centroids":   centroids,
-        "view_count":  len(view_rows),
-        "save_count":  len(saved_ids),
+        "top_wards":    top_wards[:3],
+        "top_layouts":  top_layouts[:3],
+        "rent_range":   rent_range,
+        "centroids":    centroids,
+        "score_weights": {"ward": round(ward_w, 2), "layout": round(layout_w, 2),
+                          "rent": round(rent_w, 2), "geo": round(geo_w, 2)},
+        "view_count":   len(view_rows),
+        "save_count":   len(saved_ids),
     }
     return jsonify({"listings": listings, "profile": profile, "message": None})
 
