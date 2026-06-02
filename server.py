@@ -955,6 +955,119 @@ def record_view(listing_id):
     return jsonify({"status": "ok"})
 
 
+@app.route("/api/user/for_you")
+@jwt_required()
+def for_you():
+    """
+    Return up to 10 unseen listings scored by implicit preference inferred from
+    the user's view + save history.  Also returns a brief profile summary.
+    """
+    user_id = int(get_jwt_identity())
+    con = db()
+
+    # ── collect signal rows ───────────────────────────────────────────────────
+    view_rows = con.execute(
+        "SELECT listing_id, view_count FROM user_listing_views "
+        "WHERE user_id=? ORDER BY last_viewed DESC LIMIT 60",
+        (user_id,),
+    ).fetchall()
+    saved_ids = {r["listing_id"] for r in con.execute(
+        "SELECT listing_id FROM user_saved_listings WHERE user_id=?", (user_id,)
+    ).fetchall()}
+
+    if len(view_rows) < 3:
+        con.close()
+        return jsonify({"listings": [], "profile": None,
+                        "message": "もっと物件を見ると、あなたへのおすすめが表示されます。"})
+
+    seen_ids = {r["listing_id"] for r in view_rows} | saved_ids
+
+    # weight: saved=4, viewed weight = view_count (capped at 5)
+    weights: dict[str, float] = {}
+    for r in view_rows:
+        weights[r["listing_id"]] = min(r["view_count"], 5)
+    for lid in saved_ids:
+        weights[lid] = weights.get(lid, 0) + 4
+
+    # ── load signal listing details ──────────────────────────────────────────
+    placeholders = ",".join("?" * len(weights))
+    sig_rows = con.execute(
+        f"SELECT id, ward, layout, rent, size_m2 FROM listings WHERE id IN ({placeholders})",
+        list(weights.keys()),
+    ).fetchall()
+
+    # weighted frequency maps
+    from collections import Counter
+    ward_ctr: Counter = Counter()
+    layout_ctr: Counter = Counter()
+    rents, sizes = [], []
+    for r in sig_rows:
+        w = weights.get(r["id"], 1)
+        if r["ward"]:   ward_ctr[r["ward"]]     += w
+        if r["layout"]: layout_ctr[r["layout"]] += w
+        if r["rent"]:   rents.extend([r["rent"]] * int(w))
+        if r["size_m2"]: sizes.extend([r["size_m2"]] * int(w))
+
+    top_wards   = [w for w, _ in ward_ctr.most_common(3)]
+    top_layouts = [l for l, _ in layout_ctr.most_common(3)]
+    ward_score  = {w: 3 - i for i, w in enumerate(top_wards)}
+    layout_score= {l: 3 - i for i, l in enumerate(top_layouts)}
+
+    rents.sort(); sizes.sort()
+    def _pct(lst, lo, hi):
+        if not lst: return 0, float("inf")
+        return lst[int(len(lst)*lo)], lst[int(len(lst)*hi) - 1]
+    rent_lo, rent_hi   = _pct(rents, 0.2, 0.8)
+    size_lo, size_hi   = _pct(sizes, 0.2, 0.8)
+    rent_mid = (rent_lo + rent_hi) / 2 if rents else 0
+
+    # ── score candidate listings ─────────────────────────────────────────────
+    from datetime import datetime, timedelta
+    new_cutoff = (datetime.now() - timedelta(days=7)).isoformat()
+
+    candidate_rows = con.execute(
+        "SELECT id, name, ward, layout, rent, size_m2, lat, lng, "
+        "       nearest_station, walk_min, first_seen, source, thumbnail_url "
+        "  FROM listings "
+        " WHERE disappeared_at IS NULL AND rent > 0 "
+        " ORDER BY last_seen DESC LIMIT 800",
+    ).fetchall()
+    con.close()
+
+    results = []
+    for r in candidate_rows:
+        if r["id"] in seen_ids:
+            continue
+        score = 0.0
+        score += ward_score.get(r["ward"] or "", 0)
+        score += layout_score.get(r["layout"] or "", 0)
+        if r["rent"] and rent_lo <= r["rent"] <= rent_hi:
+            score += 2
+        elif r["rent"] and abs(r["rent"] - rent_mid) <= rent_mid * 0.3:
+            score += 1
+        if r["size_m2"] and size_lo <= r["size_m2"] <= size_hi:
+            score += 1
+        if (r["ward"] or "") in ward_score and (r["layout"] or "") in layout_score:
+            score += 1  # combo bonus
+        if r["first_seen"] and r["first_seen"] >= new_cutoff:
+            score += 0.5  # freshness bonus
+        if score < 1:
+            continue
+        results.append((score, dict(r)))
+
+    results.sort(key=lambda x: -x[0])
+    listings = [row for _, row in results[:10]]
+
+    profile = {
+        "top_wards":   top_wards[:3],
+        "top_layouts": top_layouts[:3],
+        "rent_range":  [int(rent_lo), int(rent_hi)],
+        "view_count":  len(view_rows),
+        "save_count":  len(saved_ids),
+    }
+    return jsonify({"listings": listings, "profile": profile, "message": None})
+
+
 # ── Listing facilities ────────────────────────────────────────────────────────
 
 @app.route("/api/images/<int:image_id>")

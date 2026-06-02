@@ -502,6 +502,10 @@
   .src-tag.jkk   { background: #dc2626; }
   .src-tag.ur    { background: #3a86ff; }
   .src-tag.suumo { background: #16a34a; }
+  .fy-chip { display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px; font-family:var(--mono); }
+  .fy-chip.ward   { background:rgba(93,202,165,.15); color:var(--accent); border:1px solid rgba(93,202,165,.3); }
+  .fy-chip.layout { background:rgba(99,102,241,.15); color:#a5b4fc; border:1px solid rgba(99,102,241,.3); }
+  .fy-chip.rent   { background:rgba(239,159,39,.12); color:#fbbf24; border:1px solid rgba(239,159,39,.25); }
   .route-btn {
     font-size: 11px; padding: 3px 8px; border-radius: 6px; border: none; cursor: pointer;
     background: var(--surface2); color: var(--text); transition: background 0.1s;
@@ -1171,6 +1175,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
       <span class="rail-tip" data-i18n="panel_favourites">お気に入り</span>
     </button>
+    <button class="rail-btn" id="rail-foryou" onclick="openPanel('foryou')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      <span class="rail-tip">おすすめ</span>
+    </button>
     <button class="rail-btn" id="rail-layers" onclick="openPanel('layers')" style="margin-top:auto;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
       <span class="rail-tip" data-i18n="map_layers">地図レイヤー</span>
@@ -1456,6 +1464,12 @@
         </div>
       </div>
 
+      <!-- For You page -->
+      <div class="panel-page" id="panel-foryou">
+        <div id="foryou-profile" style="margin-bottom:10px;"></div>
+        <div id="foryou-table" style="color:var(--muted);font-size:11px;"></div>
+      </div>
+
       <!-- Disappeared page -->
       <div class="panel-page" id="panel-disappeared">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
@@ -1520,7 +1534,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 17:05 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 18:01 JST</p>
       </div>
 
 
@@ -2074,6 +2088,7 @@ const STRINGS = {
   panel_layers:         { ja:'地図レイヤー',             en:'Map Layers',        uk:'Шари карти' },
   panel_about:          { ja:'セットアップ',             en:'Setup',             uk:'Налаштування' },
   panel_favourites:     { ja:'お気に入り',               en:'Favourites',        uk:'Улюблені' },
+  panel_foryou:         { ja:'あなたへのおすすめ',       en:'For You',           uk:'Для вас' },
   fav_empty:            { ja:'お気に入りはまだありません。空室一覧の ☆ をクリックして追加できます。', en:'No favourites yet. Click ☆ in the Vacancies list to add one.', uk:'Ще немає улюблених. Натисніть ☆ у списку вакансій.' },
   panel_copilot:        { ja:'AI 検索',                 en:'AI Search',         uk:'AI Пошук' },
   copilot:              { ja:'AI検索',                  en:'AI Search',         uk:'AI Пошук' },
@@ -5691,6 +5706,73 @@ function renderFavouritesTable() {
   if (countEl) countEl.textContent = t('count_items', sorted.length);
 }
 
+// ── For You ──────────────────────────────────────────────────────────────────
+
+async function loadForYou() {
+  const profEl  = document.getElementById('foryou-profile');
+  const tableEl = document.getElementById('foryou-table');
+  if (!tableEl) return;
+  tableEl.innerHTML = `<div style="padding:8px;color:var(--muted);">${t('loading')}</div>`;
+  if (profEl) profEl.innerHTML = '';
+
+  try {
+    const r = await fetch(`${API}/user/for_you`, { headers: authHeaders() });
+    if (r.status === 401) { tableEl.innerHTML = `<div style="padding:8px;color:var(--muted);">ログインが必要です。</div>`; return; }
+    const d = await r.json();
+
+    if (d.message) {
+      tableEl.innerHTML = `<div style="padding:12px 4px;color:var(--muted);font-size:12px;line-height:1.6;">${escHtml(d.message)}</div>`;
+      return;
+    }
+
+    // Profile chip row
+    if (profEl && d.profile) {
+      const p = d.profile;
+      const chips = [
+        ...p.top_wards.map(w => `<span class="fy-chip ward">${escHtml(wardLabel(w)||w)}</span>`),
+        ...p.top_layouts.map(l => `<span class="fy-chip layout">${escHtml(l)}</span>`),
+        p.rent_range[0] ? `<span class="fy-chip rent">¥${Math.round(p.rent_range[0]/1000)}k〜¥${Math.round(p.rent_range[1]/1000)}k</span>` : '',
+      ].join('');
+      profEl.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;align-items:center;">
+        <span style="font-size:10px;color:var(--muted);margin-right:2px;">閲覧傾向:</span>${chips}
+        <span style="font-size:10px;color:var(--muted);margin-left:auto;">${p.view_count}件閲覧 · ${p.save_count}件保存</span>
+      </div>`;
+    }
+
+    if (!d.listings?.length) {
+      tableEl.innerHTML = `<div style="padding:8px;color:var(--muted);font-size:12px;">条件に合う新着物件が見つかりませんでした。</div>`;
+      return;
+    }
+
+    const thead = `<tr>
+      <th style="width:20px;padding:0"></th>
+      <th>${t('col_name')}</th><th>${t('col_ward')}</th>
+      <th>${t('col_rent')}</th><th>${t('col_layout')}</th>
+      <th>${t('col_size')}</th><th>${t('col_station')}</th><th>${t('col_walk')}</th>
+      <th>${t('col_first_seen')}</th></tr>`;
+    const tbody = d.listings.map(l => {
+      const tag  = l.source === 'ur' ? '<span class="src-tag ur">UR</span>' : l.source === 'suumo' ? '<span class="src-tag suumo">SUUMO</span>' : '<span class="src-tag jkk">JKK</span>';
+      const href = l.url ? escHtml(l.url) : '#';
+      const sel  = l.id === _selectedId ? ' row-selected' : '';
+      const saved = _savedListings.has(l.id);
+      return `<tr class="${sel}" onclick="if(event.target.tagName!='A'&&event.target.tagName!='BUTTON')selectListing('${l.id}','${l.url||''}')">
+        <td><button class="star-btn${saved?' saved':''}" onclick="event.stopPropagation();toggleSave('${l.id}')">${saved?'★':'☆'}</button></td>
+        <td>${tag} <a href="${href}" target="_blank" rel="noopener">${escHtml(l.name)}</a></td>
+        <td>${escHtml(wardLabel(l.ward))}</td>
+        <td style="font-family:var(--mono);">¥${(l.rent||0).toLocaleString()}</td>
+        <td>${escHtml(l.layout||'—')}</td>
+        <td style="font-family:var(--mono);">${l.size_m2 ? l.size_m2+'m²' : '—'}</td>
+        <td>${l.nearest_station ? escHtml(l.nearest_station) : '—'}</td>
+        <td style="font-family:var(--mono);">${l.walk_min > 0 ? l.walk_min + t('walk_unit') : '—'}</td>
+        <td style="font-family:var(--mono);">${fmtDate(l.first_seen)}</td>
+      </tr>`;
+    }).join('');
+    tableEl.innerHTML = `<div style="overflow-x:auto;"><table class="sort-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+  } catch (e) {
+    tableEl.innerHTML = `<div style="padding:8px;color:var(--danger);font-size:12px;">読み込みエラー</div>`;
+  }
+}
+
 function renderAvailableTable() {
   const el = document.getElementById('available-table');
   const countEl = document.getElementById('available-count');
@@ -5964,10 +6046,10 @@ function closeAuthModal() { document.getElementById('auth-modal').classList.remo
 
 // ── Icon-rail panel ───────────────────────────────────────────────────────────
 let _activePanel = null;
-const _allPanels  = ['filter','listings','favourites','disappeared','account','layers','about'];
+const _allPanels  = ['filter','listings','favourites','foryou','disappeared','account','layers','about'];
 const _panelTitles = {
   filter: 'panel_filter', listings: 'panel_listings', favourites: 'panel_favourites',
-  disappeared: 'panel_disappeared',
+  foryou: 'panel_foryou', disappeared: 'panel_disappeared',
   account: 'panel_account', layers: 'panel_layers', about: 'panel_about',
 };
 
@@ -5987,11 +6069,12 @@ function openPanel(name) {
     document.getElementById(`rail-${n}`)?.classList.toggle('active', n === name);
     document.getElementById(`panel-${n}`)?.classList.toggle('active', n === name);
   });
-  panel.style.width = (name === 'listings' || name === 'favourites' || name === 'disappeared') ? '864px' : (name === 'filter' ? '406px' : '260px');
+  panel.style.width = (name === 'listings' || name === 'favourites' || name === 'disappeared' || name === 'foryou') ? '864px' : (name === 'filter' ? '406px' : '260px');
   document.getElementById('panel-title').textContent = _panelTitles[name] ? t(_panelTitles[name]) : '';
   panel.classList.add('open');
   backdrop.classList.add('open');
   if (name === 'favourites') renderFavouritesTable();
+  if (name === 'foryou')     loadForYou();
   if (name === 'disappeared') loadDisappeared();
   setTimeout(() => { if (map) google.maps.event.trigger(map, 'resize'); }, 230);
 }
