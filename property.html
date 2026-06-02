@@ -12,7 +12,7 @@
 })();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="/detail-parser.js"></script>
+<script src="/detail-parser.js?v=2"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
 :root {
@@ -341,7 +341,7 @@ async function boot() {
   if (lr.error) { showError(`物件が見つかりません (${LISTING_ID})`); return; }
   _listing = lr;
   _allListings = (ar.listings || []).filter(l => !l.disappeared_at && l.rent > 0 && l.size_m2 > 0);
-  render();
+  try { render(); } catch(e) { showError('表示エラー: ' + e.message); }
 }
 
 function showError(msg) {
@@ -958,7 +958,8 @@ function shareProperty() {
 // parseDetailSections() loaded from /detail-parser.js
 
 function renderDetailSections(text) {
-  const sections = parseDetailSections(text);
+  let sections = [];
+  try { sections = parseDetailSections(text); } catch(_) { return ''; }
   if (!sections.length) return '';
   // Sections to show as traffic/transport block (multi-line value)
   const MULTILINE = new Set(['交通', '特記事項', 'キャンペーン等', '詳細情報']);

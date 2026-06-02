@@ -1096,7 +1096,7 @@
   @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
   .qr-img { border-radius: 10px; border: 4px solid var(--surface2); display: block; }
 </style>
-<script src="/detail-parser.js"></script>
+<script src="/detail-parser.js?v=2"></script>
 </head>
 <body>
 
@@ -1518,7 +1518,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 15:41 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-02 16:16 JST</p>
       </div>
 
 
@@ -5028,7 +5028,8 @@ async function renderDetailTab(listingId) {
 
   // ── Parsed from detail_text ─────────────────────────────────────────────
   if (listing.detail_text) {
-    const sections = _parseDetailSections(listing.detail_text);
+    let sections = [];
+    try { sections = _parseDetailSections(listing.detail_text); } catch (_) {}
     const FIELD_MAP = {
       // UR fields
       '設備':             t('detail_amenities'),
@@ -5101,7 +5102,10 @@ async function renderDetailTab(listingId) {
   el.innerHTML = html || `<div style="color:var(--muted);padding:12px 0;">${t('no_detail')}</div>`;
 }
 
-function _parseDetailSections(text) { return parseDetailSections(text); }
+function _parseDetailSections(text) {
+  if (typeof parseDetailSections === 'function') return parseDetailSections(text);
+  return [];
+}
 
 async function loadPropPhotos(listingId, gridId, filterTypes) {
   const grid = document.getElementById(gridId);
