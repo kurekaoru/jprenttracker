@@ -369,7 +369,8 @@ def _fetch_ur_room_data(listing_url: str) -> tuple[list[tuple[str, str]], dict]:
             if img_type is None:
                 continue
             images.append((url, img_type))
-        images.sort(key=lambda x: 2 if x[1] == "floor_plan" else 0 if x[1] == "exterior" else 1)
+        # floor_plan images are stored first so they're never cut off by the cap below
+        images.sort(key=lambda x: 0 if x[1] == "floor_plan" else 1 if x[1] == "exterior" else 2)
 
         # ── detail ──────────────────────────────────────────────────────────
         has_parking, parking_fee = _parse_parking(d.get("parking") or "")
@@ -419,7 +420,9 @@ def _fetch_ur_room_data(listing_url: str) -> tuple[list[tuple[str, str]], dict]:
             "systems":        system_labels,
             "commonfee_jpy":  commonfee_jpy,
         }
-        return images[:20], detail
+        fp     = [x for x in images if x[1] == "floor_plan"]
+        others = [x for x in images if x[1] != "floor_plan"]
+        return fp + others[:20], detail
 
     except Exception as e:
         log.debug(f"UR detail_room API failed ({listing_url}): {e}")
