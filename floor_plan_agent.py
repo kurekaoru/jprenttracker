@@ -19,6 +19,51 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
 
+# ── room-type normalisation ────────────────────────────────────────────────────
+# Ordered: first match wins. Patterns are matched against the label AFTER
+# stripping trailing numeric suffixes like (1), （２）, -A, etc.
+
+_ROOM_TYPE_RULES: list[tuple[str, str]] = [
+    (r"LDK|リビング.{0,4}ダイニング.{0,4}キッチン",  "LDK"),
+    (r"LD|リビング.{0,4}ダイニング",                  "LD"),
+    (r"DK|ダイニング.{0,4}キッチン",                  "DK"),
+    (r"リビング|Living|^L$",                           "L"),
+    (r"ダイニング|Dining|^D$",                         "D"),
+    (r"キッチン|Kitchen|^K$",                          "K"),
+    (r"洋室",                                          "洋室"),
+    (r"和室",                                          "和室"),
+    (r"バルコニー|ベランダ|Balcony",                   "バルコニー"),
+    (r"WC|トイレ|便所",                               "トイレ"),
+    (r"UB|浴室|バスルーム|Bath(?:room)?",              "浴室"),
+    (r"洗面所|脱衣室|洗面脱衣|Powder",                "洗面所"),
+    (r"玄関|ホール|Entrance|Hall",                     "玄関"),
+    (r"廊下|Corridor",                                 "廊下"),
+    (r"WIC|SIC|ウォーク.{0,3}イン",                   "WIC"),
+    (r"クローゼット|Closet",                           "クローゼット"),
+    (r"押入|物入|納戸|収納|Storage",                   "収納"),
+    (r"^MB$|メーターボックス",                         "MB"),
+    (r"^PS$|パイプ",                                   "PS"),
+]
+
+_STRIP_SUFFIX = re.compile(
+    r"[\s　\-_・]?"           # optional separator
+    r"(?:"
+    r"[（(][0-9０-９]+[)）]"       # (1) or （1）
+    r"|[－\-][0-9０-９A-Za-z]+"   # -1 or -A
+    r"|[0-9０-９]+$"               # trailing digit
+    r")"
+    r"$"
+)
+
+
+def normalise_room_type(label: str) -> str:
+    """Return a canonical room-type string, stripping per-property numbering."""
+    stripped = _STRIP_SUFFIX.sub("", label).strip()
+    for pattern, canonical in _ROOM_TYPE_RULES:
+        if re.search(pattern, stripped, re.IGNORECASE):
+            return canonical
+    return stripped  # unknown type: return de-numbered label as-is
+
 log = logging.getLogger(__name__)
 
 # ── prompt ────────────────────────────────────────────────────────────────────
@@ -166,6 +211,7 @@ MEDIA_TYPES = {
 @dataclass
 class Room:
     label: str
+    room_type: str                     # canonical type via normalise_room_type()
     area_m2: Optional[float]          # from dimension lines (Phase 1)
     inferred_area_m2: Optional[float]  # from pixel fraction (Phase 2)
     dim_calc: Optional[str]
@@ -356,6 +402,7 @@ class FloorPlanAgent:
                 area = None  # treat as missing; pixel ratio will fill it
             rooms.append(Room(
                 label                = label,
+                room_type            = normalise_room_type(label),
                 area_m2              = area,
                 inferred_area_m2     = None,
                 dim_calc             = rd.get("dim_calc"),
