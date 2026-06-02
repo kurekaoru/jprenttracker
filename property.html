@@ -296,7 +296,7 @@ let _map = null, _mapsReady = false;
 let _dirService = null, _dirRenderer = null;
 let _rentChart = null;
 
-window._mapsReady = () => { _mapsReady = true; if (_listing) _initMap(); };
+window._mapsReady = () => { _mapsReady = true; }; // map init is lazy — only on map tabs
 
 // ── boot ──────────────────────────────────────────────────────────────────────
 async function boot() {
@@ -309,7 +309,6 @@ async function boot() {
   _listing = lr;
   _allListings = (ar.listings || []).filter(l => !l.disappeared_at && l.rent > 0 && l.size_m2 > 0);
   render();
-  if (_mapsReady) _initMap();
 }
 
 function showError(msg) {
@@ -346,9 +345,13 @@ function render() {
   badge.className = `src-badge ${l.source || 'jkk'}`;
   badge.style.display = '';
 
-  _galleryImgs = l.images || [];
-  const fpImgs    = _galleryImgs.filter(i => i.type === 'floor_plan');
-  const photoImgs = _galleryImgs.filter(i => i.type !== 'floor_plan');
+  // exterior/interior first, floor plans last
+  const rawImgs = l.images || [];
+  const photoImgs = rawImgs.filter(i => i.type !== 'floor_plan');
+  const fpImgs    = rawImgs.filter(i => i.type === 'floor_plan');
+  _galleryImgs = [...photoImgs, ...fpImgs];
+  _galleryFilter = photoImgs.length ? 'photos' : 'floor_plan';
+  _galleryIdx = 0;
 
   // market stats
   const rpsq = l.size_m2 ? Math.round(l.rent / l.size_m2) : null;
@@ -370,27 +373,32 @@ function render() {
 
     <!-- ── PHOTO PANEL ── -->
     <div class="photo-panel">
-      ${_galleryImgs.length ? `
-        <div class="photo-filter-bar">
-          <button class="pf-chip active" onclick="setFilter('all')">すべて ${_galleryImgs.length}</button>
-          ${fpImgs.length ? `<button class="pf-chip" onclick="setFilter('floor_plan')">間取り ${fpImgs.length}</button>` : ''}
-          ${photoImgs.length ? `<button class="pf-chip" onclick="setFilter('photos')">写真 ${photoImgs.length}</button>` : ''}
-        </div>
-        <div class="photo-main-wrap">
-          <img class="photo-main" id="ph-main" src="" onerror="this.style.opacity='.2'">
-          <button class="photo-nav prev" onclick="navPh(-1)">‹</button>
-          <button class="photo-nav next" onclick="navPh(1)">›</button>
-          <div class="photo-badge" id="ph-badge" style="display:none">FLOOR PLAN</div>
-          <div class="photo-counter" id="ph-ctr"></div>
-        </div>
-        <div class="photo-strip" id="ph-strip">
-          ${_galleryImgs.map((img,i) => {
-            const src = imgSrc(img.url);
-            return `<img class="photo-thumb${img.type==='floor_plan'?' fp':''}" src="${esc(src)}"
-              onclick="jumpPh(${i})" onerror="this.style.display='none'" loading="lazy">`;
-          }).join('')}
-        </div>
-      ` : '<div class="no-photo">📷 写真なし</div>'}
+      <!-- gallery (default visible) -->
+      <div id="gallery-section" style="display:flex;flex-direction:column;height:100%;">
+        ${_galleryImgs.length ? `
+          <div class="photo-filter-bar">
+            <button class="pf-chip${!photoImgs.length?'':''}" onclick="setFilter('all')">すべて ${_galleryImgs.length}</button>
+            ${fpImgs.length ? `<button class="pf-chip${_galleryFilter==='floor_plan'?' active':''}" onclick="setFilter('floor_plan')">間取り ${fpImgs.length}</button>` : ''}
+            ${photoImgs.length ? `<button class="pf-chip active" onclick="setFilter('photos')">写真 ${photoImgs.length}</button>` : ''}
+          </div>
+          <div class="photo-main-wrap">
+            <img class="photo-main" id="ph-main" src="" onerror="this.style.opacity='.2'">
+            <button class="photo-nav prev" onclick="navPh(-1)">‹</button>
+            <button class="photo-nav next" onclick="navPh(1)">›</button>
+            <div class="photo-badge" id="ph-badge" style="display:none">FLOOR PLAN</div>
+            <div class="photo-counter" id="ph-ctr"></div>
+          </div>
+          <div class="photo-strip" id="ph-strip">
+            ${_galleryImgs.map((img,i) => {
+              const src = imgSrc(img.url);
+              return `<img class="photo-thumb${img.type==='floor_plan'?' fp':''}" src="${esc(src)}"
+                onclick="jumpPh(${i})" onerror="this.style.display='none'" loading="lazy">`;
+            }).join('')}
+          </div>
+        ` : '<div class="no-photo">📷 写真なし</div>'}
+      </div>
+      <!-- map (shown for 交通 / 施設 tabs) -->
+      <div id="prop-map" style="display:none;width:100%;height:100%;"></div>
     </div>
 
     <!-- ── INFO PANEL ── -->
@@ -534,7 +542,6 @@ function render() {
         </div>
         <div class="commute-result" id="c-result"></div>
         <a class="gmaps-link" id="c-gmaps" href="#" target="_blank" style="display:none">Google Mapsで開く →</a>
-        <div id="commute-map"></div>
       </div>
 
       <!-- FACILITIES -->
@@ -602,11 +609,29 @@ function updateGallery() {
 }
 
 // ── tabs ──────────────────────────────────────────────────────────────────────
+const MAP_TABS = new Set(['t-commute', 't-facilities']);
 function switchTab(btn, id) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b===btn));
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id===id));
+
+  const showMap = MAP_TABS.has(id);
+  document.getElementById('gallery-section').style.display = showMap ? 'none' : 'flex';
+  document.getElementById('prop-map').style.display       = showMap ? 'block' : 'none';
+
+  if (id === 't-floorplan') {
+    setFilter('floor_plan');
+  } else if (!showMap) {
+    setFilter('photos');
+  }
+
+  if (showMap) {
+    setTimeout(() => {
+      if (_mapsReady && !_map) _initMap();
+      else if (_map) google.maps.event.trigger(_map, 'resize');
+    }, 50);
+  }
+
   if (id === 't-market' && !_rentChart) drawRentChart();
-  if (id === 't-commute') { setTimeout(() => { if (_mapsReady && !_map) _initMap(); }, 100); }
 }
 
 // ── rent histogram ────────────────────────────────────────────────────────────
@@ -682,9 +707,8 @@ function showCommuteResult(html) {
 function _initMap() {
   const l = _listing;
   if (!l?.lat || !l?.lng) return;
-  const el = document.getElementById('commute-map');
+  const el = document.getElementById('prop-map');
   if (!el) return;
-  el.classList.add('on');
   _map = new google.maps.Map(el, {
     center:{lat:l.lat,lng:l.lng}, zoom:15,
     mapTypeControl:false, streetViewControl:false, fullscreenControl:false,
@@ -720,12 +744,14 @@ function parseDetailSections(text) {
   const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
   // Short line with no list/note chars = section header
   const isHdr = l => l.length <= 18 && !l.includes('、') && !l.includes('：')
-                  && !l.startsWith('・') && !l.startsWith('※') && !/^\d/.test(l)
-                  && !/^[A-Za-z]\d/.test(l);  // exclude codes like L0862
+                  && !l.startsWith('・') && !l.startsWith('※') && !l.startsWith('(')
+                  && !/^\d/.test(l) && !/^[A-Za-z]\d/.test(l);  // exclude codes like L0862
   const sections = [];
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
+    // Everything after 間取り図 is unit-table data (column headers + rows), not key-value pairs
+    if (line === '間取り図') break;
     if (isHdr(line)) {
       i++;
       const body = [];
@@ -735,9 +761,8 @@ function parseDetailSections(text) {
       }
       // Remove duplicate adjacent lines (JKK repeats values twice)
       const unique = body.filter((l, idx) => body.indexOf(l) === idx);
-      // Skip noise-only sections (just link text, etc.)
-      const skip = ['より詳しい住宅の情報はこちら', '間取り図'];
-      if (!skip.includes(line) && unique.length) {
+      // Skip noise-only sections (just link text)
+      if (line !== 'より詳しい住宅の情報はこちら' && unique.length) {
         sections.push({ header: line, body: unique.join('\n') });
       }
     } else {
