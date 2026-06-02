@@ -283,7 +283,7 @@ html,body{height:100%;overflow:hidden;font-family:var(--font);background:var(--b
 <!-- topbar -->
 <div class="topbar">
   <div class="topbar-rail">
-    <button class="back-btn" onclick="history.back()" title="戻る">‹</button>
+    <button class="back-btn" onclick="history.length > 1 ? history.back() : location.href='dashboard.html'" title="戻る">‹</button>
   </div>
   <div class="topbar-main">
     <div class="dot">J</div>
