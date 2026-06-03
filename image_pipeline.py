@@ -262,17 +262,28 @@ def download_image(url: str, row_id: int, lid: str, img_type: str,
         if img_type != "floor_plan":
             autocrop_whitespace(fpath)
 
+        existing_ocr = con.execute(
+            "SELECT ocr_text FROM listing_images WHERE id=?", (row_id,)
+        ).fetchone()
+        existing_ocr_text = existing_ocr[0] if existing_ocr else None
+
         ocr_text = None
         if img_type == "floor_plan":
-            ocr_text = ocr_floor_plan(fpath)
-            if ocr_text:
-                log.info(f"OCR floor plan {fpath}: {ocr_text[:80]}")
+            if existing_ocr_text:
+                ocr_text = existing_ocr_text
+            else:
+                ocr_text = ocr_floor_plan(fpath)
+                if ocr_text:
+                    log.info(f"OCR floor plan {fpath}: {ocr_text[:80]}")
         elif img_type == "appliances":
-            items = extract_appliances(fpath)
-            if items:
-                ocr_text = ", ".join(items)
-                log.info(f"Appliances found: {ocr_text}")
-                _merge_appliances(lid, items, con)
+            if existing_ocr_text:
+                ocr_text = existing_ocr_text
+            else:
+                items = extract_appliances(fpath)
+                if items:
+                    ocr_text = ", ".join(items)
+                    log.info(f"Appliances found: {ocr_text}")
+                    _merge_appliances(lid, items, con)
 
         stored = fpath
         if GCS_BUCKET:
