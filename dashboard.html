@@ -1542,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 14:21 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 14:22 JST</p>
       </div>
 
 
@@ -3237,16 +3237,6 @@ function setLineStationsSelected(lid, selected) {
   setViewMode('filtered');
   applyMapFilters();
   refreshTrainStationMarkers();
-  if (selected) _fitBoundsToFiltered(150);
-}
-
-function _fitBoundsToFiltered(maxCount) {
-  if (!map || !_filteredListings.length || _filteredListings.length > maxCount) return;
-  const pts = _filteredListings.filter(l => l.lat && l.lng);
-  if (!pts.length) return;
-  const bounds = new google.maps.LatLngBounds();
-  pts.forEach(l => bounds.extend({ lat: l.lat, lng: l.lng }));
-  setTimeout(() => map.fitBounds(bounds, { top: 60, right: 40, bottom: 60, left: 40 }), 150);
 }
 
 function _stationCellSelector(name) {
