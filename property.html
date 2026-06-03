@@ -315,6 +315,7 @@ let _facilityMarkers = [];
 let _facilityMarkerObjs = [];
 let _facilityCircle = null;
 let _facTransitLines = [];
+let _commutePolylines = [];
 const _facRouteCache = new Map();
 let _facTableSort = {col:'distance_m', asc:true};
 const _facTypeLayers = {
@@ -711,6 +712,8 @@ function calcCommute(mode) {
   document.getElementById('c-gmaps').style.display = '';
 
   if (mode === 'TRANSIT') {
+    clearCommutePolylines();
+    hideFacChip();
     showCommuteResult('電車の経路はGoogle Mapsで確認できます ↓');
     return;
   }
@@ -723,7 +726,13 @@ function calcCommute(mode) {
     if (status !== 'OK') { showCommuteResult(`経路なし (${status})`); return; }
     const leg = result.routes[0].legs[0];
     showCommuteResult(`<strong>${leg.duration.text}</strong> · ${leg.distance.text}`);
-    _dirRenderer?.setDirections(result);
+    if (mode === 'WALKING') {
+      _renderCommuteWalkRoute(result, dest);
+    } else {
+      clearCommutePolylines();
+      hideFacChip();
+      _dirRenderer?.setDirections(result);
+    }
   });
 }
 function showCommuteResult(html) {
@@ -773,7 +782,7 @@ function _initMap() {
   _dirRenderer = new google.maps.DirectionsRenderer({suppressMarkers:true});
   _dirRenderer.setMap(_map);
   _map.addListener('zoom_changed', _applyFacZoomVisibility);
-  _map.addListener('click', () => { hideFacChip(); clearFacTransitLines(); });
+  _map.addListener('click', () => { hideFacChip(); clearFacTransitLines(); clearCommutePolylines(); });
 }
 
 // ── facilities ────────────────────────────────────────────────────────────────
@@ -821,6 +830,9 @@ function clearFacilities() {
 function clearFacTransitLines() {
   _facTransitLines.forEach(p => p.setMap(null)); _facTransitLines = [];
   if (_dirRenderer) _dirRenderer.setDirections({routes:[]});
+}
+function clearCommutePolylines() {
+  _commutePolylines.forEach(p => p.setMap(null)); _commutePolylines = [];
 }
 function _applyFacZoomVisibility() {
   if (!_map) return;
@@ -932,6 +944,27 @@ function _renderWalkRoute(result) {
   if (sub && leg.duration?.text) {
     sub.textContent += ' · 徒歩' + leg.duration.text;
   }
+}
+
+function _renderCommuteWalkRoute(result, destName) {
+  clearCommutePolylines();
+  if (_dirRenderer) _dirRenderer.setDirections({routes:[]});
+  const leg = result.routes[0].legs[0];
+  const pts = leg.steps.flatMap(s => decodePolyline(s.polyline.points));
+  _commutePolylines.push(new google.maps.Polyline({
+    path:pts, strokeWeight:2, strokeOpacity:0,
+    icons:[{icon:{path:google.maps.SymbolPath.CIRCLE,fillColor:'#4285F4',fillOpacity:1,strokeWeight:0,scale:3.5},offset:'0',repeat:'20px'}],
+    map:_map,
+  }));
+  const bounds = new google.maps.LatLngBounds();
+  pts.forEach(p => bounds.extend(p));
+  _map.fitBounds(bounds, {top:20,right:20,bottom:20,left:20});
+  const chip = document.getElementById('fac-chip');
+  if (!chip) return;
+  chip.style.borderLeft = '3px solid #4285F4';
+  chip.innerHTML = `<span style="font-weight:600;">${esc(destName)}</span><br>`
+    + `<span class="fac-chip-sub" style="color:#777;font-size:10px;">🚶 ${leg.duration.text} · ${leg.distance.text}</span>`;
+  chip.style.display = 'block';
 }
 
 function decodePolyline(encoded) {
