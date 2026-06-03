@@ -1542,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 09:43 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 09:56 JST</p>
       </div>
 
 
@@ -3818,6 +3818,7 @@ function buildDistrictAccordion() {
       chipsRow.className = 'chips';
       city.wards.forEach(w => makeChip(w, selectedWards, chipsRow, () => {
         if (!ensureLocationFilterMode('area')) return false;
+        setViewMode('filtered');
         _updateCitySel(pref.id, city.id);
         _updatePrefSel(pref.id);
         applyMapFilters();
@@ -3861,8 +3862,9 @@ function _setCitySelected(prefId, cityId) {
   if (!ensureLocationFilterMode('area')) return;
   const pref = PREF_GROUPS.find(p => p.id === prefId); if (!pref) return;
   const city = pref.cities.find(c => c.id === cityId); if (!city) return;
-  const allSel = city.wards.every(w => selectedWards.has(w));
-  city.wards.forEach(w => allSel ? selectedWards.delete(w) : selectedWards.add(w));
+  const anySel = city.wards.some(w => selectedWards.has(w));
+  city.wards.forEach(w => anySel ? selectedWards.delete(w) : selectedWards.add(w));
+  setViewMode('filtered');
   buildDistrictAccordion();
   updateBoundaryStyles();
   applyMapFilters();
@@ -3872,8 +3874,9 @@ function _setPrefSelected(prefId) {
   if (!ensureLocationFilterMode('area')) return;
   const pref = PREF_GROUPS.find(p => p.id === prefId); if (!pref) return;
   const allWards = _prefAllWards(pref);
-  const allSel   = allWards.every(w => selectedWards.has(w));
-  allWards.forEach(w => allSel ? selectedWards.delete(w) : selectedWards.add(w));
+  const anySel   = allWards.some(w => selectedWards.has(w));
+  allWards.forEach(w => anySel ? selectedWards.delete(w) : selectedWards.add(w));
+  setViewMode('filtered');
   buildDistrictAccordion();
   updateBoundaryStyles();
   applyMapFilters();
