@@ -729,7 +729,7 @@ function _renderMLTable() {
     const dp = l.diffPct.toFixed(1);
     const badge = l.diffPct > 8 ? `<span class="badge badge-up">+${dp}%</span>` : l.diffPct < -8 ? `<span class="badge badge-down">${dp}%</span>` : `<span class="badge badge-neu">±${Math.abs(dp)}%</span>`;
     const sc = l.source==='ur'?'#3B82F6':'#DC2626';
-    return `<tr>
+    return `<tr style="cursor:pointer" onclick="window.open('property.html?id=${encodeURIComponent(l.id)}','_blank')">
       <td><span style="font-size:9px;font-weight:700;color:${sc};text-transform:uppercase">${l.source}</span></td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escH(l.name)}">${escH(l.name)}</td>
       <td>${escH(l.ward)}</td>
