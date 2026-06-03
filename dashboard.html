@@ -1542,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 13:31 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 13:35 JST</p>
       </div>
 
 
@@ -2911,8 +2911,6 @@ function lineGraphLayout(line) {
       const prefix = stas.slice(0, firstBranchIdx + 1);
       const suffix = stas.slice(firstBranchIdx + 1);
       const prefixRows = placePath(prefix, 0, fullCols, true, false, new Set(), new Set([branches[0].from]));
-      const tachikawaNode = nodes.find(node => node.name === '立川' && node.group === 'trunk');
-      if (tachikawaNode) tachikawaNode.col = Math.min(tachikawaNode.col + 1, fullCols.at(-1));
       let nextRow = prefixRows;
 
       const haijimaIdx = branches[0].stations.findIndex(([name]) => name === branches[1].from);
