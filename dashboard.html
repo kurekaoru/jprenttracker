@@ -1542,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 11:53 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 11:58 JST</p>
       </div>
 
 
@@ -2913,13 +2913,27 @@ function lineGraphLayout(line) {
       const prefixRows = placePath(prefix, 0, fullCols, true, false, new Set(), new Set([branches[0].from]));
       let nextRow = prefixRows;
 
-      const omeRows = placePath(branches[0].stations, nextRow, [1, 2, 3, 4], true, true, new Set(), new Set(), 'branch0', 1);
+      const haijimaIdx = branches[0].stations.findIndex(([name]) => name === branches[1].from);
+      const omeApproach = haijimaIdx >= 0 ? branches[0].stations.slice(0, haijimaIdx) : branches[0].stations;
+      const haijimaStation = haijimaIdx >= 0 ? branches[0].stations[haijimaIdx] : null;
+      const omeRest = haijimaIdx >= 0 ? branches[0].stations.slice(haijimaIdx + 1) : [];
+      const approachRows = placePath(omeApproach, nextRow, [1, 2, 3, 4], true, true, new Set(), new Set(), 'branch0', 1);
+      const haijimaRow = nextRow + approachRows;
+      if (haijimaStation) {
+        placePath([haijimaStation], haijimaRow, [4], true, true, new Set(), new Set(), 'branch0', 4);
+        placePath(omeRest, haijimaRow, [3, 2, 1, 0], true, true, new Set(), new Set(), 'branch0', 3);
+      }
       labels.push(terminalBranchLabel(branches[0], 'branch0', nextRow, 1));
-      nextRow += omeRows + branchGap;
 
-      const itsukaichiRows = placePath(branches[1].stations, nextRow, [4, 3, 2, 1], true, true, new Set(), new Set(), 'branch1', 4);
-      labels.push(terminalBranchLabel(branches[1], 'branch1', nextRow, 4));
-      nextRow += itsukaichiRows + branchGap;
+      const itsukaichiStartRow = haijimaStation ? haijimaRow + 1 : nextRow + approachRows;
+      branches[1].stations.forEach(([name, svc], idx) => {
+        nodes.push({ name, svc, row: itsukaichiStartRow + idx, col: 4, branch: true, group: 'branch1', escapeCol: 4, routeCols: [4] });
+      });
+      labels.push(terminalBranchLabel(branches[1], 'branch1', itsukaichiStartRow, 4));
+      nextRow = Math.max(
+        haijimaRow + Math.ceil(Math.max(1, omeRest.length) / 4),
+        itsukaichiStartRow + branches[1].stations.length
+      ) + branchGap;
 
       const suffixRows = placePath(suffix, nextRow, [1, 2, 3, 4], true, false, new Set(), new Set(), 'main-after-branches');
       mainRows = nextRow + suffixRows;
