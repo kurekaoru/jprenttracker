@@ -1542,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 11:58 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 12:08 JST</p>
       </div>
 
 
@@ -2920,19 +2920,18 @@ function lineGraphLayout(line) {
       const approachRows = placePath(omeApproach, nextRow, [1, 2, 3, 4], true, true, new Set(), new Set(), 'branch0', 1);
       const haijimaRow = nextRow + approachRows;
       if (haijimaStation) {
-        placePath([haijimaStation], haijimaRow, [4], true, true, new Set(), new Set(), 'branch0', 4);
-        placePath(omeRest, haijimaRow, [3, 2, 1, 0], true, true, new Set(), new Set(), 'branch0', 3);
+        placePath([haijimaStation], haijimaRow, [4], true, true, new Set(), new Set(), 'branch0', 1);
       }
       labels.push(terminalBranchLabel(branches[0], 'branch0', nextRow, 1));
 
       const itsukaichiStartRow = haijimaStation ? haijimaRow + 1 : nextRow + approachRows;
-      branches[1].stations.forEach(([name, svc], idx) => {
-        nodes.push({ name, svc, row: itsukaichiStartRow + idx, col: 4, branch: true, group: 'branch1', escapeCol: 4, routeCols: [4] });
-      });
+      const itsukaichiRows = placePath(branches[1].stations, itsukaichiStartRow, [4, 3, 2], true, true, new Set(), new Set(), 'branch1', 4);
       labels.push(terminalBranchLabel(branches[1], 'branch1', itsukaichiStartRow, 4));
+      const omeRestStartRow = itsukaichiStartRow + itsukaichiRows;
+      const omeRestRows = placePath(omeRest, omeRestStartRow, [1, 2, 3, 4], true, true, new Set(), new Set(), 'branch0', 1);
       nextRow = Math.max(
-        haijimaRow + Math.ceil(Math.max(1, omeRest.length) / 4),
-        itsukaichiStartRow + branches[1].stations.length
+        omeRestStartRow + omeRestRows,
+        itsukaichiStartRow + itsukaichiRows
       ) + branchGap;
 
       const suffixRows = placePath(suffix, nextRow, [1, 2, 3, 4], true, false, new Set(), new Set(), 'main-after-branches');
@@ -3091,6 +3090,10 @@ function graphTrackSvg(graph) {
     if (ax === bx) return { d: `M ${ax} ${ay} L ${bx} ${by}`, branchLink };
     if (from === '西新宿' && to === '中野坂上') {
       return { d: `M ${ax} ${ay} L ${bx} ${ay} L ${bx} ${by}`, branchLink };
+    }
+    if (from === '拝島' && to === '牛浜') {
+      const escapeX = colXs[1];
+      return { d: `M ${ax} ${ay} L ${escapeX} ${ay} L ${escapeX} ${by} L ${bx} ${by}`, branchLink };
     }
     if (branchLink) {
       const escapeCol = b.escapeCol ?? b.col;
