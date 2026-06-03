@@ -315,6 +315,18 @@ def _init_db():
     """)
     con.commit()
 
+    con.executescript("""
+        CREATE TABLE IF NOT EXISTS user_filter_events (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER NOT NULL,
+            event_type TEXT NOT NULL,
+            value      TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_ufe_user ON user_filter_events(user_id, created_at);
+    """)
+    con.commit()
+
     # listings floor_plan_data column
     try:
         con.execute("ALTER TABLE listings ADD COLUMN floor_plan_data TEXT")
@@ -1187,6 +1199,45 @@ def record_view(listing_id):
     return jsonify({"status": "ok"})
 
 
+@app.route("/api/user/filter_event", methods=["POST"])
+@jwt_required()
+def record_filter_event():
+    """Record which wards and stations the user actively filtered on."""
+    user_id = int(get_jwt_identity())
+    data = request.get_json(silent=True) or {}
+    wards    = [w for w in (data.get("wards")    or []) if isinstance(w, str) and w][:60]
+    stations = [s for s in (data.get("stations") or []) if isinstance(s, str) and s][:120]
+    if not wards and not stations:
+        return jsonify({"status": "ok"})
+    con = db()
+    cutoff = (datetime.now() - timedelta(hours=6)).isoformat()
+    # Only insert values not already recorded in the last 6 hours (dedup)
+    existing = {(r["event_type"], r["value"]) for r in con.execute(
+        "SELECT event_type, value FROM user_filter_events WHERE user_id=? AND created_at>=?",
+        (user_id, cutoff),
+    ).fetchall()}
+    rows = []
+    for w in wards:
+        if ("ward", w) not in existing:
+            rows.append((user_id, "ward", w))
+    for s in stations:
+        if ("station", s) not in existing:
+            rows.append((user_id, "station", s))
+    if rows:
+        con.executemany(
+            "INSERT INTO user_filter_events (user_id, event_type, value) VALUES (?,?,?)",
+            rows,
+        )
+    # Prune events older than 90 days
+    con.execute(
+        "DELETE FROM user_filter_events WHERE user_id=? AND created_at < ?",
+        (user_id, (datetime.now() - timedelta(days=90)).isoformat()),
+    )
+    con.commit()
+    con.close()
+    return jsonify({"status": "ok", "recorded": len(rows)})
+
+
 @app.route("/api/user/for_you")
 @jwt_required()
 def for_you():
@@ -1280,6 +1331,28 @@ def _for_you_inner(user_id, con):
         if r.get("size_m2"): sizes.extend([r["size_m2"]] * max(1, int(w)))
         if r.get("lat") and r.get("lng"):
             geo_points.append((float(r["lat"]), float(r["lng"]), w))
+
+    # ── augment with explicit filter selections ───────────────────────────────
+    cutoff_60d = (now - timedelta(days=60)).isoformat()
+    filter_rows = con.execute(
+        "SELECT event_type, value, COUNT(*) n FROM user_filter_events"
+        " WHERE user_id=? AND created_at>=? GROUP BY event_type, value",
+        (user_id, cutoff_60d),
+    ).fetchall()
+    for fr in filter_rows:
+        ev_weight = min(fr["n"], 5) * 1.5
+        if fr["event_type"] == "ward":
+            ward_ctr[fr["value"]] += ev_weight
+        elif fr["event_type"] == "station":
+            stn = fr["value"]
+            coord_row = con.execute(
+                "SELECT AVG(lat) lat, AVG(lng) lng FROM listings"
+                " WHERE nearest_station LIKE ? AND lat IS NOT NULL AND lng IS NOT NULL"
+                " LIMIT 1",
+                (stn + "%",),
+            ).fetchone()
+            if coord_row and coord_row["lat"] and coord_row["lng"]:
+                geo_points.append((float(coord_row["lat"]), float(coord_row["lng"]), ev_weight))
 
     top_wards   = [w for w, _ in ward_ctr.most_common(3)]
     top_layouts = [l for l, _ in layout_ctr.most_common(3)]

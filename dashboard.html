@@ -1542,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 13:54 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 14:21 JST</p>
       </div>
 
 
@@ -3266,6 +3266,28 @@ function _setStationSelected(name, selected) {
     cell.classList.toggle('active', selected);
   });
   TRAIN_LINES.forEach(line => _updateLineSel(line.id));
+  if (selected) _scheduleFilterEvent();
+}
+
+// ── filter-event reporting (debounced 2 s, only when logged in) ──────────────
+let _filterEventTimer = null;
+function _scheduleFilterEvent() {
+  if (!AUTH.token) return;
+  clearTimeout(_filterEventTimer);
+  _filterEventTimer = setTimeout(_sendFilterEvent, 2000);
+}
+async function _sendFilterEvent() {
+  if (!AUTH.token) return;
+  const wards    = activeLocationFilter === 'area'  ? [...selectedWards]    : [];
+  const stations = activeLocationFilter === 'line'  ? [...selectedStations] : [];
+  if (!wards.length && !stations.length) return;
+  try {
+    await fetch(`${API}/user/filter_event`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ wards, stations }),
+    });
+  } catch (_) {}
 }
 
 function setTrainStationHover(lineId, name, on) {
@@ -3862,6 +3884,7 @@ function buildDistrictAccordion() {
         _updateCitySel(pref.id, city.id);
         _updatePrefSel(pref.id);
         applyMapFilters();
+        _scheduleFilterEvent();
         return true;
       }, wardLabel(w)));
       cityBody.appendChild(chipsRow);
@@ -3908,6 +3931,7 @@ function _setCitySelected(prefId, cityId) {
   buildDistrictAccordion();
   updateBoundaryStyles();
   applyMapFilters();
+  _scheduleFilterEvent();
 }
 
 function _setPrefSelected(prefId) {
@@ -3920,6 +3944,7 @@ function _setPrefSelected(prefId) {
   buildDistrictAccordion();
   updateBoundaryStyles();
   applyMapFilters();
+  _scheduleFilterEvent();
 }
 
 function toggleAllStations() {
@@ -4057,6 +4082,7 @@ async function saveConfig() {
       });
       msg.textContent = r.ok ? t('saved') : t('save_failed');
     } catch { msg.textContent = t('server_error'); }
+    _sendFilterEvent();
   } else {
     localStorage.setItem('jkktrackr_config', JSON.stringify(payload));
     msg.textContent = t('saved_local');
