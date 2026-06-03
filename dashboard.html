@@ -1542,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 15:02 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 15:04 JST</p>
       </div>
 
 
@@ -6411,7 +6411,9 @@ function _chatAppendMsg(role, text, listingIds) {
   const div = document.createElement('div');
   div.className = `chat-msg chat-msg--${role}`;
   const bubbleContent = role === 'assistant' ? _renderChatMarkdown(text) : escHtml(text);
-  div.innerHTML = `<div class="chat-bubble chat-bubble--${role}">${bubbleContent}</div>${role==='assistant' ? cardsHtml : ''}`;
+  const bubbleHtml = bubbleContent.trim() ? `<div class="chat-bubble chat-bubble--${role}">${bubbleContent}</div>` : '';
+  div.innerHTML = `${bubbleHtml}${role==='assistant' ? cardsHtml : ''}`;
+  if (!div.innerHTML.trim()) return;
   thread.appendChild(div);
   thread.scrollTop = thread.scrollHeight;
 }
