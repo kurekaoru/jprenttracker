@@ -20,8 +20,9 @@ from scraper_ur    import URScraper
 from image_pipeline import download_pending_images, reset_asyncio_loop
 import db_events
 
-DEV_MODE = os.environ.get("DEV_MODE") == "1"
-if DEV_MODE:
+DEV_MODE     = os.environ.get("DEV_MODE") == "1"
+SUUMO_ENABLED = False  # paused — set True to re-enable
+if SUUMO_ENABLED:
     from scraper_suumo import SuumoScraper
 
 # File handler for WARNING+ only (crash dumps); INFO events go to the DB events table.
@@ -50,7 +51,7 @@ POLL_INTERVAL     = 3600  # seconds
 SCRAPERS = [
     JKKScraper(DB_FILE),
     URScraper(DB_FILE),
-    *([] if not DEV_MODE else [SuumoScraper(DB_FILE)]),
+    *([] if not SUUMO_ENABLED else [SuumoScraper(DB_FILE)]),
 ]
 
 # ── DB helpers ────────────────────────────────────────────────────────────────

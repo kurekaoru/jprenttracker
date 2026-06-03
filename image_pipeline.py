@@ -140,6 +140,10 @@ def ocr_floor_plan(image_path: str) -> str | None:
 
 def run_floor_plan_analysis(lid: str, con: sqlite3.Connection) -> None:
     """Run Claude vision floor plan analysis and store result in listings.floor_plan_data."""
+    # Idempotency guard — never re-analyze a listing that already has floor_plan_data.
+    existing = con.execute("SELECT floor_plan_data FROM listings WHERE id=?", (lid,)).fetchone()
+    if existing and existing[0]:
+        return
     fp_row = con.execute(
         "SELECT local_path FROM listing_images "
         "WHERE listing_id=? AND image_type='floor_plan' AND local_path IS NOT NULL "
