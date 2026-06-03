@@ -1542,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 14:22 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 15:02 JST</p>
       </div>
 
 
@@ -3513,15 +3513,44 @@ function trainStationMarkerIcon(marker, hover = false) {
   };
 }
 
+function _stationHoverIcon(name, lineColor, selected) {
+  // Estimate text width: CJK chars ~7.4px, ASCII ~5.5px at 11px bold
+  let textW = 0;
+  for (const ch of name) textW += ch.codePointAt(0) > 0x3000 ? 7.4 : 5.5;
+  const pH = 18, pPad = 9, gap = 5, dotR = 6;
+  const pW = Math.max(Math.ceil(textW) + pPad * 2, 36);
+  const totalW = Math.max(pW + 2, 40);
+  const cx = totalW / 2;
+  const totalH = pH + gap + dotR * 2;
+  const pillX = (totalW - pW) / 2;
+  const dotCY = totalH - dotR;
+  const dotFill = selected ? lineColor : '#ffffff';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${totalH}">
+    <rect x="${pillX}" y="0" width="${pW}" height="${pH}" rx="${pH / 2}"
+      fill="rgba(14,22,30,0.88)" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>
+    <text x="${cx}" y="13" text-anchor="middle"
+      font-family="-apple-system,BlinkMacSystemFont,sans-serif"
+      font-size="11" font-weight="700" fill="#ffffff">${name}</text>
+    <circle cx="${cx}" cy="${dotCY}" r="${dotR}"
+      fill="${dotFill}" stroke="${lineColor}" stroke-width="2.5"/>
+  </svg>`;
+  return {
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+    anchor: new google.maps.Point(cx, dotCY + dotR),
+    scaledSize: new google.maps.Size(totalW, totalH),
+  };
+}
+
 function updateTrainStationMarker(marker, hover = false) {
-  marker.setIcon(trainStationMarkerIcon(marker, hover));
-  const line = TRAIN_LINES.find(l => l.id === marker._lineId);
-  marker.setLabel(hover ? {
-    text: marker._stationName,
-    color: '#1f2933',
-    fontSize: '13px',
-    fontWeight: '700'
-  } : null);
+  if (hover) {
+    const color = _sdc(marker._svc || 0);
+    const selected = selectedStations.has(marker._stationName);
+    marker.setIcon(_stationHoverIcon(marker._stationName, color, selected));
+    marker.setLabel(null);
+  } else {
+    marker.setIcon(trainStationMarkerIcon(marker, false));
+    marker.setLabel(null);
+  }
   marker.setZIndex(hover ? 24 : 19);
 }
 
