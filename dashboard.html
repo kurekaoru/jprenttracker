@@ -1542,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 10:02 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 11:53 JST</p>
       </div>
 
 
@@ -3194,6 +3194,7 @@ function _staTog(el) {
   const lid  = el.dataset.lid;
   _setStationSelected(name, !selectedStations.has(name));
   if (lid) _updateLineSel(lid);
+  setViewMode('filtered');
   applyMapFilters();
   refreshTrainStationMarkers();
 }
@@ -3205,6 +3206,7 @@ function setLineStationsSelected(lid, selected) {
   line.stations.forEach(([name]) => _setStationSelected(name, selected));
   (line.branches || []).forEach(b => b.stations.forEach(([name]) => _setStationSelected(name, selected)));
   _updateLineSel(lid);
+  setViewMode('filtered');
   applyMapFilters();
   refreshTrainStationMarkers();
 }
@@ -3465,9 +3467,9 @@ function updateTrainStationMarker(marker, hover = false) {
   marker.setIcon(trainStationMarkerIcon(marker, hover));
   const line = TRAIN_LINES.find(l => l.id === marker._lineId);
   marker.setLabel(hover ? {
-    text: line ? `${line.name} ${marker._stationName}` : marker._stationName,
+    text: marker._stationName,
     color: '#1f2933',
-    fontSize: '11px',
+    fontSize: '13px',
     fontWeight: '700'
   } : null);
   marker.setZIndex(hover ? 24 : 19);
@@ -3891,6 +3893,7 @@ function toggleAllStations() {
   const anyOn = allSta.some(n => selectedStations.has(n));
   allSta.forEach(n => _setStationSelected(n, !anyOn));
   TRAIN_LINES.forEach(l => _updateLineSel(l.id));
+  setViewMode('filtered');
   applyMapFilters();
   refreshTrainStationMarkers();
 }
