@@ -1542,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 13:35 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 13:44 JST</p>
       </div>
 
 
@@ -3063,7 +3063,10 @@ function renderGraphLineFromGraph(line, graph) {
     cell.className = 'graph-sta snake-sta' + (selectedStations.has(node.name) ? ' active' : '');
     cell.dataset.sta = node.name;
     cell.dataset.lid = line.id;
-    cell.style.left = `${graph.colXs[node.col]}%`;
+    const visualCol = line.id === 'JC' && node.name === '立川'
+      ? Math.min(node.col + 1, graph.colXs.length - 1)
+      : node.col;
+    cell.style.left = `${graph.colXs[visualCol]}%`;
     cell.style.width = `${graph.cellW}%`;
     cell.style.top = `${node.row * 46 + 1}px`;
     cell.style.setProperty('--dc', _sdc(svc));
