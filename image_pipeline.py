@@ -19,6 +19,32 @@ log = logging.getLogger(__name__)
 
 IMG_DIR = "images"
 
+# ── GCS ────────────────────────────────────────────────────────────────────────
+GCS_BUCKET = os.environ.get("GCS_BUCKET", "")
+_gcs_client = None
+
+def _gcs():
+    global _gcs_client
+    if _gcs_client is None:
+        from google.cloud import storage
+        _gcs_client = storage.Client()
+    return _gcs_client
+
+def _upload_to_gcs(fpath: str, blob_name: str) -> str | None:
+    if not GCS_BUCKET:
+        return None
+    try:
+        bucket = _gcs().bucket(GCS_BUCKET)
+        blob = bucket.blob(blob_name)
+        ext = fpath.rsplit(".", 1)[-1].lower()
+        mime = f"image/{'jpeg' if ext == 'jpg' else ext}"
+        blob.upload_from_filename(fpath, content_type=mime)
+        blob.make_public()
+        return blob.public_url
+    except Exception as e:
+        log.warning(f"GCS upload failed for {fpath}: {e}")
+        return None
+
 _IMG_HEADERS = {"User-Agent": "jkktrackr/1.0 (image-collector)"}
 
 _DETAIL_HEADERS = {
@@ -244,12 +270,22 @@ def download_image(url: str, row_id: int, lid: str, img_type: str,
                 log.info(f"Appliances found: {ocr_text}")
                 _merge_appliances(lid, items, con)
 
+        stored = fpath
+        if GCS_BUCKET:
+            blob_name = f"images/{lid}/{row_id}.{ext}"
+            gcs_url = _upload_to_gcs(fpath, blob_name)
+            if gcs_url:
+                stored = gcs_url
+                try:
+                    os.remove(fpath)
+                except OSError:
+                    pass
         con.execute(
             "UPDATE listing_images SET local_path=?, downloaded_at=?, ocr_text=? WHERE id=?",
-            (fpath, datetime.now().isoformat(), ocr_text, row_id),
+            (stored, datetime.now().isoformat(), ocr_text, row_id),
         )
-        log.debug(f"Saved {fpath}")
-        return fpath
+        log.debug(f"Saved {stored}")
+        return stored
     except Exception as e:
         log.warning(f"Image download failed ({url}): {e}")
         return None
@@ -295,10 +331,13 @@ def save_images_for_listing(lid: str, images: list[tuple[str, str]],
             continue
         row_id, existing_path = row
 
-        if existing_path and os.path.exists(existing_path):
+        already_stored = existing_path and (
+            existing_path.startswith("http") or os.path.exists(existing_path)
+        )
+        if already_stored:
             prio = THUMB_PRIORITY.get(img_type, 99)
             if best_thumb is None or prio < best_thumb[0]:
-                best_thumb = (prio, img_url)
+                best_thumb = (prio, existing_path if existing_path.startswith("http") else img_url)
             ok += 1
             continue
 
@@ -314,7 +353,7 @@ def save_images_for_listing(lid: str, images: list[tuple[str, str]],
                 floor_plan_found = True
             prio = THUMB_PRIORITY.get(actual_type, 99)
             if best_thumb is None or prio < best_thumb[0]:
-                best_thumb = (prio, img_url)
+                best_thumb = (prio, fpath)
 
     if best_thumb:
         con.execute("UPDATE listings SET thumbnail_url=? WHERE id=?", (best_thumb[1], lid))

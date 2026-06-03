@@ -1523,7 +1523,11 @@ def serve_listing_image(image_id):
     con = db()
     row = con.execute("SELECT local_path FROM listing_images WHERE id=?", (image_id,)).fetchone()
     con.close()
-    if not row or not row["local_path"] or not os.path.isfile(row["local_path"]):
+    if not row or not row["local_path"]:
+        return "", 404
+    if row["local_path"].startswith("http"):
+        return redirect(row["local_path"], code=302)
+    if not os.path.isfile(row["local_path"]):
         return "", 404
     return send_file(row["local_path"])
 
@@ -1538,7 +1542,11 @@ def get_listing_images(listing_id):
         (listing_id,),
     ).fetchall()
     con.close()
-    return jsonify([{"url": f"/api/images/{r['id']}", "type": r["image_type"]} for r in rows])
+    return jsonify([{
+        "url": r["local_path"] if r["local_path"] and r["local_path"].startswith("http")
+               else f"/api/images/{r['id']}",
+        "type": r["image_type"],
+    } for r in rows])
 
 
 @app.route("/api/listings/<listing_id>/reprocess-images", methods=["POST"])
@@ -3087,7 +3095,8 @@ def _chat_show_images(params, con):
         return {"error": f"no {''+filter_type+' ' if filter_type else ''}images found for this listing"}
     images = []
     for r in rows:
-        serve_url = f"/api/images/{r['id']}" if r["local_path"] else r["url"]
+        serve_url = (r["local_path"] if r["local_path"] and r["local_path"].startswith("http")
+                     else f"/api/images/{r['id']}" if r["local_path"] else r["url"])
         images.append({"url": serve_url, "type": r["image_type"]})
     _row = con.execute("SELECT name FROM listings WHERE id=?", (lid,)).fetchone()
     name = _row["name"] if _row else ""
