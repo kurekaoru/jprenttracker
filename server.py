@@ -1412,6 +1412,7 @@ def _for_you_inner(user_id, con):
         "       nearest_station, walk_min, first_seen, source, thumbnail_url "
         "  FROM listings "
         " WHERE disappeared_at IS NULL AND rent > 0 "
+        "   AND COALESCE(source,'jkk') != 'suumo' "
         " ORDER BY last_seen DESC LIMIT 800",
     ).fetchall()
 
