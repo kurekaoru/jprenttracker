@@ -1542,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 12:10 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 13:24 JST</p>
       </div>
 
 
@@ -2911,6 +2911,8 @@ function lineGraphLayout(line) {
       const prefix = stas.slice(0, firstBranchIdx + 1);
       const suffix = stas.slice(firstBranchIdx + 1);
       const prefixRows = placePath(prefix, 0, fullCols, true, false, new Set(), new Set([branches[0].from]));
+      const tachikawaNode = nodes.find(node => node.name === '立川' && node.group === 'trunk');
+      if (tachikawaNode) tachikawaNode.col = Math.min(tachikawaNode.col + 1, fullCols.at(-1));
       let nextRow = prefixRows;
 
       const haijimaIdx = branches[0].stations.findIndex(([name]) => name === branches[1].from);
@@ -2922,11 +2924,10 @@ function lineGraphLayout(line) {
       if (haijimaStation) {
         placePath([haijimaStation], haijimaRow, [4], true, true, new Set(), new Set(), 'branch0', 1);
       }
-      labels.push(terminalBranchLabel(branches[0], 'branch0', nextRow, 1));
+      labels.push({ text: branchDisplayName(line, branches[0]), row: nextRow + 8, col: 1 });
 
       const itsukaichiStartRow = haijimaStation ? haijimaRow + 1 : nextRow + approachRows;
       const itsukaichiRows = placePath(branches[1].stations, itsukaichiStartRow, [4, 3, 2], true, true, new Set(), new Set(), 'branch1', 4);
-      labels.push(terminalBranchLabel(branches[1], 'branch1', itsukaichiStartRow, 4));
       const omeRestStartRow = itsukaichiStartRow + itsukaichiRows;
       const omeRestRows = placePath(omeRest, omeRestStartRow, [1, 2, 3, 4], true, true, new Set(), new Set(), 'branch0', 1);
       nextRow = Math.max(
