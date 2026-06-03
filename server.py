@@ -1206,7 +1206,7 @@ def record_filter_event():
     user_id = int(get_jwt_identity())
     data = request.get_json(silent=True) or {}
     wards    = [w for w in (data.get("wards")    or []) if isinstance(w, str) and w][:60]
-    stations = [s for s in (data.get("stations") or []) if isinstance(s, str) and s][:120]
+    stations = [s for s in (data.get("stations") or []) if isinstance(s, str) and s][:300]
     if not wards and not stations:
         return jsonify({"status": "ok"})
     con = db()

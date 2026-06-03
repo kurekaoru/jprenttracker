@@ -1542,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 15:04 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 15:31 JST</p>
       </div>
 
 
@@ -3268,8 +3268,21 @@ function _scheduleFilterEvent() {
 }
 async function _sendFilterEvent() {
   if (!AUTH.token) return;
-  const wards    = activeLocationFilter === 'area'  ? [...selectedWards]    : [];
-  const stations = activeLocationFilter === 'line'  ? [...selectedStations] : [];
+  const wards = activeLocationFilter === 'area' ? [...selectedWards] : [];
+  let stations = [];
+  if (activeLocationFilter === 'line' && selectedStations.size) {
+    // Expand: any line that has at least one selected station → record all its stations.
+    // This lets the recommendation engine boost the full corridor, not just individual stops.
+    const expanded = new Set(selectedStations);
+    TRAIN_LINES.forEach(line => {
+      const all = [
+        ...line.stations.map(([n]) => n),
+        ...(line.branches || []).flatMap(b => b.stations.map(([n]) => n)),
+      ];
+      if (all.some(n => selectedStations.has(n))) all.forEach(n => expanded.add(n));
+    });
+    stations = [...expanded];
+  }
   if (!wards.length && !stations.length) return;
   try {
     await fetch(`${API}/user/filter_event`, {
@@ -3499,9 +3512,25 @@ function clearTrainLineOverlay(id = null) {
   _trainLineOverlays.delete(id);
 }
 
+function _stationSelectedIcon(color) {
+  const dotR = 5, ringR = 8.5, pad = 2;
+  const w = Math.ceil((ringR + pad) * 2);
+  const c = w / 2;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${w}">
+    <circle cx="${c}" cy="${c}" r="${ringR}" fill="none" stroke="${color}" stroke-width="1.5" stroke-opacity="0.45"/>
+    <circle cx="${c}" cy="${c}" r="${dotR}" fill="${color}" stroke="white" stroke-width="1.5"/>
+  </svg>`;
+  return {
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+    anchor: new google.maps.Point(c, c),
+    scaledSize: new google.maps.Size(w, w),
+  };
+}
+
 function trainStationMarkerIcon(marker, hover = false) {
   const color = _sdc(marker._svc || 0);
   const selected = selectedStations.has(marker._stationName);
+  if (selected && !hover) return _stationSelectedIcon(color);
   return {
     path: google.maps.SymbolPath.CIRCLE,
     scale: hover ? 6 : 5,
@@ -4051,7 +4080,7 @@ function loadConfig() {
   if (fmEl) fmEl.value     = d.max_age_years || '';
   selectedStations = new Set(Array.isArray(d.stored_filter_stations) ? d.stored_filter_stations : (d.filter_stations || []));
   selectedWards    = Array.isArray(d.stored_wards) ? new Set(d.stored_wards) : (d.wards?.length ? new Set(d.wards) : new Set(DEFAULT_WARDS));
-  activeLocationFilter = 'area'; // always start in area mode on page load; station selections preserved
+  activeLocationFilter = locationModeFromSettings(d);
   selectedLayouts  = d.layouts?.length ? new Set(d.layouts) : new Set(DEFAULT_LAYOUTS);
   selectedFeatures = new Set(d.required_features || []);
   filterSources    = _loadSavedSources();
@@ -5065,7 +5094,7 @@ async function loadAreaBoundaries() {
       { color: '#D3A200', wards: SI },
     ]),
     loadFile('N03-21_14_210101.json', [
-      { color: '#1565C0', wards: YOKOHAMA },
+      { color: '#00ACC1', wards: YOKOHAMA },
       { color: '#C62828', wards: KAWASAKI },
       { color: '#1565C0', wards: SAGAMIHARA },
       { color: '#1565C0', wards: KANAGAWA_CITIES },
@@ -7157,7 +7186,7 @@ async function loadUserSettings() {
     if (fmEl) fmEl.value   = d.max_age_years || '';
     selectedStations = new Set(Array.isArray(d.stored_filter_stations) ? d.stored_filter_stations : (d.filter_stations || []));
     selectedWards    = Array.isArray(d.stored_wards) ? new Set(d.stored_wards) : (d.wards?.length ? new Set(d.wards) : new Set(DEFAULT_WARDS));
-    activeLocationFilter = 'area'; // always start in area mode on page load; station selections preserved
+    activeLocationFilter = locationModeFromSettings(d);
     selectedLayouts  = d.layouts?.length ? new Set(d.layouts) : new Set(DEFAULT_LAYOUTS);
     selectedFeatures = new Set(d.required_features || []);
     filterSources    = _loadSavedSources();
