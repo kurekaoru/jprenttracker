@@ -17,6 +17,11 @@ log = logging.getLogger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
+# Kill-switch: set False while developing local OCR/classifier replacements.
+# All three Anthropic call sites (ocr_floor_plan, extract_appliances,
+# run_floor_plan_analysis) check this before making any API request.
+ANTHROPIC_ENABLED = False
+
 IMG_DIR = "images"
 
 # ── GCS ────────────────────────────────────────────────────────────────────────
@@ -105,6 +110,8 @@ def ocr_floor_plan(image_path: str) -> str | None:
     Ask Claude Haiku to extract room dimensions from an image.
     Returns a text summary, or None if the image is not a floor plan.
     """
+    if not ANTHROPIC_ENABLED:
+        return None
     import os as _os
     try:
         from anthropic import Anthropic
@@ -140,6 +147,8 @@ def ocr_floor_plan(image_path: str) -> str | None:
 
 def run_floor_plan_analysis(lid: str, con: sqlite3.Connection) -> None:
     """Run Claude vision floor plan analysis and store result in listings.floor_plan_data."""
+    if not ANTHROPIC_ENABLED:
+        return
     # Idempotency guard — never re-analyze a listing that already has floor_plan_data.
     existing = con.execute("SELECT floor_plan_data FROM listings WHERE id=?", (lid,)).fetchone()
     if existing and existing[0]:
@@ -465,6 +474,8 @@ def extract_appliances(image_path: str) -> list[str]:
     ["air conditioning", "video interphone", "bathroom ventilation fan"].
     Returns [] on failure or if nothing recognisable.
     """
+    if not ANTHROPIC_ENABLED:
+        return []
     import os as _os
     try:
         from anthropic import Anthropic
