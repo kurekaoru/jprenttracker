@@ -1542,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 09:39 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 09:43 JST</p>
       </div>
 
 
@@ -5788,6 +5788,71 @@ function renderFavouritesTable() {
 
 // ── For You ──────────────────────────────────────────────────────────────────
 
+let _fyListings = [];
+let _fySortCol  = 'rank';
+let _fySortAsc  = true;
+
+function sortForYou(col) {
+  _fySortAsc = (_fySortCol === col) ? !_fySortAsc : (['name','ward','layout','nearest_station'].includes(col));
+  _fySortCol = col;
+  renderForYouTable();
+}
+
+function renderForYouTable() {
+  const tableEl = document.getElementById('foryou-table');
+  if (!tableEl || !_fyListings.length) return;
+
+  const sorted = [..._fyListings];
+  if (_fySortCol !== 'rank') {
+    sorted.sort((a, b) => {
+      let va, vb;
+      if (['name','ward','layout','nearest_station'].includes(_fySortCol)) {
+        va = (a[_fySortCol]||''); vb = (b[_fySortCol]||'');
+        return _fySortAsc ? va.localeCompare(vb,'ja') : vb.localeCompare(va,'ja');
+      }
+      if (_fySortCol === 'walk_min') { va = a.walk_min ?? 9999; vb = b.walk_min ?? 9999; }
+      else { va = a[_fySortCol] ?? ''; vb = b[_fySortCol] ?? ''; }
+      return _fySortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+    });
+  }
+
+  const ind = col => col === _fySortCol
+    ? `<span class="sort-ind">${_fySortAsc ? '▴' : '▾'}</span>`
+    : `<span class="sort-ind" style="opacity:.25">⇅</span>`;
+
+  const cols = [
+    ['name', t('col_name')], ['ward', t('col_ward')], ['rent', t('col_rent')],
+    ['layout', t('col_layout')], ['size_m2', t('col_size')],
+    ['nearest_station', t('col_station')], ['walk_min', t('col_walk')],
+    ['first_seen', t('col_first_seen')],
+  ];
+  const thead = `<tr>
+    <th style="width:20px;padding:0"></th>
+    ${cols.map(([k,l]) => `<th class="${_fySortCol===k?'sort-active':''}" onclick="sortForYou('${k}')">${l}${ind(k)}</th>`).join('')}
+  </tr>`;
+
+  const tbody = sorted.map(l => {
+    const tag   = l.source === 'ur' ? '<span class="src-tag ur">UR</span>' : l.source === 'suumo' ? '<span class="src-tag suumo">SUUMO</span>' : '<span class="src-tag jkk">JKK</span>';
+    const href  = l.url ? escHtml(l.url) : '#';
+    const sel   = l.id === _selectedId ? ' row-selected' : '';
+    const saved = _savedListings.has(l.id);
+    return `<tr class="${sel}" data-id="${escHtml(l.id)}" data-name="${escHtml(l.name)}" data-thumb="${escHtml(_trThumb(l))}" onclick="if(event.target.tagName!='A'&&event.target.tagName!='BUTTON')selectListing('${l.id}','${l.url||''}')">
+      <td><button class="star-btn${saved?' saved':''}" onclick="event.stopPropagation();toggleSave('${l.id}')">${saved?'★':'☆'}</button></td>
+      <td>${tag} <a href="${href}" target="_blank" rel="noopener">${escHtml(l.name)}</a></td>
+      <td>${escHtml(wardLabel(l.ward))}</td>
+      <td style="font-family:var(--mono);">¥${(l.rent||0).toLocaleString()}</td>
+      <td>${escHtml(l.layout||'—')}</td>
+      <td style="font-family:var(--mono);">${l.size_m2 ? l.size_m2+'m²' : '—'}</td>
+      <td>${l.nearest_station ? escHtml(l.nearest_station) : '—'}</td>
+      <td style="font-family:var(--mono);">${l.walk_min > 0 ? l.walk_min + t('walk_unit') : '—'}</td>
+      <td style="font-family:var(--mono);">${fmtDate(l.first_seen)}</td>
+    </tr>`;
+  }).join('');
+
+  tableEl.innerHTML = `<div style="overflow-x:auto;"><table class="sort-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+  attachThumbHover(tableEl);
+}
+
 async function loadForYou() {
   const profEl  = document.getElementById('foryou-profile');
   const tableEl = document.getElementById('foryou-table');
@@ -5830,31 +5895,9 @@ async function loadForYou() {
       return;
     }
 
-    const thead = `<tr>
-      <th style="width:20px;padding:0"></th>
-      <th>${t('col_name')}</th><th>${t('col_ward')}</th>
-      <th>${t('col_rent')}</th><th>${t('col_layout')}</th>
-      <th>${t('col_size')}</th><th>${t('col_station')}</th><th>${t('col_walk')}</th>
-      <th>${t('col_first_seen')}</th></tr>`;
-    const tbody = d.listings.map(l => {
-      const tag  = l.source === 'ur' ? '<span class="src-tag ur">UR</span>' : l.source === 'suumo' ? '<span class="src-tag suumo">SUUMO</span>' : '<span class="src-tag jkk">JKK</span>';
-      const href = l.url ? escHtml(l.url) : '#';
-      const sel  = l.id === _selectedId ? ' row-selected' : '';
-      const saved = _savedListings.has(l.id);
-      return `<tr class="${sel}" data-id="${escHtml(l.id)}" data-name="${escHtml(l.name)}" data-thumb="${escHtml(_trThumb(l))}" onclick="if(event.target.tagName!='A'&&event.target.tagName!='BUTTON')selectListing('${l.id}','${l.url||''}')">
-        <td><button class="star-btn${saved?' saved':''}" onclick="event.stopPropagation();toggleSave('${l.id}')">${saved?'★':'☆'}</button></td>
-        <td>${tag} <a href="${href}" target="_blank" rel="noopener">${escHtml(l.name)}</a></td>
-        <td>${escHtml(wardLabel(l.ward))}</td>
-        <td style="font-family:var(--mono);">¥${(l.rent||0).toLocaleString()}</td>
-        <td>${escHtml(l.layout||'—')}</td>
-        <td style="font-family:var(--mono);">${l.size_m2 ? l.size_m2+'m²' : '—'}</td>
-        <td>${l.nearest_station ? escHtml(l.nearest_station) : '—'}</td>
-        <td style="font-family:var(--mono);">${l.walk_min > 0 ? l.walk_min + t('walk_unit') : '—'}</td>
-        <td style="font-family:var(--mono);">${fmtDate(l.first_seen)}</td>
-      </tr>`;
-    }).join('');
-    tableEl.innerHTML = `<div style="overflow-x:auto;"><table class="sort-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
-    attachThumbHover(tableEl);
+    _fyListings = d.listings;
+    _fySortCol  = 'rank';
+    renderForYouTable();
   } catch (e) {
     tableEl.innerHTML = `<div style="padding:8px;color:var(--danger);font-size:11px;font-family:var(--mono);">エラー: ${escHtml(e?.message || String(e))}</div>`;
   }
