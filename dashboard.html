@@ -1542,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 08:32 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 09:30 JST</p>
       </div>
 
 
@@ -4099,11 +4099,15 @@ function hideThumbTip() {
 }
 
 function attachThumbHover(container) {
-  container.querySelectorAll('tr[data-id]').forEach(tr => {
-    tr.addEventListener('mouseenter', e => {
+  container.addEventListener('mouseover', e => {
+    const tr = e.target.closest('tr[data-id]');
+    if (!tr) { hideThumbTip(); return; }
+    if (_tipCurrentId !== tr.dataset.id)
       showThumbTip(tr.dataset.name || '', e.clientX, e.clientY, tr.dataset.thumb || null, tr.dataset.id);
-    });
-    tr.addEventListener('mouseleave', hideThumbTip);
+  });
+  container.addEventListener('mouseout', e => {
+    const tr = e.target.closest('tr[data-id]');
+    if (!tr || !tr.contains(e.relatedTarget)) hideThumbTip();
   });
 }
 
@@ -6698,6 +6702,8 @@ window.addEventListener('message', e => {
   if (!e.data) return;
   if (e.data.type === 'google-auth' || e.data.type === 'github-auth') onAuthSuccess(e.data);
 });
+
+document.addEventListener('mouseleave', hideThumbTip);
 
 // ── Onboarding flash cards ───────────────────────────────────────────────────
 const ONBOARD_CARDS = 7;
