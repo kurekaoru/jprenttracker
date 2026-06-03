@@ -1542,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 15:31 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 19:25 JST</p>
       </div>
 
 
@@ -5742,8 +5742,10 @@ function applyMapFilters() {
       if (availNow && !(l.available_from || '').startsWith('随時')) return;
       if (maxAge > 0 && l.age_years != null && l.age_years > maxAge) return;
       if (activeLocationFilter === 'line' && selectedStations.size > 0) {
-        const sta = l.nearest_station || '';
-        if (![...selectedStations].some(s => sta.startsWith(s))) return;
+        // Strip （line name） suffix and trailing 駅, then exact-match against selected set.
+        // startsWith was too loose: an empty string in selectedStations passed everything.
+        const staBase = (l.nearest_station || '').replace(/[(（].*$/, '').replace(/駅$/, '').trim();
+        if (!staBase || !selectedStations.has(staBase)) return;
       }
       for (const feat of selectedFeatures) {
         if (!(l.features || '').includes(feat)) return;
