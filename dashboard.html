@@ -1542,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 13:44 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 13:54 JST</p>
       </div>
 
 
@@ -3044,9 +3044,13 @@ function renderGraphLineFromGraph(line, graph) {
   wrap.style.setProperty('--rowh', '46px');
   wrap.innerHTML = graphTrackSvg(graph);
   graph.labels.forEach(label => {
+    if (line.id === 'JC' && label.text === '五日市線') return;
     const el = document.createElement('div');
     el.className = 'branch-label';
-    el.style.top = `${label.row * 46 + 2}px`;
+    const labelRow = line.id === 'JC' && label.text === '青梅線'
+      ? label.row + 6
+      : label.row;
+    el.style.top = `${labelRow * 46 + 2}px`;
     if (Number.isFinite(label.col)) {
       el.style.left = `${graph.colXs[label.col]}%`;
       el.style.width = `${graph.cellW * 0.9}%`;
@@ -3166,7 +3170,11 @@ function buildLineAccordion() {
     body.id = 'lb-' + line.id;
     const actions = document.createElement('div');
     actions.className = 'line-actions';
-    const allSelNow = line.stations.every(([n]) => selectedStations.has(n));
+    const _allLineNames = () => [
+      ...line.stations.map(([n]) => n),
+      ...(line.branches || []).flatMap(b => b.stations.map(([n]) => n)),
+    ];
+    const allSelNow = _allLineNames().every(n => selectedStations.has(n));
     const togBtn = document.createElement('button');
     togBtn.type = 'button';
     togBtn.className = 'line-action';
@@ -3174,7 +3182,7 @@ function buildLineAccordion() {
     togBtn.textContent = allSelNow ? '全OFF' : '全ON';
     togBtn.onclick = e => {
       e.stopPropagation();
-      const isAll = line.stations.every(([n]) => selectedStations.has(n));
+      const isAll = _allLineNames().every(n => selectedStations.has(n));
       setLineStationsSelected(line.id, !isAll);
     };
     actions.appendChild(togBtn);
@@ -3229,6 +3237,16 @@ function setLineStationsSelected(lid, selected) {
   setViewMode('filtered');
   applyMapFilters();
   refreshTrainStationMarkers();
+  if (selected) _fitBoundsToFiltered(150);
+}
+
+function _fitBoundsToFiltered(maxCount) {
+  if (!map || !_filteredListings.length || _filteredListings.length > maxCount) return;
+  const pts = _filteredListings.filter(l => l.lat && l.lng);
+  if (!pts.length) return;
+  const bounds = new google.maps.LatLngBounds();
+  pts.forEach(l => bounds.extend({ lat: l.lat, lng: l.lng }));
+  setTimeout(() => map.fitBounds(bounds, { top: 60, right: 40, bottom: 60, left: 40 }), 150);
 }
 
 function _stationCellSelector(name) {
