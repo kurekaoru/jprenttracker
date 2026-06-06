@@ -2496,7 +2496,7 @@ def proxy_directions():
         return jsonify({"status": "REQUEST_DENIED", "error_message": "GOOGLE_MAPS_SERVER_KEY not set"}), 503
 
     cache_origin = _round_origin(origin)
-    cache_cutoff = (datetime.now() - timedelta(hours=24)).isoformat()
+    cache_cutoff = (datetime.now() - timedelta(days=7)).isoformat()
 
     con = db()
     cached = con.execute(
@@ -3251,6 +3251,14 @@ def _chat_batch_commute(params, con):
         else:
             uncached.append(r)
 
+    # Hard cap: Distance Matrix costs $5/1000 elements. Cap at 100 uncached listings
+    # (~$0.50 max per call). If more exist, tell the AI to ask the user to filter first.
+    UNCACHED_CAP = 100
+    skipped = 0
+    if len(uncached) > UNCACHED_CAP:
+        skipped = len(uncached) - UNCACHED_CAP
+        uncached = uncached[:UNCACHED_CAP]
+
     BATCH = 25
     for i in range(0, len(uncached), BATCH):
         batch = uncached[i:i + BATCH]
@@ -3285,13 +3293,19 @@ def _chat_batch_commute(params, con):
     con.commit()
 
     matching.sort(key=lambda x: x["commute_minutes"])
-    return {
+    result = {
         "count": len(matching),
         "checked": len(rows),
         "destination": destination,
         "max_minutes": max_minutes,
         "listings": matching,
     }
+    if skipped:
+        result["warning"] = (
+            f"{skipped} listings skipped (no cached commute data and cap of {UNCACHED_CAP} reached). "
+            "Ask the user to narrow down by ward or station filter first, then retry."
+        )
+    return result
 
 
 def _chat_run_sql(params, con):
@@ -3714,29 +3728,58 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                     )
                     driving = None
                     if GOOGLE_MAPS_SERVER_KEY:
-                        try:
-                            gm = requests.get(
-                                "https://maps.googleapis.com/maps/api/directions/json",
-                                params={"origin": f"{row['lat']},{row['lng']}", "destination": dest,
-                                        "mode": "driving", "language": "ja", "region": "JP",
-                                        "key": GOOGLE_MAPS_SERVER_KEY},
-                                timeout=10,
-                            ).json()
-                            if gm.get("status") == "OK":
-                                leg = gm["routes"][0]["legs"][0]
-                                driving = {
-                                    "duration": leg["duration"]["text"],
-                                    "duration_minutes": round(leg["duration"]["value"] / 60),
-                                    "distance": leg["distance"]["text"],
-                                }
-                                all_actions.append({
-                                    "type":        "show_driving_route",
-                                    "lat":         row["lat"], "lng": row["lng"],
-                                    "destination": dest,
-                                    "mode":        "DRIVING",
-                                })
-                        except Exception:
-                            pass
+                        _drive_origin  = _round_origin(f"{row['lat']},{row['lng']}")
+                        _drive_cutoff  = (datetime.now() - timedelta(days=7)).isoformat()
+                        _drive_cached  = con.execute(
+                            "SELECT response FROM route_cache"
+                            " WHERE origin=? AND destination=? AND mode=? AND cached_at>?",
+                            (_drive_origin, dest, "driving", _drive_cutoff),
+                        ).fetchone()
+                        if _drive_cached:
+                            try:
+                                _gm = json.loads(_drive_cached["response"])
+                                if _gm.get("status") == "OK":
+                                    _leg = _gm["routes"][0]["legs"][0]
+                                    driving = {
+                                        "duration": _leg["duration"]["text"],
+                                        "duration_minutes": round(_leg["duration"]["value"] / 60),
+                                        "distance": _leg["distance"]["text"],
+                                    }
+                            except Exception:
+                                pass
+                        if driving is None:
+                            try:
+                                gm = requests.get(
+                                    "https://maps.googleapis.com/maps/api/directions/json",
+                                    params={"origin": f"{row['lat']},{row['lng']}", "destination": dest,
+                                            "mode": "driving", "language": "ja", "region": "JP",
+                                            "key": GOOGLE_MAPS_SERVER_KEY},
+                                    timeout=10,
+                                ).json()
+                                if gm.get("status") == "OK":
+                                    leg = gm["routes"][0]["legs"][0]
+                                    driving = {
+                                        "duration": leg["duration"]["text"],
+                                        "duration_minutes": round(leg["duration"]["value"] / 60),
+                                        "distance": leg["distance"]["text"],
+                                    }
+                                    con.execute(
+                                        "INSERT OR REPLACE INTO route_cache"
+                                        " (origin, destination, mode, response, cached_at)"
+                                        " VALUES (?,?,?,?,?)",
+                                        (_drive_origin, dest, "driving",
+                                         json.dumps(gm), datetime.now().isoformat()),
+                                    )
+                                    con.commit()
+                            except Exception:
+                                pass
+                        if driving:
+                            all_actions.append({
+                                "type":        "show_driving_route",
+                                "lat":         row["lat"], "lng": row["lng"],
+                                "destination": dest,
+                                "mode":        "DRIVING",
+                            })
                     result = {
                         "transit_api_unavailable": True,
                         "google_maps_transit_url": gmaps_transit,
