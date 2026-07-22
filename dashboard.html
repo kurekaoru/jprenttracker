@@ -1542,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-06-03 19:25 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-07-22 17:44 JST</p>
       </div>
 
 
@@ -6396,8 +6396,13 @@ function chatCardSelect(lid) {
   }
 }
 
-function _chatListingCard(lid) {
-  const l = _allListings?.find(x => x.id === lid && !x.disappeared_at);
+function _chatListingCard(lid, listingData) {
+  // Prefer the listing data the chat API returned directly (always in sync
+  // with what the AI actually found) over _allListings, which only holds
+  // whatever the main map/grid's own last fetch returned — a chat search can
+  // easily return listings outside that cached, filter-dependent set.
+  const l = listingData?.find(x => x.id === lid)
+    || _allListings?.find(x => x.id === lid && !x.disappeared_at);
   if (!l) return '';
   const _thumbSrc = l.thumbnail_url
     ? (l.thumbnail_url.startsWith('/') ? API.replace(/\/api\/?$/, '') + l.thumbnail_url : l.thumbnail_url)
@@ -6431,12 +6436,12 @@ function _renderChatMarkdown(text) {
     .replace(/\n/g, '<br>');
 }
 
-function _chatAppendMsg(role, text, listingIds) {
+function _chatAppendMsg(role, text, listingIds, listingData) {
   const thread = document.getElementById('chat-thread');
   document.getElementById('chat-empty')?.remove();
 
   const ids = Array.isArray(listingIds) ? listingIds : [];
-  const cards = ids.map(_chatListingCard).filter(Boolean).join('');
+  const cards = ids.map(id => _chatListingCard(id, listingData)).filter(Boolean).join('');
   const cardsHtml = cards ? `<div class="chat-listings">${cards}</div>` : '';
 
   const div = document.createElement('div');
@@ -6508,7 +6513,7 @@ async function chatSend() {
 
     _chatSessionId = data.session_id;
     localStorage.setItem('chatSessionId', _chatSessionId);
-    _chatAppendMsg('assistant', data.response, data.listing_ids || []);
+    _chatAppendMsg('assistant', data.response, data.listing_ids || [], data.listings || []);
     (data.actions || []).forEach(chatExecuteAction);
   } catch (e) {
     _chatRemoveTyping();

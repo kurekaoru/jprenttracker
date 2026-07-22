@@ -3453,6 +3453,9 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
     messages = [{"role": m["role"], "content": m["content"]} for m in history]
     all_ids = []
     all_actions = []
+    all_listing_objs = {}  # id -> full row dict, so the frontend can render cards
+                            # without depending on the map's own (possibly
+                            # filter-mismatched, 90s-cached) _allListings array
 
     if open_listing:
         open_ctx = (
@@ -3551,7 +3554,13 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
             # Images are self-displaying — suppress AI text narration when photos were shown
             if any(a.get("type") == "show_images" for a in all_actions):
                 text = ""
-            return {"text": text, "listing_ids": list(dict.fromkeys(all_ids)), "actions": all_actions}
+            deduped_ids = list(dict.fromkeys(all_ids))
+            return {
+                "text": text,
+                "listing_ids": deduped_ids,
+                "listings": [all_listing_objs[i] for i in deduped_ids if i in all_listing_objs],
+                "actions": all_actions,
+            }
 
         tool_results = []
         for block in resp.content:
@@ -3559,7 +3568,9 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                 continue
             if block.name == "search_listings":
                 result = _chat_search(block.input, con)
-                all_ids.extend(r["id"] for r in result.get("listings", []))
+                for r in result.get("listings", []):
+                    all_ids.append(r["id"])
+                    all_listing_objs[r["id"]] = r
             elif block.name == "get_statistics":
                 result = _chat_stats(con)
             elif block.name == "get_room_stats":
@@ -3574,7 +3585,9 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                     })
             elif block.name == "batch_commute_filter":
                 result = _chat_batch_commute(block.input, con)
-                all_ids.extend(r["id"] for r in result.get("listings", []))
+                for r in result.get("listings", []):
+                    all_ids.append(r["id"])
+                    all_listing_objs[r["id"]] = r
             elif block.name == "save_listings":
                 ids = block.input.get("listing_ids", [])
                 if user_id and ids:
@@ -3654,6 +3667,19 @@ def _call_claude(history, con, open_listing=None, user_id=None, saved_listings=N
                         id_idx = cols.index(id_col)
                         rendered = [r[id_idx] for r in result["rows"] if r[id_idx]]
                         all_ids.extend(rendered)
+                        # run_sql lets the model select arbitrary columns, so we can't
+                        # trust name/rent/thumbnail_url are present or in a known
+                        # position. Look the card-relevant fields up fresh by ID
+                        # instead of trying to parse them out of the model's own SQL.
+                        new_ids = [i for i in rendered if i not in all_listing_objs]
+                        if new_ids:
+                            ph = ",".join("?" * len(new_ids))
+                            card_rows = con.execute(
+                                f"SELECT id,name,ward,rent,layout,thumbnail_url FROM listings "
+                                f"WHERE id IN ({ph})", new_ids,
+                            ).fetchall()
+                            for cr in card_rows:
+                                all_listing_objs[cr["id"]] = dict(cr)
                         # Return all rows — listing_ids[i] corresponds to rows[i]
                         # so model can filter by ward or other columns and pick exact IDs
                         other_cols = [c for c in cols if c not in ("id", "listing_id")]
@@ -4095,6 +4121,7 @@ def chat_send():
 
     return jsonify({"session_id": session_id, "response": result["text"],
                     "listing_ids": result["listing_ids"],
+                    "listings": result.get("listings", []),
                     "actions": result.get("actions", [])})
 
 

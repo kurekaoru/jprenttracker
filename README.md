@@ -1,5 +1,13 @@
 # JKK Monitor 🏠
 
+> **Note:** This is the original single-source quick-start doc, kept for the
+> minimal local dev flow (`server.py` + `scraper.py` + `dashboard.html`).
+> The current product is **JKKTrackr** — a dual-source (JKK + UR) monitor
+> with OAuth accounts, AI chat, and an ML pipeline. See
+> [PROJECT_SUMMARY.md](PROJECT_SUMMARY.md) for the full picture and
+> [Architecture: sources as sockets](#architecture-sources-as-sockets) below
+> for how new sources plug in.
+
 Monitors JKK Tokyo (jkk.go.jp) for new apartment vacancies every 5 minutes
 and sends Slack notifications for listings matching your criteria.
 
@@ -119,3 +127,36 @@ jkk_monitor/
 ├── jkk_monitor.log     ← runtime log
 └── requirements.txt
 ```
+
+---
+
+## Architecture: sources as sockets
+
+The single-source flow above (`scraper.py`) is the historical v1. The
+current app (`scraper4.py`) runs multiple sources side by side — JKK and
+UR today — each plugged into a common **socket interface** defined by
+`scraper_base.py::BaseScraper`, rather than being special-cased in the
+orchestrator.
+
+**The socket contract** (`BaseScraper`):
+
+- `source: str` — the DB source string (`"jkk"`, `"ur"`, …)
+- `fetch_listings(config) -> (listing_dicts, success_flag)` — every listing
+  dict must standardize to the same shape regardless of source:
+  `name, address, ward, rent, layout, size_m2, url, source`
+- `fetch_images_batch(new_lids)` — optional override for sources where
+  images require a separate authenticated pass after the listing scrape
+  (UR-style); sources that capture images inline during `fetch_listings`
+  (JKK-style) leave this at the default no-op
+- `backfill_images(listing_ids, limit)` — optional re-fetch for listings
+  with missing/broken image data
+
+Adding a new source (都営住宅, 市営住宅, etc.) means writing one
+`scraper_<site>.py` that subclasses `BaseScraper`, normalizes that site's
+raw listing data into the standard dict shape, and registering an instance
+in `SCRAPERS` in `scraper4.py` — no changes needed to `server.py`, the
+dashboards, or the DB schema, since everything downstream (upsert,
+enrichment, notifications) only ever sees the standardized shape.
+
+`scraper_suumo.py` (market-rate comparison data) follows the same socket
+today but is not yet registered in the main poll loop.
