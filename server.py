@@ -1609,7 +1609,7 @@ def serve_listing_image(image_id):
 def get_listing_images(listing_id):
     con = db()
     rows = con.execute(
-        "SELECT id, image_type FROM listing_images "
+        "SELECT id, image_type, local_path FROM listing_images "
         "WHERE listing_id=? AND local_path IS NOT NULL "
         "ORDER BY CASE image_type WHEN 'exterior' THEN 0 WHEN 'interior' THEN 1 ELSE 2 END, id",
         (listing_id,),
