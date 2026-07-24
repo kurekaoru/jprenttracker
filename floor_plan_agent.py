@@ -39,8 +39,7 @@ _ROOM_TYPE_RULES: list[tuple[str, str]] = [
     (r"玄関|ホール|Entrance|Hall",                     "玄関"),
     (r"廊下|Corridor",                                 "廊下"),
     (r"WIC|SIC|ウォーク.{0,3}イン",                   "WIC"),
-    (r"クローゼット|Closet",                           "クローゼット"),
-    (r"押入|物入|納戸|収納|Storage",                   "収納"),
+    (r"押入|物入|納戸|収納|リネン庫|クローゼット|Closet|Storage", "収納"),
     (r"^MB$|メーターボックス",                         "MB"),
     (r"^PS$|パイプ",                                   "PS"),
 ]

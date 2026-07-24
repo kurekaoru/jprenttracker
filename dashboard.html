@@ -1542,7 +1542,7 @@
           <button class="refresh-btn" onclick="loadLog()" data-i18n="refresh">更新</button>
         </div>
         <div class="log-lines" id="log-lines" style="max-height:340px;overflow-y:auto;font-size:10px;" data-i18n="log_loading">サーバーが起動するとここにログが表示されます。</div>
-        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-07-22 17:44 JST</p>
+        <p style="font-size:10px;color:var(--muted);margin-top:10px;text-align:right;">deployed: 2026-07-24 23:10 JST</p>
       </div>
 
 
@@ -1871,6 +1871,34 @@ if (DEV_MODE) document.title = '[DEV] ' + document.title;
 // ── i18n ─────────────────────────────────────────────────────────────────────
 let _lang = localStorage.getItem('jkktrackr_lang') || 'ja';
 
+// Floor plan room-type labels come from floor_plan_agent.py's normalise_room_type()
+// (see server-side _ROOM_TYPE_RULES) — canonical Japanese/abbreviation strings,
+// not free text, so a small dedicated map is clearer than stuffing them into
+// STRINGS. Room labels that are already English/abbreviations (LDK, LD, DK, L,
+// D, K, WIC, MB, PS) pass through unchanged in every language.
+const ROOM_TYPE_LABELS = {
+  '洋室':     { en: 'Western room', uk: 'Кімната (західний стиль)' },
+  '和室':     { en: 'Japanese room', uk: 'Кімната (татамі)' },
+  'バルコニー': { en: 'Balcony',       uk: 'Балкон' },
+  'トイレ':    { en: 'Toilet',        uk: 'Туалет' },
+  '浴室':     { en: 'Bathroom',      uk: 'Ванна кімната' },
+  '洗面所':    { en: 'Washroom',      uk: 'Умивальня' },
+  '玄関':     { en: 'Entrance',      uk: 'Передпокій' },
+  '廊下':     { en: 'Hallway',       uk: 'Коридор' },
+  'クローゼット': { en: 'Closet',       uk: 'Шафа' },
+  '収納':     { en: 'Storage',       uk: 'Комора' },
+};
+
+function translateRoomLabel(label, roomType) {
+  // Prefer an exact match on the normalized room_type (stable canonical form);
+  // fall back to matching against the raw label in case room_type is missing
+  // (older analyses run before room_type was added to the schema).
+  const entry = ROOM_TYPE_LABELS[roomType] || ROOM_TYPE_LABELS[label];
+  if (!entry) return label;
+  const v = entry[_lang];
+  return v || label;  // ja (and any unmapped lang) shows the original Japanese
+}
+
 const STRINGS = {
   n_properties:         { ja: n=>`${n} 件`,         en: n=>`${n} Properties`, uk: n=>`${n} об\'єктів` },
   // Topbar
@@ -2141,6 +2169,17 @@ const STRINGS = {
   tab_fac:              { ja:'施設',                    en:'Nearby',            uk:'Поруч' },
   tab_photos:           { ja:'写真',                    en:'Photos',            uk:'Фото' },
   tab_floorplan:        { ja:'間取り',                  en:'Floor Plan',        uk:'Планування' },
+  fp_analysis_title:    { ja:'間取り分析',                en:'Floor Plan Analysis', uk:'Аналіз планування' },
+  fp_room:              { ja:'部屋',                    en:'Room',              uk:'Кімната' },
+  fp_area:              { ja:'面積',                    en:'Area',              uk:'Площа' },
+  fp_kitchen:           { ja:'キッチン',                 en:'Kitchen',           uk:'Кухня' },
+  fp_kitchen_open:      { ja:'オープン',                 en:'Open',              uk:'Відкрита' },
+  fp_kitchen_closed:    { ja:'クローズド',                en:'Closed',            uk:'Закрита' },
+  fp_wc:                { ja:'トイレ数',                 en:'WC',                uk:'Туалет' },
+  fp_bath:              { ja:'浴室数',                   en:'Bath',              uk:'Ванна' },
+  fp_envelope:          { ja:'外形寸法',                 en:'Envelope',          uk:'Габарити' },
+  fp_analyzed:          { ja:n=>`${n} 分析済み`,          en:n=>`Analyzed ${n}`, uk:n=>`Проаналізовано ${n}` },
+  fp_pixel_inferred:    { ja:n=>`${n} 件推定`,           en:n=>`${n} pixel-inferred`, uk:n=>`${n} оцінено` },
   tab_details:          { ja:'詳細',                    en:'Details',           uk:'Деталі' },
   detail_structure:     { ja:'構造',                    en:'Structure',         uk:'Конструкція' },
   detail_avail:         { ja:'入居可能',                 en:'Available',         uk:'Заселення' },
@@ -5383,33 +5422,34 @@ function _renderFloorPlanAnalysis(d) {
     const areaStr = area != null ? area.toFixed(2) + ' m²' : '—';
     const inferred = r.area_m2 == null && r.inferred_area_m2 != null;
     const infTag  = inferred ? `<span style="color:var(--muted);font-size:9px;" title="pixel-ratio estimate">~</span>` : '';
+    const label = translateRoomLabel(r.label, r.room_type);
     return `<tr${r.is_outdoor ? ' style="opacity:.6"' : ''}>
-      <td>${escHtml(r.label)}</td>
+      <td>${escHtml(label)}</td>
       <td class="r">${infTag}${areaStr}</td>
       <td class="c" style="color:#FFD700;font-size:11px;">${winSym(r.has_window)}</td>
     </tr>`;
   }).join('');
-  const kitchenLabel = d.kitchen_open === true ? 'open' : d.kitchen_open === false ? 'closed' : '—';
+  const kitchenLabel = d.kitchen_open === true ? t('fp_kitchen_open') : d.kitchen_open === false ? t('fp_kitchen_closed') : '—';
   const dateStr = d.analyzed_at ? new Date(d.analyzed_at).toLocaleDateString() : '';
   const inferredCount = (d.inferred_rooms || []).length;
   const inferredNote = inferredCount
-    ? `<span style="color:var(--muted)"> · ${inferredCount} pixel-inferred</span>` : '';
+    ? `<span style="color:var(--muted)"> · ${t('fp_pixel_inferred', inferredCount)}</span>` : '';
   return `
-    <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">Floor Plan Analysis</div>
+    <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;">${t('fp_analysis_title')}</div>
     <table class="fp-analysis-table">
       <thead><tr>
-        <th>Room</th><th class="r">Area</th><th class="c" title="Exterior window">☀</th>
+        <th>${t('fp_room')}</th><th class="r">${t('fp_area')}</th><th class="c" title="Exterior window">☀</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
     <div class="fp-analysis-summary">
       <span>LDK: <b>${d.living_area_m2 != null ? d.living_area_m2 + ' m²' : '—'}</b></span>
-      <span>Kitchen: <b>${kitchenLabel}</b></span>
-      <span>WC: <b>${d.toilet_count ?? '—'}</b></span>
-      <span>Bath: <b>${d.bathroom_count ?? '—'}</b></span>
-      ${(d.envelope_width_m && d.envelope_height_m) ? `<span>Envelope: <b>${d.envelope_width_m}×${d.envelope_height_m} m</b></span>` : ''}
+      <span>${t('fp_kitchen')}: <b>${kitchenLabel}</b></span>
+      <span>${t('fp_wc')}: <b>${d.toilet_count ?? '—'}</b></span>
+      <span>${t('fp_bath')}: <b>${d.bathroom_count ?? '—'}</b></span>
+      ${(d.envelope_width_m && d.envelope_height_m) ? `<span>${t('fp_envelope')}: <b>${d.envelope_width_m}×${d.envelope_height_m} m</b></span>` : ''}
     </div>
-    <div class="fp-analysis-footer">${dateStr ? `Analyzed ${dateStr} · ` : ''}${escHtml(d.model || '')}${inferredNote}</div>`;
+    <div class="fp-analysis-footer">${dateStr ? `${t('fp_analyzed', dateStr)} · ` : ''}${escHtml(d.model || '')}${inferredNote}</div>`;
 }
 
 function _openGridPhotoAt(gridId, idx) {
