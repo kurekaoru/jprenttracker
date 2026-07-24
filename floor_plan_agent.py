@@ -88,6 +88,18 @@ PROMPT = """Analyze this Japanese apartment floor plan image.
 • ALWAYS prefer dimension-line calculations over 約X畳 tatami annotations.
   Use tatami only when NO dimension lines are visible for that room.
   UR/JKK public housing uses 団地間 (公団間): 1畳 = 1.44 m² — use 1.44, NOT 1.62.
+• MANDATORY CROSS-CHECK: for every room, actively look for a 約X畳 (or X帖)
+  label anywhere near the room — it may be placed off-center or in a corner,
+  not necessarily in the room's middle. If one is visible, compute
+  tatami_check_m2 = X × 1.44 and compare it to your dimension-line area_m2.
+  - If they agree within ~20%, proceed normally.
+  - If they disagree by more than ~20%, your dimension-line reading is
+    probably wrong (e.g. you summed segments belonging to a different room,
+    or double-counted a shared wall). Re-examine which dimension segments
+    actually bound THIS room before finalizing area_m2. If you cannot
+    resolve the discrepancy, prefer the tatami-derived value and set
+    dim_calc to note the conflict, e.g. "conflict: dim-line=29.4m² vs
+    tatami(5.5畳×1.44)=7.9m² — used tatami value".
 
 === BALCONY / VERANDA WIDTH RULE ===
 バルコニー/ベランダ almost always spans the FULL building width at the bottom of
@@ -116,6 +128,31 @@ depth = 7.600 × 0.10 = 0.76 m). Use pixel proportion — do not default to 0.35
   apartment. Exclude it entirely — do not measure it or count it as a room.
 • Do NOT include the external staircase (階段室) area as part of the apartment
   unless it is clearly inside the unit boundary.
+• MULTIPLE DIAGRAMS ON ONE SHEET — READ THIS CAREFULLY: these sheets very
+  often show 2-4 SEPARATE diagrams side by side, not just one. Concrete
+  visual signature to check for BEFORE extracting anything:
+    - Narrow vertical strip diagrams on the far left and/or far right edges
+      of the image, labelled with text like バリエーション ("variation"),
+      号室 room-number ranges (e.g. "106〜506号室"), or a different unit
+      number than the main plan (e.g. main plan is unit X but a side strip
+      says "402・502号室").
+    - These side strips often repeat the SAME room labels as the main plan
+      (洋室, 和室, トイレ, etc.) but belong to a DIFFERENT unit — they are
+      NOT extra rooms of the main unit, they are a different apartment
+      entirely, sometimes with no dimension numbers, sometimes with their
+      own separate, unrelated dimension numbers.
+    - The MAIN plan is the single LARGEST, most fully-dimensioned diagram,
+      usually positioned centrally, with dimension numbers running along
+      its own edges only.
+  BEFORE writing any room, ask: "which diagram does this room's outline
+  physically belong to?" If a dimension number sits next to a side-strip
+  variation diagram rather than the main diagram, it belongs to that side
+  diagram — never attach it to a main-diagram room just because the room
+  name matches.
+  RULE: extract rooms from the MAIN diagram ONLY. Every room label should
+  appear EXACTLY ONCE in your output — if you find yourself about to output
+  the same room label a second time, STOP: you are reading a side/variation
+  diagram, discard that second reading entirely, do not include it.
 
 === CALIBRATION AND PIXEL FRACTION ===
 Choose the best calibration reference for this specific floor plan:
@@ -303,7 +340,7 @@ class FloorPlanAgent:
         client = self._client_lazy()
         msg = client.messages.create(
             model=self.model,
-            max_tokens=1024,
+            max_tokens=2048,
             system=SYSTEM,
             messages=[{
                 "role": "user",
@@ -410,6 +447,34 @@ class FloorPlanAgent:
                 is_outdoor           = bool(rd.get("is_outdoor", False)),
                 pixel_fraction_of_ld = float(rd.get("pixel_fraction_of_ld") or 0),
             ))
+
+        # De-duplicate: the model sometimes reads a second/variant floor-plan
+        # diagram on the same sheet (JKK/UR sheets often show 2-4 unit-type
+        # variations side by side) and outputs the same room label twice with
+        # different dimensions. A prompt instruction alone doesn't reliably
+        # stop this, so enforce it deterministically here: for any exact
+        # label appearing more than once, keep only the smallest-area
+        # occurrence (observed pattern: the spurious second reading from a
+        # side/variant diagram tends to inflate area, never shrink it) and
+        # drop the rest, flagging what happened.
+        seen_labels: dict[str, list[int]] = {}
+        for i, r in enumerate(rooms):
+            seen_labels.setdefault(r.label, []).append(i)
+        dup_labels = {label: idxs for label, idxs in seen_labels.items() if len(idxs) > 1}
+        if dup_labels:
+            drop_indices = set()
+            for label, idxs in dup_labels.items():
+                areas = [(i, rooms[i].area_m2 if rooms[i].area_m2 is not None else float("inf")) for i in idxs]
+                keep_i = min(areas, key=lambda t: t[1])[0]
+                for i in idxs:
+                    if i != keep_i:
+                        drop_indices.add(i)
+                log.warning(
+                    f"DUPLICATE ROOM LABEL '{label}' ({len(idxs)}x) — likely a second/variant "
+                    f"diagram on the sheet. Kept smallest-area occurrence, dropped {len(idxs)-1}."
+                )
+                quality_flags.append(f"duplicate_label:{label}:{len(idxs)}x")
+            rooms = [r for i, r in enumerate(rooms) if i not in drop_indices]
 
         # Compute envelope from labeled dimensions if available
         envelope_w = _float_or_none(raw.get("envelope_width_m"))
